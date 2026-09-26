@@ -116,22 +116,27 @@ export class CreditController {
     const { target, userId, developerId, amount, reason, referenceId, metadata } = req.body;
     const targetId = target || userId || developerId;
 
-    if (!targetId || amount === undefined || !reason) {
+    if (!targetId || amount === undefined || amount === null || !reason) {
       res.status(400).json({ error: 'target (userId, developerId, or public UID), amount, and reason are required' });
       return;
     }
 
-    const numAmount = parseInt(amount, 10);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      res.status(400).json({ error: 'Credit grant amount must be a positive integer greater than zero' });
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      res.status(400).json({ error: 'Credit grant amount must be a positive integer between 1 and 1,000,000.' });
+      return;
+    }
+
+    if (typeof reason !== 'string' || reason.trim().length < 5) {
+      res.status(400).json({ error: 'Mandatory justification reason (at least 5 characters) required for credit adjustments.' });
       return;
     }
 
     try {
       const result = await CreditLedgerService.grantCredits({
-        target: targetId,
+        target: String(targetId).trim(),
         amount: numAmount,
-        reason,
+        reason: reason.trim(),
         adminUserId: req.user!.userId,
         referenceId,
         metadata,
@@ -262,6 +267,21 @@ export class CreditController {
         offset: offset ? parseInt(offset as string, 10) : undefined,
       });
       res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async searchUsers(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { q, search, limit } = req.query;
+    const searchQuery = typeof q === 'string' ? q : (typeof search === 'string' ? search : undefined);
+
+    try {
+      const users = await CreditLedgerService.searchEligibleUsers(
+        searchQuery,
+        limit ? parseInt(limit as string, 10) : 20
+      );
+      res.json({ users });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

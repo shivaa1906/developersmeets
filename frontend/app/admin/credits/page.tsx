@@ -18,6 +18,9 @@ import {
   User,
   History,
   Wallet,
+  Search,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 
 interface LedgerRow {
@@ -62,11 +65,37 @@ interface AccountRow {
   updated_at: string;
 }
 
+interface UserSearchResult {
+  id: string;
+  uid: string;
+  public_uid?: string;
+  name: string;
+  email: string;
+  username: string;
+  role: string;
+  status: string;
+  is_suspended: boolean;
+  current_balance: number;
+  currency: string;
+  developer_id?: string;
+  client_id?: string;
+}
+
 export default function AdminCreditsPage() {
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = React.useState<'ledger' | 'accounts'>('ledger');
 
-  // Adjustment Modal State
+  // Dedicated "Give Credits" (Phase 7) Modal State
+  const [isGiveCreditsModalOpen, setIsGiveCreditsModalOpen] = React.useState(false);
+  const [searchUserQuery, setSearchUserQuery] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState<UserSearchResult[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = React.useState(false);
+  const [selectedUser, setSelectedUser] = React.useState<UserSearchResult | null>(null);
+  const [creditsToAdd, setCreditsToAdd] = React.useState('5');
+  const [grantReason, setGrantReason] = React.useState('');
+  const [isGrantingCredits, setIsGrantingCredits] = React.useState(false);
+
+  // General / Bulk Adjustment Modal State
   const [isAdjustModalOpen, setIsAdjustModalOpen] = React.useState(false);
   const [actionType, setActionType] = React.useState<'GRANT' | 'REMOVE' | 'BULK_GRANT' | 'BULK_REMOVE'>('GRANT');
   const [targetScope, setTargetScope] = React.useState<'ALL_DEVELOPERS' | 'ALL_CLIENTS' | 'ALL'>('ALL_DEVELOPERS');
@@ -112,6 +141,105 @@ export default function AdminCreditsPage() {
       fetchAccounts();
     }
   }, [activeTab, fetchLedger, fetchAccounts]);
+
+  // Live User Search for Give Credits
+  const fetchSearchUsers = React.useCallback(async (queryStr: string) => {
+    setIsSearchingUsers(true);
+    try {
+      const endpoint = queryStr.trim().length > 0
+        ? `/admin/credits/search-users?q=${encodeURIComponent(queryStr.trim())}`
+        : '/admin/credits/search-users';
+      const res = await apiClient.get<{ users: UserSearchResult[] }>(endpoint);
+      setSearchResults(res.users || []);
+    } catch (_err) {
+      setSearchResults([]);
+    } finally {
+      setIsSearchingUsers(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (isGiveCreditsModalOpen && !selectedUser) {
+      const timer = setTimeout(() => {
+        fetchSearchUsers(searchUserQuery);
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [searchUserQuery, isGiveCreditsModalOpen, selectedUser, fetchSearchUsers]);
+
+  const openGiveCreditsModal = (user?: UserSearchResult | AccountRow) => {
+    if (user) {
+      const candidate: UserSearchResult = {
+        id: (user as any).user_id || (user as any).id,
+        uid: (user as any).user_uid || (user as any).uid,
+        public_uid: (user as any).user_public_uid || (user as any).public_uid,
+        name: (user as any).developer_name || (user as any).name || (user as any).company_name || (user as any).email || 'User',
+        email: (user as any).user_email || (user as any).email,
+        username: (user as any).developer_username || (user as any).username || '',
+        role: (user as any).user_role || (user as any).role || 'DEVELOPER',
+        status: (user as any).user_status || (user as any).status || 'ACTIVE',
+        is_suspended: (user as any).is_suspended || false,
+        current_balance: (user as any).balance !== undefined ? Number((user as any).balance) : (Number((user as any).current_balance) || 0),
+        currency: user.currency || 'INR',
+      };
+      setSelectedUser(candidate);
+    } else {
+      setSelectedUser(null);
+      fetchSearchUsers('');
+    }
+    setSearchUserQuery('');
+    setCreditsToAdd('5');
+    setGrantReason('');
+    setIsGiveCreditsModalOpen(true);
+  };
+
+  const handleGiveCredits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) {
+      addToast('error', 'Select User', 'Please select a platform user to grant credits to.');
+      return;
+    }
+
+    const numCredits = Number(creditsToAdd);
+    if (!Number.isInteger(numCredits) || numCredits <= 0 || numCredits > 1_000_000) {
+      addToast('error', 'Invalid Amount', 'Credits to add must be a positive integer between 1 and 1,000,000.');
+      return;
+    }
+
+    if (!grantReason.trim() || grantReason.trim().length < 5) {
+      addToast('error', 'Reason Required', 'Mandatory justification reason (at least 5 characters) required.');
+      return;
+    }
+
+    setIsGrantingCredits(true);
+    try {
+      const res = await apiClient.post<any>('/admin/credits/grant', {
+        target: selectedUser.uid || selectedUser.id,
+        amount: numCredits,
+        reason: grantReason.trim(),
+      });
+
+      const newBalance = res.newBalance !== undefined ? res.newBalance : res.balance;
+      addToast(
+        'success',
+        'Credits Granted',
+        `Successfully granted +${numCredits} credits to ${selectedUser.name}. New balance: ${newBalance} credits.`
+      );
+      setIsGiveCreditsModalOpen(false);
+      setSelectedUser(null);
+      setGrantReason('');
+
+      if (activeTab === 'ledger') {
+        await fetchLedger();
+      } else {
+        await fetchAccounts();
+      }
+    } catch (err: any) {
+      addToast('error', 'Credit Grant Failed', err.message || 'Unable to grant credits.');
+    } finally {
+      setIsGrantingCredits(false);
+    }
+  };
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,9 +303,13 @@ export default function AdminCreditsPage() {
   };
 
   const openAdjustForUser = (user: AccountRow, defaultAction: 'GRANT' | 'REMOVE') => {
-    setActionType(defaultAction);
-    setTargetIdentifier(user.user_public_uid || user.user_uid || user.user_id);
-    setIsAdjustModalOpen(true);
+    if (defaultAction === 'GRANT') {
+      openGiveCreditsModal(user);
+    } else {
+      setActionType(defaultAction);
+      setTargetIdentifier(user.user_public_uid || user.user_uid || user.user_id);
+      setIsAdjustModalOpen(true);
+    }
   };
 
   const filteredTransactions = transactions.filter((tx) => {
@@ -213,9 +345,14 @@ export default function AdminCreditsPage() {
     <div className="space-y-6 max-w-7xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Global Credits Ledger Management</h1>
+          <div className="flex items-center space-x-2 text-xs text-muted mb-1">
+            <span>Admin</span>
+            <span>&rarr;</span>
+            <span className="text-foreground font-medium">Credits &amp; Wallet</span>
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">Credits &amp; Wallet Management</h1>
           <p className="text-xs text-muted mt-1">
-            Immutable double-entry transaction ledger with mandatory justification, non-negative balance protection, and performer tracking.
+            Allocate user credits, search users by UID or identity, and inspect double-entry immutable transaction ledgers.
           </p>
         </div>
 
@@ -230,13 +367,22 @@ export default function AdminCreditsPage() {
           </Button>
           <Button
             size="sm"
-            leftIcon={<Plus className="h-4 w-4" />}
+            variant="secondary"
+            leftIcon={<Users className="h-3.5 w-3.5" />}
             onClick={() => {
-              setActionType('GRANT');
+              setActionType('BULK_GRANT');
               setIsAdjustModalOpen(true);
             }}
           >
-            Adjust Credits
+            Bulk Adjustments
+          </Button>
+          <Button
+            size="sm"
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => openGiveCreditsModal()}
+            className="bg-accent-primary hover:bg-accent-primary/90 text-white font-semibold"
+          >
+            Give Credits
           </Button>
         </div>
       </div>
@@ -348,32 +494,36 @@ export default function AdminCreditsPage() {
                           </span>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted">
-                          {tx.project_number || tx.reference_id}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted max-w-xs truncate">
-                          {tx.reason || tx.description}
-                        </TableCell>
-                        <TableCell>
-                          {tx.performed_by_email ? (
-                            <div>
-                              <span className="text-xs text-foreground block">{tx.performed_by_email}</span>
-                              <span className="text-[10px] font-mono text-muted">{tx.performed_by_role}</span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted">System Automated</span>
+                          {tx.reference_id}
+                          {tx.project_number && (
+                            <span className="block text-[10px] text-accent-primary">{tx.project_number}</span>
                           )}
                         </TableCell>
-                        <TableCell
-                          className={`font-mono text-xs font-bold text-right ${
-                            tx.amount > 0 ? 'text-status-success' : 'text-status-danger'
-                          }`}
-                        >
-                          {tx.amount > 0 ? `+${tx.amount}` : tx.amount} Cr
+                        <TableCell className="text-xs text-foreground max-w-xs">
+                          <div className="truncate font-medium">{tx.reason || '—'}</div>
+                          <div className="text-[10px] text-muted truncate">{tx.description}</div>
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-foreground font-bold text-right">
-                          {tx.balance_after} Cr
+                        <TableCell className="text-xs font-mono text-muted">
+                          {tx.performed_by_email ? (
+                            <div>
+                              <span className="text-foreground block">{tx.performed_by_email}</span>
+                              <span className="text-[10px] text-accent-primary uppercase font-mono">
+                                {tx.performed_by_role || 'ADMIN'}
+                              </span>
+                            </div>
+                          ) : (
+                            'SYSTEM / GATEWAY'
+                          )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted text-right font-mono whitespace-nowrap">
+                        <TableCell className="text-right font-mono text-xs font-semibold">
+                          <span className={tx.amount > 0 ? 'text-status-success' : 'text-status-danger'}>
+                            {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs font-bold text-foreground">
+                          {tx.balance_after}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-[10px] text-muted whitespace-nowrap">
                           {new Date(tx.created_at).toLocaleString()}
                         </TableCell>
                       </TableRow>
@@ -389,53 +539,70 @@ export default function AdminCreditsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">User Credit Accounts</CardTitle>
+                <CardTitle className="text-base">User Credit Accounts &amp; Wallets</CardTitle>
                 <CardDescription>
-                  Real-time balances across developers, clients, and platform participants
+                  Real-time wallet balances, user identity mapping, and direct single-user credit allocations
                 </CardDescription>
               </div>
+              <span className="text-xs font-mono text-accent-primary bg-accent-primary/10 px-2 py-0.5 rounded border border-accent-primary/30">
+                Live Wallets: {filteredAccounts.length}
+              </span>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
               <div className="p-8 text-center text-xs text-muted">Loading user credit accounts...</div>
             ) : filteredAccounts.length === 0 ? (
-              <div className="p-8 text-center text-xs text-muted">No credit accounts found.</div>
+              <div className="p-8 text-center text-xs text-muted">No accounts found.</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>User / Entity</TableHead>
+                      <TableHead>User / Identity</TableHead>
+                      <TableHead>Public 16-Char UID</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Public UID</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="text-right">Balance</TableHead>
-                      <TableHead className="text-right">Transactions</TableHead>
+                      <TableHead className="text-right">Tx Count</TableHead>
                       <TableHead className="text-right">Last Updated</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredAccounts.map((acc) => (
-                      <TableRow key={acc.account_id}>
+                      <TableRow key={acc.account_id || acc.user_id}>
                         <TableCell>
                           <span className="text-xs font-semibold text-foreground block">
                             {acc.developer_name || acc.company_name || acc.email}
                           </span>
-                          <span className="text-[10px] text-muted font-mono">{acc.email}</span>
+                          <span className="text-[10px] text-muted block font-mono">
+                            {acc.developer_username ? `@${acc.developer_username}` : acc.email}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs font-bold text-accent-primary">
+                          {acc.user_uid}
                         </TableCell>
                         <TableCell>
-                          <span className="text-xs font-mono px-2 py-0.5 rounded bg-surface-elevated border border-border">
+                          <span className="text-[10px] font-mono uppercase bg-surface-elevated px-2 py-0.5 rounded border border-border text-foreground">
                             {acc.role}
                           </span>
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-accent-primary">
-                          {acc.user_public_uid || acc.user_uid || '—'}
+                        <TableCell>
+                          <span
+                            className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${
+                              acc.user_status === 'ACTIVE'
+                                ? 'bg-status-success/10 text-status-success border-status-success/30'
+                                : 'bg-status-warning/10 text-status-warning border-status-warning/30'
+                            }`}
+                          >
+                            {acc.user_status}
+                          </span>
                         </TableCell>
-                        <TableCell className="font-mono text-xs font-bold text-right text-foreground">
-                          {acc.balance} {acc.currency || 'Cr'}
+                        <TableCell className="text-right font-mono text-xs font-bold text-status-success">
+                          {acc.balance} Credits
                         </TableCell>
-                        <TableCell className="text-xs text-muted text-right font-mono">
+                        <TableCell className="text-xs font-mono text-right text-muted">
                           {acc.transaction_count}
                         </TableCell>
                         <TableCell className="text-xs text-muted text-right font-mono whitespace-nowrap">
@@ -445,11 +612,11 @@ export default function AdminCreditsPage() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() => openAdjustForUser(acc, 'GRANT')}
-                            className="text-xs h-7 px-2"
+                            onClick={() => openGiveCreditsModal(acc)}
+                            className="text-xs h-7 px-2 font-medium"
                             leftIcon={<ArrowUpRight className="h-3 w-3 text-status-success" />}
                           >
-                            Grant
+                            Give Credits
                           </Button>
                           <Button
                             size="sm"
@@ -471,11 +638,226 @@ export default function AdminCreditsPage() {
         </Card>
       )}
 
+      {/* PHASE 7: DEDICATED GIVE CREDITS MODAL (User Search & Grant) */}
+      <Modal
+        isOpen={isGiveCreditsModalOpen}
+        onClose={() => {
+          setIsGiveCreditsModalOpen(false);
+          setSelectedUser(null);
+        }}
+        title="Give Credits"
+        description="Search platform users by UID, Name, Email, or Username to grant credits atomically to their account."
+      >
+        {!selectedUser ? (
+          /* Step 1: User Search */
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1">
+                Search User (UID, Name, Email, or Username)
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted pointer-events-none" />
+                <Input
+                  placeholder="e.g. A7kP92xLmQ4vT8Nz, Ritesh, shiva@nexus.dev..."
+                  value={searchUserQuery}
+                  onChange={(e) => setSearchUserQuery(e.target.value)}
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+              <p className="text-[11px] text-muted mt-1">
+                Real-time search across all platform accounts. Authentication secrets are never exposed.
+              </p>
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {isSearchingUsers ? (
+                <div className="p-6 text-center text-xs text-muted">Searching user directory...</div>
+              ) : searchResults.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted border border-border/60 rounded-lg">
+                  No platform users found matching your search.
+                </div>
+              ) : (
+                searchResults.map((user) => (
+                  <div
+                    key={user.id}
+                    onClick={() => setSelectedUser(user)}
+                    className="p-3 bg-surface-elevated/60 hover:bg-surface-elevated border border-border hover:border-accent-primary rounded-lg cursor-pointer transition-all flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-bold text-foreground truncate">{user.name}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-base border border-border text-foreground">
+                          UID: {user.uid}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-muted truncate mt-0.5">
+                        <span>{user.email}</span>
+                        {user.username && <span> &bull; @{user.username}</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <div className="text-right">
+                        <div className="text-xs font-bold text-status-success font-mono">
+                          {user.current_balance} Credits
+                        </div>
+                        <div className="flex items-center justify-end space-x-1 mt-0.5">
+                          <span className="text-[9px] font-mono uppercase px-1 py-0.2 rounded bg-accent-primary/10 text-accent-primary">
+                            {user.role}
+                          </span>
+                          <span
+                            className={`text-[9px] font-mono uppercase px-1 py-0.2 rounded ${
+                              user.status === 'ACTIVE'
+                                ? 'bg-status-success/10 text-status-success'
+                                : 'bg-status-danger/10 text-status-danger'
+                            }`}
+                          >
+                            {user.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      <Button size="sm" variant="secondary" className="h-7 text-xs px-2 pointer-events-none">
+                        Select
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsGiveCreditsModalOpen(false);
+                  setSelectedUser(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          /* Step 2: Grant Modal (Exact specification layout) */
+          <form onSubmit={handleGiveCredits} className="space-y-4">
+            <div className="bg-surface-elevated/70 border border-border/80 rounded-lg p-3.5 space-y-2.5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Target User</span>
+                  <div className="text-sm font-bold text-foreground mt-0.5">{selectedUser.name}</div>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <span className="text-xs font-mono font-bold bg-surface-base px-2 py-0.5 rounded border border-border text-foreground">
+                      UID: {selectedUser.uid}
+                    </span>
+                    <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-accent-primary/10 text-accent-primary border border-accent-primary/20">
+                      {selectedUser.role}
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded ${
+                        selectedUser.status === 'ACTIVE'
+                          ? 'bg-status-success/10 text-status-success border border-status-success/20'
+                          : 'bg-status-danger/10 text-status-danger border border-status-danger/20'
+                      }`}
+                    >
+                      {selectedUser.status}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted mt-1">{selectedUser.email}</p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedUser(null)}
+                  className="text-xs h-7 px-2"
+                >
+                  Change User
+                </Button>
+              </div>
+
+              <div className="border-t border-border/60 pt-2 flex items-center justify-between">
+                <span className="text-xs text-muted font-medium">Current Balance:</span>
+                <span className="text-sm font-bold text-status-success font-mono">
+                  {selectedUser.current_balance} Credits
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-1">
+                Credits to Add <span className="text-status-danger">*</span>
+              </label>
+              <Input
+                type="number"
+                min="1"
+                max="1000000"
+                step="1"
+                placeholder="5"
+                value={creditsToAdd}
+                onChange={(e) => setCreditsToAdd(e.target.value)}
+                required
+                autoFocus
+              />
+              <p className="text-[10px] text-muted mt-0.5">
+                Must be a positive integer between 1 and 1,000,000.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-1">
+                Reason <span className="text-status-danger">*</span>
+              </label>
+              <textarea
+                placeholder="Promotional credit for approved project..."
+                value={grantReason}
+                onChange={(e) => setGrantReason(e.target.value)}
+                rows={3}
+                required
+                className="w-full bg-surface-elevated border border-border text-foreground text-xs rounded px-3 py-2 outline-none focus:border-accent-primary resize-none font-sans"
+              />
+              <div className="flex justify-between items-center text-[10px] text-muted mt-0.5">
+                <span>Stored permanently in immutable double-entry ledger &amp; audit log.</span>
+                <span className={grantReason.trim().length >= 5 ? 'text-status-success font-mono' : 'text-status-danger font-mono'}>
+                  {grantReason.trim().length}/5 min chars
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsGiveCreditsModalOpen(false);
+                  setSelectedUser(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                isLoading={isGrantingCredits}
+                leftIcon={<ArrowUpRight className="h-4 w-4" />}
+                className="bg-accent-primary hover:bg-accent-primary/90 text-white font-semibold"
+              >
+                Give Credits
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
       {/* Admin Credit Adjustment & Bulk Operations Modal */}
       <Modal
         isOpen={isAdjustModalOpen}
         onClose={() => setIsAdjustModalOpen(false)}
-        title="Administrative Credit Adjustment"
+        title="Administrative Credit Adjustment &amp; Bulk Operations"
         description="Every manual adjustment requires an auditable justification reason and commits to the permanent immutable ledger."
       >
         <form onSubmit={handleAdjust} className="space-y-4">

@@ -17,6 +17,7 @@ export interface CreditAdjustmentResult {
   user: {
     id: string;
     uid: string;
+    name?: string;
     email: string;
     role: string;
     developerId?: string | null;
@@ -246,8 +247,9 @@ export class CreditLedgerService {
     const trimmed = String(identifier).trim();
     const userRes = await db.query(
       `SELECT u.id, u.uid, u.public_uid, u.email, u.role, u.status, u.is_suspended,
+              COALESCE(d.display_name, c.private_name, c.company_name, split_part(u.email, '@', 1)) as name,
               d.id as developer_id, d.username as developer_username, d.display_name as developer_name,
-              c.id as client_id, c.company_name
+              c.id as client_id, c.company_name, c.private_name
        FROM users u
        LEFT JOIN developers d ON d.user_id = u.id
        LEFT JOIN clients c ON c.user_id = u.id
@@ -263,6 +265,83 @@ export class CreditLedgerService {
   }
 
   /**
+   * Searches platform users for administrative credit management.
+   * Searchable by UID, Name, Email, or Username.
+   * Displays Name, UID, Role, Current Balance, Account Status.
+   * Strictly returns non-sensitive metadata only (no passwords, reset tokens, or secrets).
+   */
+  static async searchEligibleUsers(searchQuery?: string, limit: number = 20) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const params: any[] = [];
+    let whereClause = '';
+
+    if (searchQuery && searchQuery.trim().length > 0) {
+      const q = `%${searchQuery.trim()}%`;
+      params.push(q);
+      whereClause = `
+        WHERE (
+          u.uid ILIKE $1
+          OR u.id::text ILIKE $1
+          OR u.email ILIKE $1
+          OR d.display_name ILIKE $1
+          OR d.username ILIKE $1
+          OR c.private_name ILIKE $1
+          OR c.company_name ILIKE $1
+          OR c.client_number ILIKE $1
+        )
+      `;
+    }
+
+    params.push(safeLimit);
+    const limitIdx = params.length;
+
+    const sql = `
+      SELECT 
+        u.id,
+        u.uid,
+        u.public_uid,
+        u.email,
+        u.role,
+        u.status,
+        u.is_suspended,
+        COALESCE(d.display_name, c.private_name, c.company_name, split_part(u.email, '@', 1)) AS name,
+        COALESCE(d.username, c.client_number, split_part(u.email, '@', 1)) AS username,
+        COALESCE(ca.balance, 0)::int AS current_balance,
+        COALESCE(ca.currency, 'INR') AS currency,
+        d.id AS developer_id,
+        c.id AS client_id
+      FROM users u
+      LEFT JOIN developers d ON d.user_id = u.id
+      LEFT JOIN clients c ON c.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT balance, currency FROM credit_accounts 
+        WHERE user_id = u.id OR (developer_id IS NOT NULL AND developer_id = d.id)
+        LIMIT 1
+      ) ca ON true
+      ${whereClause}
+      ORDER BY u.created_at DESC
+      LIMIT $${limitIdx}
+    `;
+
+    const res = await query(sql, params);
+    return res.rows.map((row) => ({
+      id: row.id,
+      uid: row.uid,
+      public_uid: row.public_uid,
+      name: row.name,
+      email: row.email,
+      username: row.username,
+      role: row.role,
+      status: row.is_suspended ? 'SUSPENDED' : row.status,
+      is_suspended: row.is_suspended,
+      current_balance: Number(row.current_balance),
+      currency: row.currency,
+      developer_id: row.developer_id,
+      client_id: row.client_id,
+    }));
+  }
+
+  /**
    * Grants credits to a single target user with atomic ledger entry and audit
    */
   static async grantCredits(params: {
@@ -275,10 +354,11 @@ export class CreditLedgerService {
   }): Promise<CreditAdjustmentResult> {
     const { target, amount, reason, adminUserId, referenceId, metadata } = params;
 
-    if (!amount || amount <= 0 || !Number.isInteger(amount)) {
-      throw new Error('Credit grant amount must be a positive integer greater than zero.');
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      throw new Error('Credit grant amount must be a positive integer between 1 and 1,000,000.');
     }
-    if (!reason || reason.trim().length < 5) {
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
       throw new Error('Mandatory justification reason (at least 5 characters) required for credit adjustments.');
     }
 
@@ -289,8 +369,9 @@ export class CreditLedgerService {
       }
 
       const accRes = await client.query(
-        `SELECT id, balance FROM credit_accounts
+        `SELECT id, balance, user_id, developer_id FROM credit_accounts
          WHERE user_id = $1 OR (developer_id IS NOT NULL AND developer_id = $2)
+         ORDER BY user_id NULLS LAST
          FOR UPDATE`,
         [user.id, user.developer_id || null]
       );
@@ -312,12 +393,19 @@ export class CreditLedgerService {
         balanceBefore = Number(accRes.rows[0].balance);
       }
 
-      const balanceAfter = balanceBefore + amount;
+      const balanceAfter = balanceBefore + numAmount;
 
-      await client.query(
-        `UPDATE credit_accounts SET balance = $1, user_id = $2, updated_at = NOW() WHERE id = $3`,
-        [balanceAfter, user.id, accountId]
-      );
+      if (!accRes.rows[0]?.user_id && user.id) {
+        await client.query(
+          `UPDATE credit_accounts SET balance = $1, user_id = $2, updated_at = NOW() WHERE id = $3`,
+          [balanceAfter, user.id, accountId]
+        );
+      } else {
+        await client.query(
+          `UPDATE credit_accounts SET balance = $1, updated_at = NOW() WHERE id = $2`,
+          [balanceAfter, accountId]
+        );
+      }
 
       const refId = referenceId || `GRANT-${Date.now().toString().slice(-6)}`;
 
@@ -332,7 +420,7 @@ export class CreditLedgerService {
         [
           user.id,
           user.developer_id || null,
-          amount,
+          numAmount,
           balanceBefore,
           balanceAfter,
           refId,
@@ -349,7 +437,7 @@ export class CreditLedgerService {
           action: 'ADMIN_CREDIT_GRANT',
           entityType: 'CREDIT_ACCOUNT',
           entityId: accountId,
-          metadata: { targetUserId: user.id, developerId: user.developer_id, amount, balanceBefore, balanceAfter, reason, referenceId: refId },
+          metadata: { targetUserId: user.id, developerId: user.developer_id, amount: numAmount, balanceBefore, balanceAfter, reason, referenceId: refId },
         },
         client
       );
@@ -358,9 +446,9 @@ export class CreditLedgerService {
         userId: user.id,
         type: 'CREDIT_GRANTED',
         title: 'Credits Granted to Account',
-        message: `An administrator granted +${amount} credits to your account. Reason: ${reason}. New balance: ${balanceAfter} credits.`,
+        message: `An administrator granted +${numAmount} credits to your account. Reason: ${reason}. New balance: ${balanceAfter} credits.`,
         link: '/wallet',
-        metadata: { amount, balanceAfter, balanceBefore, referenceId: refId, reason, performedBy: adminUserId },
+        metadata: { amount: numAmount, balanceAfter, balanceBefore, referenceId: refId, reason, performedBy: adminUserId },
         client,
       });
 
@@ -369,6 +457,7 @@ export class CreditLedgerService {
         user: {
           id: user.id,
           uid: user.uid,
+          name: user.name || user.developer_name || user.email,
           email: user.email,
           role: user.role,
           developerId: user.developer_id,
@@ -376,7 +465,7 @@ export class CreditLedgerService {
         balance: balanceAfter,
         newBalance: balanceAfter,
         balanceBefore,
-        amount,
+        amount: numAmount,
         transactionId: tx.rows[0].id,
         referenceId: refId,
         reason,

@@ -52,7 +52,7 @@ export const siteConfig = {
     { label: 'Projects', href: '/admin/projects' },
     { label: 'Clients', href: '/admin/clients' },
     { label: 'Claims', href: '/admin/claims' },
-    { label: 'Credits Ledger', href: '/admin/credits' },
+    { label: 'Credits & Wallet', href: '/admin/credits' },
     { label: 'Payments', href: '/admin/payments' },
     { label: 'Inquiries', href: '/admin/inquiries' },
     { label: 'Community', href: '/admin/community' },

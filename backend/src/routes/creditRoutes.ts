@@ -26,5 +26,6 @@ router.post('/admin/bulk-grant', authenticateJwt, requireCreditManagement, Credi
 router.post('/admin/bulk-remove', authenticateJwt, requireCreditManagement, CreditController.bulkRemove);
 router.get('/admin/history', authenticateJwt, requireCreditManagement, CreditController.getCreditHistory);
 router.get('/admin/accounts', authenticateJwt, requireCreditManagement, CreditController.listAccounts);
+router.get('/admin/search-users', authenticateJwt, requireCreditManagement, CreditController.searchUsers);
 
 export default router;

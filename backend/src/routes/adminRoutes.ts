@@ -81,5 +81,6 @@ router.post('/credits/bulk-grant', requireCreditManagement, CreditController.bul
 router.post('/credits/bulk-remove', requireCreditManagement, CreditController.bulkRemove);
 router.get('/credits/history', requireCreditManagement, CreditController.getCreditHistory);
 router.get('/credits/accounts', requireCreditManagement, CreditController.listAccounts);
+router.get('/credits/search-users', requireCreditManagement, CreditController.searchUsers);
 
 export default router;

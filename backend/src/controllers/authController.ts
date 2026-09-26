@@ -201,9 +201,9 @@ export class AuthController {
 
         // Create initial credit account (0 credits until verified)
         await client.query(
-          `INSERT INTO credit_accounts (developer_id, balance) VALUES ($1, 0)
+          `INSERT INTO credit_accounts (developer_id, user_id, balance) VALUES ($1, $2, 0)
            ON CONFLICT (developer_id) DO NOTHING`,
-          [dev.id]
+          [dev.id, user.id]
         );
 
         // Associate categorized skills
