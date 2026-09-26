@@ -2,6 +2,9 @@
   "name": "developer-company-platform-root",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18.18.0 <=22.x"
+  },
   "workspaces": [
     "frontend",
     "backend"
@@ -10,8 +13,8 @@
     "dev": "npm run dev --workspace=frontend",
     "dev:backend": "npm run dev --workspace=backend",
     "dev:all": "npm run dev --workspace=backend & npm run dev --workspace=frontend",
-    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
-    "build:frontend": "npm run build --workspace=frontend",
+    "build": "npm run build --workspace=backend && npm run build:frontend",
+    "build:frontend": "NODE_ENV=production npm run build --workspace=frontend",
     "build:backend": "npm run build --workspace=backend",
     "lint": "npm run lint --workspace=frontend && npm run lint --workspace=backend",
     "typecheck": "npm run typecheck --workspace=frontend && npm run typecheck --workspace=backend",
