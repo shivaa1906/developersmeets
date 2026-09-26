@@ -45,11 +45,18 @@ export class RealtimeClient {
       return;
     }
 
-    const host = window.location.hostname || 'localhost';
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // When developing locally or using port 5000 API
-    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '5000';
-    const wsUrl = `${protocol}//${host}:${wsPort}/ws?token=${encodeURIComponent(this.token)}`;
+    let wsUrl: string;
+    if (process.env.NEXT_PUBLIC_WS_URL) {
+      const baseWsUrl = process.env.NEXT_PUBLIC_WS_URL.replace(/\/+$/, '');
+      const separator = baseWsUrl.includes('?') ? '&' : '?';
+      wsUrl = `${baseWsUrl}${separator}token=${encodeURIComponent(this.token)}`;
+    } else {
+      const host = window.location.hostname || 'localhost';
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      // When developing locally or using port 5000 API
+      const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '5000';
+      wsUrl = `${protocol}//${host}:${wsPort}/ws?token=${encodeURIComponent(this.token)}`;
+    }
 
     try {
       this.ws = new WebSocket(wsUrl);
