@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { query, withTransaction } from '../database/db.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AuditLogger } from '../utils/auditLogger.js';
+import { ProjectService } from '../services/projectService.js';
 
 export class AdminController {
   /**
@@ -272,6 +273,39 @@ export class AdminController {
       res.json({ logs: result.rows });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Admin moves submitted project to REVIEWING state
+   */
+  static async reviewProject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const { notes } = req.body;
+    try {
+      const result = await ProjectService.reviewProject(projectId, req.user!.userId, notes);
+      res.json({ message: 'Project status transitioned to REVIEWING.', ...result });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Admin approves submitted/reviewing project (transitions to OPEN_FOR_CLAIMS)
+   */
+  static async approveProject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const { maxClaims, deadlineDays } = req.body;
+    try {
+      const result = await ProjectService.approveProject(
+        projectId,
+        req.user!.userId,
+        Number(maxClaims) || 5,
+        Number(deadlineDays) || 7
+      );
+      res.json({ message: 'Project approved and opened for developer claims.', ...result });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
     }
   }
 }

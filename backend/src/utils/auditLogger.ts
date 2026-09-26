@@ -1,15 +1,19 @@
 import { query } from '../database/db.js';
 
 export class AuditLogger {
-  static async log(params: {
-    actorUserId?: string | null;
-    action: string;
-    entityType: string;
-    entityId: string;
-    metadata?: Record<string, any>;
-  }): Promise<void> {
+  static async log(
+    params: {
+      actorUserId?: string | null;
+      action: string;
+      entityType: string;
+      entityId: string;
+      metadata?: Record<string, any>;
+    },
+    client?: any
+  ): Promise<void> {
     try {
-      await query(
+      const runner = client ? client.query.bind(client) : query;
+      await runner(
         `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
          VALUES ($1, $2, $3, $4, $5)`,
         [

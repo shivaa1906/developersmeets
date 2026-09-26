@@ -60,12 +60,13 @@ export class ProjectController {
     const { id } = req.params;
     try {
       const projRes = await query(
-        `SELECT p.*, c.client_number, c.company_name,
+        `SELECT p.*, c.client_number, c.company_name, c.private_name, c.phone, u.email as client_email,
                 d.username as lead_dev_username, d.display_name as lead_dev_name
          FROM projects p
          LEFT JOIN clients c ON p.client_id = c.id
+         LEFT JOIN users u ON c.user_id = u.id
          LEFT JOIN developers d ON p.lead_developer_id = d.id
-         WHERE p.id = $1 OR p.slug = $1`,
+         WHERE p.id::text = $1 OR p.slug = $1`,
         [id]
       );
 
@@ -76,12 +77,37 @@ export class ProjectController {
 
       const project = projRes.rows[0];
 
-      // Identity Shielding: Mask client company if uncompleted and caller is not owner/admin
+      // Multi-tenant privacy guard: Non-owners and non-admins cannot view projects under review
       const isClientOwner = req.user?.clientId === project.client_id;
       const isAdmin = ['CEO', 'MD', 'ADMIN'].includes(req.user?.role || '');
+      const isPubliclyVisibleStatus = [
+        'OPEN_FOR_CLAIMS',
+        'CLAIMS_ACTIVE',
+        'SELECTION_PENDING',
+        'DEVELOPER_SELECTED',
+        'IN_PROGRESS',
+        'COMPLETED',
+        'PUBLISHED',
+      ].includes(project.status);
 
-      if (!isClientOwner && !isAdmin && project.status !== 'PUBLISHED') {
-        project.company_name = undefined; // Shielded
+      if (!isClientOwner && !isAdmin) {
+        if (!isPubliclyVisibleStatus) {
+          res.status(403).json({ error: 'Access denied: Project is under administrative review.' });
+          return;
+        }
+      }
+
+      // Identity Shielding: Developers / unprivileged callers must NEVER see real client PII
+      if (!isClientOwner && !isAdmin) {
+        delete project.private_name;
+        delete project.phone;
+        delete project.client_email;
+        delete project.client_id;
+
+        // Mask company_name unless project has been completed and published to the showcase
+        if (project.status !== 'PUBLISHED') {
+          delete project.company_name;
+        }
       }
 
       // Check if logged in developer has claimed this project
@@ -103,7 +129,7 @@ export class ProjectController {
   }
 
   /**
-   * Client project submission
+   * Client project submission with comprehensive input validation
    */
   static async submit(req: AuthenticatedRequest, res: Response): Promise<void> {
     const clientId = req.user?.clientId;
@@ -113,23 +139,130 @@ export class ProjectController {
     }
 
     try {
-      const { title, category, description, budgetMin, budgetMax, timeline, requirements, requiredTechnologies } =
-        req.body;
-
-      if (!title || !category || !description) {
-        res.status(400).json({ error: 'Title, category, and description are required.' });
-        return;
-      }
-
-      const result = await ProjectService.submitProject(clientId, req.user!.userId, {
+      const {
         title,
         category,
         description,
-        budgetMin: Number(budgetMin) || 0,
-        budgetMax: Number(budgetMax) || 0,
-        timeline: timeline || '30 Days',
-        requirements: requirements || [],
-        requiredTechnologies: requiredTechnologies || [],
+        budgetMin,
+        budgetMax,
+        timeline,
+        requirements,
+        requiredTechnologies,
+        attachments,
+        preferredProjectNumber,
+      } = req.body;
+
+      // 1. Title validation (reject empty title)
+      if (!title || typeof title !== 'string' || !title.trim()) {
+        res.status(400).json({ error: 'Project title is required and cannot be empty.' });
+        return;
+      }
+
+      // 2. Category & Description validation
+      if (!category || typeof category !== 'string' || !category.trim()) {
+        res.status(400).json({ error: 'Project category is required and cannot be empty.' });
+        return;
+      }
+
+      if (!description || typeof description !== 'string' || !description.trim()) {
+        res.status(400).json({ error: 'Project description is required and cannot be empty.' });
+        return;
+      }
+
+      // 3. Requirements validation (reject empty requirements)
+      if (
+        !requirements ||
+        !Array.isArray(requirements) ||
+        requirements.length === 0 ||
+        requirements.every((r) => typeof r !== 'string' || !r.trim())
+      ) {
+        res.status(400).json({
+          error: 'Requirements are required and must contain at least one valid specification.',
+        });
+        return;
+      }
+
+      // 4. Budget validation (reject invalid budget, negative budget, budgetMin > budgetMax)
+      const parsedMin = Number(budgetMin);
+      const parsedMax = Number(budgetMax);
+
+      if (
+        budgetMin === undefined ||
+        budgetMax === undefined ||
+        isNaN(parsedMin) ||
+        isNaN(parsedMax) ||
+        parsedMin <= 0 ||
+        parsedMax <= 0
+      ) {
+        res.status(400).json({
+          error: 'Invalid budget: Both budgetMin and budgetMax must be positive numbers greater than zero.',
+        });
+        return;
+      }
+
+      if (parsedMin > parsedMax) {
+        res.status(400).json({
+          error: 'Invalid budget: budgetMin cannot exceed budgetMax.',
+        });
+        return;
+      }
+
+      // 5. Timeline validation (reject invalid timeline)
+      if (!timeline || typeof timeline !== 'string' || !timeline.trim()) {
+        res.status(400).json({ error: 'Project timeline is required and cannot be empty.' });
+        return;
+      }
+
+      // Validate timeline duration is not negative or zero
+      const timelineDaysMatch = timeline.match(/(-?\d+)\s*(?:-|to)?\s*(-?\d+)?\s*days?/i);
+      if (timelineDaysMatch) {
+        const d1 = parseInt(timelineDaysMatch[1], 10);
+        const d2 = timelineDaysMatch[2] ? parseInt(timelineDaysMatch[2], 10) : d1;
+        if (d1 <= 0 || d2 <= 0 || d1 > d2) {
+          res.status(400).json({
+            error: 'Invalid timeline: Timeline duration must be positive and valid.',
+          });
+          return;
+        }
+      }
+
+      // 6. Attachment validation (reject huge files > 10MB, unsupported file formats)
+      if (attachments && Array.isArray(attachments)) {
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+        const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.zip', '.csv'];
+        const PROHIBITED_EXTENSIONS = ['.exe', '.sh', '.bat', '.cmd', '.msi', '.bin', '.js', '.py', '.apk', '.vbs'];
+
+        for (const file of attachments) {
+          if (file.size && Number(file.size) > MAX_FILE_SIZE) {
+            res.status(400).json({
+              error: `File "${file.name || 'attachment'}" exceeds maximum allowed limit of 10MB.`,
+            });
+            return;
+          }
+
+          const filename = (file.name || file.filename || '').toLowerCase();
+          const ext = filename.lastIndexOf('.') !== -1 ? filename.slice(filename.lastIndexOf('.')) : '';
+
+          if (PROHIBITED_EXTENSIONS.includes(ext) || (ext && !ALLOWED_EXTENSIONS.includes(ext))) {
+            res.status(400).json({
+              error: `Unsupported file format "${ext}". Upload of executable or disallowed files is prohibited.`,
+            });
+            return;
+          }
+        }
+      }
+
+      const result = await ProjectService.submitProject(clientId, req.user!.userId, {
+        title: title.trim(),
+        category: category.trim(),
+        description: description.trim(),
+        budgetMin: parsedMin,
+        budgetMax: parsedMax,
+        timeline: timeline.trim(),
+        requirements: requirements.map((r: any) => String(r).trim()).filter(Boolean),
+        requiredTechnologies: Array.isArray(requiredTechnologies) ? requiredTechnologies : [],
+        attachments: Array.isArray(attachments) ? attachments : [],
+        preferredProjectNumber,
       });
 
       res.status(201).json({
@@ -142,22 +275,89 @@ export class ProjectController {
   }
 
   /**
-   * Admin approves project
+   * Admin moves project to REVIEWING state (SUBMITTED -> REVIEWING)
+   */
+  static async review(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const { notes } = req.body;
+
+    try {
+      const result = await ProjectService.reviewProject(projectId, req.user!.userId, notes);
+      res.json({ message: 'Project status transitioned to REVIEWING.', ...result });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Admin approves project (REVIEWING/SUBMITTED -> OPEN_FOR_CLAIMS)
    */
   static async approve(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { projectId } = req.params;
     const { maxClaims, deadlineDays } = req.body;
 
     try {
-      await ProjectService.approveProject(
+      const result = await ProjectService.approveProject(
         projectId,
         req.user!.userId,
         Number(maxClaims) || 5,
         Number(deadlineDays) || 7
       );
-      res.json({ message: 'Project approved and opened for developer claims.' });
+      res.json({ message: 'Project approved and opened for developer claims.', ...result });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Client / Leadership project update with strict state protection
+   */
+  static async updateProject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const clientId = req.user?.clientId;
+    const isLeadership = ['CEO', 'MD', 'ADMIN'].includes(req.user?.role || '');
+
+    try {
+      const projRes = await query('SELECT * FROM projects WHERE id = $1', [projectId]);
+      if (projRes.rows.length === 0) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      const project = projRes.rows[0];
+
+      // Ownership check for clients
+      if (!isLeadership && project.client_id !== clientId) {
+        res.status(403).json({ error: 'Forbidden: You do not have permission to update this project.' });
+        return;
+      }
+
+      // State protection: Clients CANNOT manually change status to DEVELOPER_SELECTED, COMPLETED, or PUBLISHED
+      const { status: requestedStatus, title, description } = req.body;
+
+      if (!isLeadership && requestedStatus) {
+        const protectedStatuses = ['DEVELOPER_SELECTED', 'COMPLETED', 'PUBLISHED', 'OPEN_FOR_CLAIMS', 'IN_PROGRESS'];
+        if (protectedStatuses.includes(requestedStatus) || requestedStatus !== project.status) {
+          res.status(403).json({
+            error: `Forbidden: Clients cannot manually change project status to ${requestedStatus}. Status transitions must follow system workflow rules.`,
+          });
+          return;
+        }
+      }
+
+      const updateRes = await query(
+        `UPDATE projects
+         SET title = COALESCE($1, title),
+             description = COALESCE($2, description),
+             updated_at = NOW()
+         WHERE id = $3
+         RETURNING *`,
+        [title || null, description || null, projectId]
+      );
+
+      res.json({ message: 'Project updated successfully.', project: updateRes.rows[0] });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   }
 

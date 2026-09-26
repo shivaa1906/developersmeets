@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS projects (
     timeline VARCHAR(100) NOT NULL,
     requirements JSONB NOT NULL DEFAULT '[]',
     required_technologies JSONB NOT NULL DEFAULT '[]',
+    attachments JSONB NOT NULL DEFAULT '[]',
     status project_status NOT NULL DEFAULT 'SUBMITTED',
     claim_cost INTEGER NOT NULL DEFAULT 1 CHECK (claim_cost >= 1),
     max_claims INTEGER NOT NULL DEFAULT 5 CHECK (max_claims >= 1),

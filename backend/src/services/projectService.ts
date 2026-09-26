@@ -12,6 +12,8 @@ export interface ProjectSubmissionInput {
   timeline: string;
   requirements: string[];
   requiredTechnologies: string[];
+  attachments?: any[];
+  preferredProjectNumber?: string;
 }
 
 export interface ProposalInput {
@@ -31,25 +33,36 @@ export class ProjectService {
     clientId: string,
     userId: string,
     data: ProjectSubmissionInput
-  ): Promise<{ projectId: string; projectNumber: string }> {
+  ): Promise<{ projectId: string; projectNumber: string; status: string }> {
     return withTransaction(async (client) => {
-      // Generate clean slug & unique project number
-      const seqRes = await client.query(
-        `SELECT COALESCE(MAX(SUBSTRING(project_number FROM 10)::int), 0) + 1 as next_seq 
-         FROM projects WHERE project_number ~ '^PRJ-2026-[0-9]+$'`
-      );
-      const seq = seqRes.rows[0]?.next_seq || Math.floor(1000 + Math.random() * 9000);
-      const projectNumber = `PRJ-2026-${String(seq).padStart(4, '0')}`;
+      // Generate clean slug & unique project number (find lowest available sequence starting from 1)
+      let projectNumber = data.preferredProjectNumber;
+      let seq = 1;
+      if (!projectNumber) {
+        const seqRes = await client.query(
+          `SELECT SUBSTRING(project_number FROM 10)::int as num 
+           FROM projects WHERE project_number ~ '^PRJ-2026-[0-9]+$' ORDER BY num ASC`
+        );
+        const existingNums = new Set(seqRes.rows.map((r: any) => r.num));
+        while (existingNums.has(seq)) {
+          seq++;
+        }
+        projectNumber = `PRJ-2026-${String(seq).padStart(4, '0')}`;
+      } else {
+        const match = projectNumber.match(/PRJ-2026-(\d+)/);
+        seq = match ? parseInt(match[1], 10) : 1;
+      }
+
       const slug = `${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${seq}`;
 
       const insertRes = await client.query(
         `INSERT INTO projects (
             project_number, slug, title, description, category,
             budget_min, budget_max, timeline, requirements, required_technologies,
-            status, claim_cost, max_claims, claim_deadline, client_id
+            attachments, status, claim_cost, max_claims, claim_deadline, client_id
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'SUBMITTED', 1, 5, NOW() + INTERVAL '7 days', $11)
-         RETURNING id, project_number`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'SUBMITTED', 1, 5, NOW() + INTERVAL '7 days', $12)
+         RETURNING id, project_number, status`,
         [
           projectNumber,
           slug,
@@ -61,6 +74,7 @@ export class ProjectService {
           data.timeline,
           JSON.stringify(data.requirements || []),
           JSON.stringify(data.requiredTechnologies || []),
+          JSON.stringify(data.attachments || []),
           clientId,
         ]
       );
@@ -79,23 +93,78 @@ export class ProjectService {
       return {
         projectId: newProject.id,
         projectNumber: newProject.project_number,
+        status: newProject.status,
       };
     });
   }
 
   /**
-   * Admin approves submitted project and opens it for marketplace developer claims
+   * Admin reviews submitted project: transitions from SUBMITTED to REVIEWING
+   */
+  static async reviewProject(
+    projectId: string,
+    adminUserId: string,
+    notes?: string
+  ): Promise<{ projectId: string; status: string }> {
+    return withTransaction(async (client) => {
+      const projRes = await client.query(
+        'SELECT id, status, title FROM projects WHERE id = $1 FOR UPDATE',
+        [projectId]
+      );
+      if (projRes.rows.length === 0) {
+        throw new Error('Project not found');
+      }
+
+      const project = projRes.rows[0];
+      if (project.status !== 'SUBMITTED') {
+        throw new Error(
+          `Invalid status transition: Cannot review project in '${project.status}' state. Expected 'SUBMITTED'.`
+        );
+      }
+
+      await client.query(
+        `UPDATE projects
+         SET status = 'REVIEWING',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [projectId]
+      );
+
+      await AuditLogger.log({
+        actorUserId: adminUserId,
+        action: 'PROJECT_REVIEW_STARTED',
+        entityType: 'PROJECT',
+        entityId: projectId,
+        metadata: { previousStatus: project.status, newStatus: 'REVIEWING', notes },
+      });
+
+      return { projectId, status: 'REVIEWING' };
+    });
+  }
+
+  /**
+   * Admin approves submitted project and opens it for marketplace developer claims (REVIEWING/SUBMITTED -> OPEN_FOR_CLAIMS)
    */
   static async approveProject(
     projectId: string,
     adminUserId: string,
     maxClaims = 5,
     deadlineDays = 7
-  ): Promise<void> {
-    await withTransaction(async (client) => {
-      const projRes = await client.query('SELECT id, status, title FROM projects WHERE id = $1', [projectId]);
+  ): Promise<{ projectId: string; status: string }> {
+    return withTransaction(async (client) => {
+      const projRes = await client.query(
+        'SELECT id, status, title FROM projects WHERE id = $1 FOR UPDATE',
+        [projectId]
+      );
       if (projRes.rows.length === 0) {
         throw new Error('Project not found');
+      }
+
+      const project = projRes.rows[0];
+      if (project.status !== 'REVIEWING' && project.status !== 'SUBMITTED') {
+        throw new Error(
+          `Invalid status transition: Cannot approve project in '${project.status}' state. Expected 'REVIEWING' or 'SUBMITTED'.`
+        );
       }
 
       await client.query(
@@ -113,8 +182,10 @@ export class ProjectService {
         action: 'PROJECT_APPROVED_FOR_CLAIMS',
         entityType: 'PROJECT',
         entityId: projectId,
-        metadata: { maxClaims, deadlineDays },
+        metadata: { maxClaims, deadlineDays, previousStatus: project.status, newStatus: 'OPEN_FOR_CLAIMS' },
       });
+
+      return { projectId, status: 'OPEN_FOR_CLAIMS' };
     });
   }
 

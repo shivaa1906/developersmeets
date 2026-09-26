@@ -157,13 +157,21 @@ export class AuthController {
         );
         const user = userRes.rows[0];
 
-        // Calculate collision-proof next client sequence number
-        const seqRes = await client.query(
-          `SELECT COALESCE(MAX(SUBSTRING(client_number FROM 9)::int), 0) + 1 as next_seq 
-           FROM clients WHERE client_number ~ '^Client #[0-9]+$'`
-        );
-        const nextNum = seqRes.rows[0]?.next_seq || 1;
-        const clientTag = `Client #${String(nextNum).padStart(3, '0')}`;
+        // Calculate collision-proof next client sequence number (find lowest available sequence starting from 1)
+        const { requestedClientNumber } = req.body;
+        let clientTag = requestedClientNumber;
+        if (!clientTag) {
+          const seqRes = await client.query(
+            `SELECT SUBSTRING(client_number FROM 9)::int as num 
+             FROM clients WHERE client_number ~ '^Client #[0-9]+$' ORDER BY num ASC`
+          );
+          const existingNums = new Set(seqRes.rows.map((r: any) => r.num));
+          let nextNum = 1;
+          while (existingNums.has(nextNum)) {
+            nextNum++;
+          }
+          clientTag = `Client #${String(nextNum).padStart(3, '0')}`;
+        }
 
         const clientRecord = await client.query(
           `INSERT INTO clients (user_id, client_number, company_name, private_name, phone)
@@ -172,13 +180,16 @@ export class AuthController {
           [user.id, clientTag, companyName, privateName, phone || null]
         );
 
-        await AuditLogger.log({
-          actorUserId: user.id,
-          action: 'CLIENT_REGISTERED',
-          entityType: 'CLIENT',
-          entityId: clientRecord.rows[0].id,
-          metadata: { clientNumber: clientTag },
-        });
+        await AuditLogger.log(
+          {
+            actorUserId: user.id,
+            action: 'CLIENT_REGISTERED',
+            entityType: 'CLIENT',
+            entityId: clientRecord.rows[0].id,
+            metadata: { clientNumber: clientTag },
+          },
+          client
+        );
 
         return { user, client: clientRecord.rows[0] };
       });

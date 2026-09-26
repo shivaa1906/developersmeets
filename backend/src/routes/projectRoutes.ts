@@ -22,13 +22,24 @@ router.post(
   ProjectController.submit
 );
 
-// Admin approval of project
+// Admin review and approval of project
+router.post(
+  '/:projectId/review',
+  authenticateJwt,
+  requireRole(ROLES.CEO, ROLES.MD, ROLES.ADMIN),
+  ProjectController.review
+);
+
 router.post(
   '/:projectId/approve',
   authenticateJwt,
   requireRole(ROLES.CEO, ROLES.MD, ROLES.ADMIN),
   ProjectController.approve
 );
+
+// Client / Leadership project updates (with strict state protection)
+router.patch('/:projectId', authenticateJwt, ProjectController.updateProject);
+router.put('/:projectId', authenticateJwt, ProjectController.updateProject);
 
 // Developer claim project slot
 router.post(

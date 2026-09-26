@@ -17,6 +17,8 @@ router.post('/developers/:developerId/suspend', AdminController.suspendDeveloper
 
 // Operations & Audit endpoints
 router.get('/projects', AdminController.listAllProjects);
+router.post('/projects/:projectId/review', AdminController.reviewProject);
+router.post('/projects/:projectId/approve', AdminController.approveProject);
 router.get('/users', AdminController.listAllUsers);
 router.get('/ledger', AdminController.listFinancialLedger);
 router.get('/audit-logs', AdminController.listAuditLogs);
