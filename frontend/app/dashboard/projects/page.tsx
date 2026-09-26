@@ -280,6 +280,11 @@ export default function DashboardProjectsPage() {
                   </div>
 
                   <div className="flex items-center space-x-2">
+                    {claim.claim_status === 'SELECTED' && (
+                      <Link href={`/dashboard/workspace/${claim.project_id || claim.id}`}>
+                        <Button size="sm">Workspace</Button>
+                      </Link>
+                    )}
                     <Button
                       size="sm"
                       variant="secondary"
@@ -330,6 +335,11 @@ export default function DashboardProjectsPage() {
                   </div>
 
                   <div className="flex items-center space-x-2">
+                    {['DEVELOPER_SELECTED', 'IN_PROGRESS', 'COMPLETED', 'PUBLISHED'].includes(proj.status) && (
+                      <Link href={`/dashboard/workspace/${proj.id}`}>
+                        <Button size="sm">Workspace</Button>
+                      </Link>
+                    )}
                     <Button
                       size="sm"
                       variant="secondary"

@@ -161,6 +161,72 @@ export interface Milestone {
   order_index: number;
 }
 
+export interface ProjectTask {
+  id: string;
+  project_id: string;
+  milestone_id?: string;
+  title: string;
+  description?: string;
+  assignee_developer_id?: string;
+  assignee_name?: string;
+  status: 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectFile {
+  id: string;
+  project_id: string;
+  milestone_id?: string;
+  file_name: string;
+  file_url: string;
+  file_size: number;
+  mime_type: string;
+  uploaded_by_user_id: string;
+  uploader_email?: string;
+  created_at: string;
+}
+
+export interface ProjectWorkspace {
+  overview: {
+    id: string;
+    projectNumber: string;
+    title: string;
+    description: string;
+    status: ProjectStatus;
+    category: string;
+    timeline: string;
+    budgetMin: number;
+    budgetMax: number;
+    clientNumber: string;
+    companyName: string;
+    leadDeveloper?: {
+      id: string;
+      username: string;
+      name: string;
+      title: string;
+      avatar?: string;
+    } | null;
+    teamMembers: any[];
+  };
+  requirements: string[];
+  requiredTechnologies: string[];
+  milestones: Milestone[];
+  tasks: ProjectTask[];
+  files: ProjectFile[];
+  messages: any[];
+  timeline: Array<{
+    id: string;
+    type: string;
+    title: string;
+    description: string;
+    timestamp: string;
+    status?: string;
+  }>;
+  payments: any[];
+  support: SupportTicket[];
+}
+
 export interface SupportTicket {
   id: string;
   ticket_number: string; // e.g. "SUP-2026-0001"
@@ -175,3 +241,4 @@ export interface SupportTicket {
   updated_at: string;
   closed_at?: string;
 }
+
