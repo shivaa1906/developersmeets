@@ -4,6 +4,61 @@ import crypto from 'crypto';
 import type { PoolClient } from 'pg';
 import { NotificationService } from './notificationService.js';
 import { AuditLogger } from '../utils/auditLogger.js';
+import { RealtimeEvents } from '../realtime/events.js';
+
+export interface BulkTargetFilters {
+  role?: 'ALL' | 'DEVELOPER' | 'CLIENT';
+  verificationStatus?: string;
+  minExperience?: number;
+  skills?: string[];
+  search?: string;
+  includeSuspended?: boolean;
+}
+
+export interface BulkPreviewResult {
+  targetScope: string;
+  recipientCount: number;
+  amountPerUser: number;
+  totalCredits: number;
+  reason: string;
+  sampleRecipients: Array<{
+    id: string;
+    uid: string;
+    name: string;
+    email: string;
+    role: string;
+    currentBalance: number;
+  }>;
+  breakdown: {
+    developers: number;
+    clients: number;
+    other: number;
+  };
+}
+
+export interface BulkCreditExecutionResult {
+  success: boolean;
+  operationId: string;
+  bulkOperationRecordId: string;
+  batchReference?: string;
+  targetScope: string;
+  recipientCount: number;
+  count?: number;
+  amountPerUser: number;
+  totalCredits: number;
+  reason: string;
+  performedBy: string;
+  status: string;
+  affectedUsers?: Array<{
+    userId: string;
+    email: string;
+    uid: string;
+    balanceBefore: number;
+    balanceAfter: number;
+    amount: number;
+  }>;
+  message?: string;
+}
 
 export interface CreditLedgerResult {
   success: boolean;
@@ -34,10 +89,33 @@ export interface CreditAdjustmentResult {
   performedBy: string;
 }
 
+export interface BulkRemovalPreviewResult {
+  targetScope: string;
+  recipientCount: number;
+  amountPerUser: number;
+  estimatedTotalCredits: number;
+  reason: string;
+  sampleRecipients: Array<{
+    id: string;
+    uid: string;
+    name: string;
+    email: string;
+    role: string;
+    currentBalance: number;
+    creditsToDeduct: number;
+  }>;
+  breakdown: {
+    developers: number;
+    clients: number;
+    other: number;
+  };
+}
+
 export interface BulkCreditResult {
   success: boolean;
   targetScope: string;
   count: number;
+  recipientCount?: number;
   totalCredits: number;
   batchReference: string;
   affectedUsers: Array<{
@@ -489,11 +567,12 @@ export class CreditLedgerService {
   }): Promise<CreditAdjustmentResult> {
     const { target, amount, reason, adminUserId, referenceId, metadata } = params;
 
-    if (!amount || amount <= 0 || !Number.isInteger(amount)) {
-      throw new Error('Credit removal amount must be a positive integer greater than zero.');
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      throw new Error('Credit removal amount must be a positive integer between 1 and 1,000,000.');
     }
-    if (!reason || reason.trim().length < 5) {
-      throw new Error('Mandatory justification reason required for credit removal.');
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
+      throw new Error('Mandatory justification reason (at least 5 characters) required for credit removal.');
     }
 
     return withTransaction(async (client) => {
@@ -505,22 +584,23 @@ export class CreditLedgerService {
       const accRes = await client.query(
         `SELECT id, balance FROM credit_accounts
          WHERE user_id = $1 OR (developer_id IS NOT NULL AND developer_id = $2)
+         ORDER BY user_id NULLS LAST
          FOR UPDATE`,
         [user.id, user.developer_id || null]
       );
 
       if (accRes.rows.length === 0) {
-        throw new Error(`Cannot remove ${amount} credits: Credit account not found. Current balance is 0.`);
+        throw new Error(`Cannot remove ${numAmount} credits: Credit account not found. Current balance is 0.`);
       }
 
       const balanceBefore = Number(accRes.rows[0].balance);
-      if (balanceBefore < amount) {
+      if (balanceBefore < numAmount) {
         throw new Error(
-          `Cannot remove ${amount} credits: Current balance is ${balanceBefore}. Operation would result in negative balance. Business rules prohibit negative credit balances.`
+          `Cannot remove ${numAmount} credits: Current balance is ${balanceBefore}. Operation would result in negative balance. Business rules prohibit negative credit balances.`
         );
       }
 
-      const balanceAfter = balanceBefore - amount;
+      const balanceAfter = balanceBefore - numAmount;
 
       await client.query(
         `UPDATE credit_accounts SET balance = $1, user_id = $2, updated_at = NOW() WHERE id = $3`,
@@ -540,12 +620,12 @@ export class CreditLedgerService {
         [
           user.id,
           user.developer_id || null,
-          -amount,
+          -numAmount,
           balanceBefore,
           balanceAfter,
           refId,
-          reason,
-          `Admin deduction by ${adminUserId}: ${reason}`,
+          reason.trim(),
+          `Admin deduction by ${adminUserId}: ${reason.trim()}`,
           adminUserId,
           JSON.stringify(metadata || {}),
         ]
@@ -557,7 +637,7 @@ export class CreditLedgerService {
           action: 'ADMIN_CREDIT_REMOVAL',
           entityType: 'CREDIT_ACCOUNT',
           entityId: accRes.rows[0].id,
-          metadata: { targetUserId: user.id, developerId: user.developer_id, amount: -amount, balanceBefore, balanceAfter, reason, referenceId: refId },
+          metadata: { targetUserId: user.id, developerId: user.developer_id, amount: -numAmount, balanceBefore, balanceAfter, reason: reason.trim(), referenceId: refId },
         },
         client
       );
@@ -566,9 +646,9 @@ export class CreditLedgerService {
         userId: user.id,
         type: 'CREDIT_REMOVED',
         title: 'Credit Deduction',
-        message: `An administrator deducted ${amount} credits from your account. Reason: ${reason}. New balance: ${balanceAfter} credits.`,
+        message: `An administrator deducted ${numAmount} credits from your account. Reason: ${reason.trim()}. New balance: ${balanceAfter} credits.`,
         link: '/wallet',
-        metadata: { amount: -amount, balanceAfter, balanceBefore, referenceId: refId, reason, performedBy: adminUserId },
+        metadata: { amount: -numAmount, balanceAfter, balanceBefore, referenceId: refId, reason: reason.trim(), performedBy: adminUserId },
         client,
       });
 
@@ -577,6 +657,7 @@ export class CreditLedgerService {
         user: {
           id: user.id,
           uid: user.uid,
+          name: user.name || user.developer_name || user.email,
           email: user.email,
           role: user.role,
           developerId: user.developer_id,
@@ -584,10 +665,10 @@ export class CreditLedgerService {
         balance: balanceAfter,
         newBalance: balanceAfter,
         balanceBefore,
-        amount: -amount,
+        amount: -numAmount,
         transactionId: tx.rows[0].id,
         referenceId: refId,
-        reason,
+        reason: reason.trim(),
         type: 'ADMIN_CREDIT_REMOVAL',
         timestamp: tx.rows[0].created_at,
         performedBy: adminUserId,
@@ -596,251 +677,613 @@ export class CreditLedgerService {
   }
 
   /**
-   * Bulk grant credits to multiple or all eligible users inside an atomic ledger transaction
+   * Resolves platform users eligible for bulk credit grants based on scope and filters.
+   * Strictly enforces eligibility:
+   * - Excludes suspended users unless explicitly configured.
+   * - Excludes deleted / disabled users.
+   * - Excludes guests.
+   * - Validates developer / client relation.
+   */
+  static async resolveEligibleUsers(params: {
+    targetScope: 'ALL' | 'ALL_DEVELOPERS' | 'ALL_CLIENTS' | 'SELECTED' | 'CUSTOM' | 'FILTERED';
+    userIds?: string[];
+    filters?: BulkTargetFilters;
+  }): Promise<Array<{
+    id: string;
+    uid: string;
+    public_uid: string;
+    email: string;
+    role: string;
+    status: string;
+    is_suspended: boolean;
+    name: string;
+    developer_id: string | null;
+    developer_username: string | null;
+    verification_status: string | null;
+    experience: number | null;
+    client_id: string | null;
+    company_name: string | null;
+    current_balance: number;
+    currency: string;
+  }>> {
+    const { targetScope, userIds, filters } = params;
+    const queryParams: any[] = [];
+    const conditions: string[] = [];
+
+    // Base exclusion: GUEST role and DISABLED accounts are never eligible
+    conditions.push(`u.role != 'GUEST'`);
+    conditions.push(`u.status != 'DISABLED'`);
+
+    // Suspended users exclusion (unless explicitly configured)
+    if (!filters?.includeSuspended) {
+      conditions.push(`u.status = 'ACTIVE'`);
+      conditions.push(`u.is_suspended = FALSE`);
+    }
+
+    if (targetScope === 'ALL_DEVELOPERS') {
+      conditions.push(`u.role = 'DEVELOPER'`);
+      conditions.push(`d.id IS NOT NULL`);
+      conditions.push(`d.verification_status NOT IN ('SUSPENDED', 'REJECTED')`);
+    } else if (targetScope === 'ALL_CLIENTS') {
+      conditions.push(`u.role = 'CLIENT'`);
+      conditions.push(`c.id IS NOT NULL`);
+    } else if (targetScope === 'ALL') {
+      conditions.push(`u.role IN ('DEVELOPER', 'CLIENT')`);
+    } else if (targetScope === 'SELECTED' || targetScope === 'CUSTOM') {
+      if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+        throw new Error('userIds array is required for SELECTED/CUSTOM audience.');
+      }
+      queryParams.push(userIds);
+      const pIdx = queryParams.length;
+      conditions.push(`(
+        u.id::text = ANY($${pIdx})
+        OR u.uid = ANY($${pIdx})
+        OR u.public_uid = ANY($${pIdx})
+        OR u.email = ANY($${pIdx})
+        OR d.id::text = ANY($${pIdx})
+        OR d.username = ANY($${pIdx})
+      )`);
+    } else if (targetScope === 'FILTERED') {
+      if (filters?.role && filters.role !== 'ALL') {
+        queryParams.push(filters.role);
+        conditions.push(`u.role = $${queryParams.length}`);
+      } else {
+        conditions.push(`u.role IN ('DEVELOPER', 'CLIENT')`);
+      }
+
+      if (filters?.verificationStatus && filters.verificationStatus !== 'ALL') {
+        queryParams.push(filters.verificationStatus);
+        conditions.push(`d.verification_status = $${queryParams.length}`);
+      }
+
+      if (filters?.minExperience && Number(filters.minExperience) > 0) {
+        queryParams.push(Number(filters.minExperience));
+        conditions.push(`d.experience >= $${queryParams.length}`);
+      }
+
+      if (filters?.skills && Array.isArray(filters.skills) && filters.skills.length > 0) {
+        queryParams.push(filters.skills);
+        const pIdx = queryParams.length;
+        conditions.push(`d.id IN (
+          SELECT ds.developer_id FROM developer_skills ds
+          JOIN skills s ON s.id = ds.skill_id
+          WHERE s.name = ANY($${pIdx})
+        )`);
+      }
+
+      if (filters?.search && filters.search.trim().length > 0) {
+        queryParams.push(`%${filters.search.trim()}%`);
+        const pIdx = queryParams.length;
+        conditions.push(`(
+          u.email ILIKE $${pIdx}
+          OR u.uid ILIKE $${pIdx}
+          OR d.display_name ILIKE $${pIdx}
+          OR d.username ILIKE $${pIdx}
+          OR c.company_name ILIKE $${pIdx}
+          OR c.private_name ILIKE $${pIdx}
+        )`);
+      }
+    } else {
+      throw new Error(`Invalid audience targetScope: ${targetScope}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ` + conditions.join(' AND ') : '';
+
+    const sql = `
+      SELECT 
+        u.id,
+        u.uid,
+        u.public_uid,
+        u.email,
+        u.role,
+        u.status,
+        u.is_suspended,
+        COALESCE(d.display_name, c.private_name, c.company_name, split_part(u.email, '@', 1)) AS name,
+        d.id AS developer_id,
+        d.username AS developer_username,
+        d.verification_status,
+        d.experience,
+        c.id AS client_id,
+        c.company_name,
+        COALESCE(ca.balance, 0)::int AS current_balance,
+        COALESCE(ca.currency, 'INR') AS currency
+      FROM users u
+      LEFT JOIN developers d ON d.user_id = u.id
+      LEFT JOIN clients c ON c.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT balance, currency FROM credit_accounts 
+        WHERE user_id = u.id OR (developer_id IS NOT NULL AND developer_id = d.id)
+        LIMIT 1
+      ) ca ON true
+      ${whereClause}
+      ORDER BY u.created_at DESC
+    `;
+
+    const res = await query(sql, queryParams);
+    return res.rows.map((r) => ({
+      ...r,
+      current_balance: Number(r.current_balance),
+    }));
+  }
+
+  /**
+   * Previews a bulk grant operation, returning recipient count, credits per user, total credits,
+   * reason, and a sample recipient list without modifying any balances.
+   */
+  static async previewBulkGrant(params: {
+    targetScope: 'ALL' | 'ALL_DEVELOPERS' | 'ALL_CLIENTS' | 'SELECTED' | 'CUSTOM' | 'FILTERED';
+    userIds?: string[];
+    filters?: BulkTargetFilters;
+    amount: number;
+    reason: string;
+  }): Promise<BulkPreviewResult> {
+    const { targetScope, userIds, filters, amount, reason } = params;
+
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      throw new Error('Credits per user must be a positive integer between 1 and 1,000,000.');
+    }
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
+      throw new Error('Mandatory justification reason (at least 5 characters) required.');
+    }
+
+    const eligibleUsers = await this.resolveEligibleUsers({ targetScope, userIds, filters });
+    const recipientCount = eligibleUsers.length;
+    const totalCredits = recipientCount * numAmount;
+
+    const sampleRecipients = eligibleUsers.slice(0, 10).map((u) => ({
+      id: u.id,
+      uid: u.uid,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      currentBalance: u.current_balance,
+    }));
+
+    const breakdown = {
+      developers: eligibleUsers.filter((u) => u.role === 'DEVELOPER').length,
+      clients: eligibleUsers.filter((u) => u.role === 'CLIENT').length,
+      other: eligibleUsers.filter((u) => u.role !== 'DEVELOPER' && u.role !== 'CLIENT').length,
+    };
+
+    return {
+      targetScope,
+      recipientCount,
+      amountPerUser: numAmount,
+      totalCredits,
+      reason: reason.trim(),
+      sampleRecipients,
+      breakdown,
+    };
+  }
+
+  /**
+   * Executes a bulk credit grant operation in controlled batches.
+   * Satisfies all Phase 8 requirements:
+   * - Creates an administrative bulk-operation audit record in credit_bulk_operations.
+   * - Processes recipients in controlled transactions (BATCH_SIZE = 50) to prevent timeouts.
+   * - Atomically updates each user's credit_account.
+   * - Creates an individual, immutable credit_transaction per recipient referencing the bulk operation.
+   * - Follows notification policy: suppresses realtime socket flood for > 25 recipients while ensuring DB notifications exist.
+   * - Records an executive audit log.
    */
   static async bulkGrantCredits(params: {
-    targetScope: 'ALL' | 'ALL_DEVELOPERS' | 'ALL_CLIENTS' | 'CUSTOM';
+    targetScope: 'ALL' | 'ALL_DEVELOPERS' | 'ALL_CLIENTS' | 'SELECTED' | 'CUSTOM' | 'FILTERED';
     userIds?: string[];
+    filters?: BulkTargetFilters;
     amount: number;
     reason: string;
     adminUserId: string;
+    async?: boolean;
     metadata?: any;
-  }): Promise<BulkCreditResult> {
-    const { targetScope, userIds, amount, reason, adminUserId, metadata } = params;
+  }): Promise<BulkCreditExecutionResult> {
+    const { targetScope, userIds, filters, amount, reason, adminUserId, metadata } = params;
 
-    if (!amount || amount <= 0 || !Number.isInteger(amount)) {
-      throw new Error('Bulk credit grant amount must be a positive integer.');
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      throw new Error('Bulk credit grant amount must be a positive integer between 1 and 1,000,000.');
     }
-    if (!reason || reason.trim().length < 5) {
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
       throw new Error('Mandatory justification reason (at least 5 characters) required for bulk adjustments.');
     }
 
-    return withTransaction(async (client) => {
-      let usersQuery = '';
-      let usersParams: any[] = [];
+    const eligibleUsers = await this.resolveEligibleUsers({ targetScope, userIds, filters });
+    if (eligibleUsers.length === 0) {
+      throw new Error('No eligible target users found for bulk credit grant with the specified criteria.');
+    }
 
-      if (targetScope === 'ALL_DEVELOPERS') {
-        usersQuery = `
-          SELECT u.id, u.uid, u.email, u.role, d.id as developer_id
-          FROM users u
-          JOIN developers d ON d.user_id = u.id
-          WHERE u.status = 'ACTIVE' AND u.is_suspended = FALSE
-        `;
-      } else if (targetScope === 'ALL_CLIENTS') {
-        usersQuery = `
-          SELECT u.id, u.uid, u.email, u.role, NULL as developer_id
-          FROM users u
-          JOIN clients c ON c.user_id = u.id
-          WHERE u.status = 'ACTIVE' AND u.is_suspended = FALSE
-        `;
-      } else if (targetScope === 'ALL') {
-        usersQuery = `
-          SELECT u.id, u.uid, u.email, u.role, d.id as developer_id
-          FROM users u
-          LEFT JOIN developers d ON d.user_id = u.id
-          WHERE u.status = 'ACTIVE' AND u.is_suspended = FALSE
-            AND u.role IN ('DEVELOPER', 'CLIENT')
-        `;
-      } else if (targetScope === 'CUSTOM') {
-        if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-          throw new Error('userIds array is required for CUSTOM target scope.');
-        }
-        usersQuery = `
-          SELECT u.id, u.uid, u.email, u.role, d.id as developer_id
-          FROM users u
-          LEFT JOIN developers d ON d.user_id = u.id
-          WHERE u.id::text = ANY($1)
-             OR u.uid = ANY($1)
-             OR u.public_uid = ANY($1)
-             OR u.email = ANY($1)
-             OR d.id::text = ANY($1)
-        `;
-        usersParams = [userIds];
-      } else {
-        throw new Error(`Invalid target scope: ${targetScope}`);
-      }
+    const totalCredits = eligibleUsers.length * numAmount;
+    const opId = `BULK-OP-${Date.now().toString().slice(-8)}-${crypto.randomBytes(3).toString('hex')}`;
 
-      const usersRes = await client.query(usersQuery, usersParams);
-      const eligibleUsers = usersRes.rows;
+    // 1. Create administrative bulk-operation audit record
+    const bulkOpRes = await query(
+      `INSERT INTO credit_bulk_operations (
+         operation_id, performed_by, target_scope, amount_per_user,
+         recipient_count, total_credits, reason, status, filters
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'PROCESSING', $8)
+       RETURNING id, operation_id, created_at`,
+      [
+        opId,
+        adminUserId,
+        targetScope,
+        numAmount,
+        eligibleUsers.length,
+        totalCredits,
+        reason.trim(),
+        JSON.stringify(filters || {}),
+      ]
+    );
 
-      if (eligibleUsers.length === 0) {
-        throw new Error('No eligible target users found for bulk credit grant.');
-      }
+    const bulkRecord = bulkOpRes.rows[0];
 
-      const batchReference = `BULK-GRANT-${Date.now().toString().slice(-8)}`;
+    // Worker function for controlled batch processing
+    const processBatches = async () => {
+      const BATCH_SIZE = 50;
       const affectedUsers: any[] = [];
+      const suppressRealtimeSockets = eligibleUsers.length > 25;
 
-      for (const u of eligibleUsers) {
-        const accRes = await client.query(
-          `SELECT id, balance FROM credit_accounts
-           WHERE user_id = $1 OR (developer_id IS NOT NULL AND developer_id = $2)
-           FOR UPDATE`,
-          [u.id, u.developer_id || null]
-        );
+      try {
+        for (let i = 0; i < eligibleUsers.length; i += BATCH_SIZE) {
+          const chunk = eligibleUsers.slice(i, i + BATCH_SIZE);
 
-        let accountId: string;
-        let balanceBefore = 0;
+          await withTransaction(async (client) => {
+            for (const u of chunk) {
+              const accRes = await client.query(
+                `SELECT id, balance, user_id, developer_id FROM credit_accounts
+                 WHERE user_id = $1 OR (developer_id IS NOT NULL AND developer_id = $2)
+                 ORDER BY user_id NULLS LAST
+                 FOR UPDATE`,
+                [u.id, u.developer_id || null]
+              );
 
-        if (accRes.rows.length === 0) {
-          const newAcc = await client.query(
-            `INSERT INTO credit_accounts (user_id, developer_id, balance, currency)
-             VALUES ($1, $2, 0, 'INR')
-             RETURNING id, balance`,
-            [u.id, u.developer_id || null]
-          );
-          accountId = newAcc.rows[0].id;
-          balanceBefore = 0;
-        } else {
-          accountId = accRes.rows[0].id;
-          balanceBefore = Number(accRes.rows[0].balance);
+              let accountId: string;
+              let balanceBefore = 0;
+
+              if (accRes.rows.length === 0) {
+                const newAcc = await client.query(
+                  `INSERT INTO credit_accounts (user_id, developer_id, balance, currency)
+                   VALUES ($1, $2, 0, 'INR')
+                   RETURNING id, balance`,
+                  [u.id, u.developer_id || null]
+                );
+                accountId = newAcc.rows[0].id;
+                balanceBefore = 0;
+              } else {
+                accountId = accRes.rows[0].id;
+                balanceBefore = Number(accRes.rows[0].balance);
+              }
+
+              const balanceAfter = balanceBefore + numAmount;
+
+              if (!accRes.rows[0]?.user_id && u.id) {
+                await client.query(
+                  `UPDATE credit_accounts SET balance = $1, user_id = $2, updated_at = NOW() WHERE id = $3`,
+                  [balanceAfter, u.id, accountId]
+                );
+              } else {
+                await client.query(
+                  `UPDATE credit_accounts SET balance = $1, updated_at = NOW() WHERE id = $2`,
+                  [balanceAfter, accountId]
+                );
+              }
+
+              const refId = `${opId}-${u.uid.slice(-4)}`;
+
+              await client.query(
+                `INSERT INTO credit_transactions (
+                   user_id, developer_id, type, amount, balance_before, balance_after,
+                   reference_id, reason, description, performed_by, bulk_operation_id, metadata
+                 ) VALUES (
+                   $1, $2, 'ADMIN_CREDIT_GRANT', $3, $4, $5,
+                   $6, $7, $8, $9, $10, $11
+                 )`,
+                [
+                  u.id,
+                  u.developer_id || null,
+                  numAmount,
+                  balanceBefore,
+                  balanceAfter,
+                  refId,
+                  reason.trim(),
+                  `Bulk credit grant (${opId}): ${reason.trim()}`,
+                  adminUserId,
+                  bulkRecord.id,
+                  JSON.stringify({ ...metadata, operationId: opId, targetScope, amountPerUser: numAmount }),
+                ]
+              );
+
+              // Notifications policy: Insert DB notification
+              const notifMsg = `An administrator granted +${numAmount} credits to your account. Reason: ${reason.trim()}. New balance: ${balanceAfter} credits.`;
+              await client.query(
+                `INSERT INTO notifications (user_id, type, title, message, link, metadata)
+                 VALUES ($1, 'CREDIT_GRANTED', 'Credits Granted to Account', $2, '/wallet', $3)`,
+                [
+                  u.id,
+                  notifMsg,
+                  JSON.stringify({ amount: numAmount, balanceAfter, balanceBefore, referenceId: refId, operationId: opId }),
+                ]
+              );
+
+              // Realtime socket policy: emit only for small audiences (<= 25)
+              if (!suppressRealtimeSockets) {
+                try {
+                  RealtimeEvents.emitNotification(u.id, {
+                    type: 'CREDIT_GRANTED',
+                    title: 'Credits Granted to Account',
+                    message: notifMsg,
+                    link: '/wallet',
+                    created_at: new Date().toISOString(),
+                  });
+                } catch (_err) {}
+              }
+
+              affectedUsers.push({
+                userId: u.id,
+                email: u.email,
+                uid: u.uid,
+                balanceBefore,
+                balanceAfter,
+                amount: numAmount,
+              });
+            }
+          });
         }
 
-        const balanceAfter = balanceBefore + amount;
-
-        await client.query(
-          `UPDATE credit_accounts SET balance = $1, user_id = $2, updated_at = NOW() WHERE id = $3`,
-          [balanceAfter, u.id, accountId]
+        // Mark bulk operation as COMPLETED
+        await query(
+          `UPDATE credit_bulk_operations
+           SET status = 'COMPLETED', updated_at = NOW(), completed_at = NOW()
+           WHERE id = $1`,
+          [bulkRecord.id]
         );
 
-        await client.query(
-          `INSERT INTO credit_transactions (
-             user_id, developer_id, type, amount, balance_before, balance_after,
-             reference_id, reason, description, performed_by, metadata
-           ) VALUES (
-             $1, $2, 'ADMIN_CREDIT_GRANT', $3, $4, $5,
-             $6, $7, $8, $9, $10
-           )`,
-          [
-            u.id,
-            u.developer_id || null,
-            amount,
-            balanceBefore,
-            balanceAfter,
-            batchReference,
-            reason,
-            `Bulk grant by admin ${adminUserId}: ${reason}`,
-            adminUserId,
-            JSON.stringify({ ...metadata, batchReference, targetScope }),
-          ]
-        );
-
-        await NotificationService.createNotification({
-          userId: u.id,
-          type: 'CREDIT_GRANTED',
-          title: 'Credits Granted to Your Account',
-          message: `An administrator granted +${amount} credits to your account. Reason: ${reason}. New balance: ${balanceAfter} credits.`,
-          link: '/wallet',
-          metadata: { amount, balanceAfter, balanceBefore, referenceId: batchReference, reason, performedBy: adminUserId },
-          client,
-        });
-
-        affectedUsers.push({
-          userId: u.id,
-          email: u.email,
-          uid: u.uid,
-          balanceBefore,
-          balanceAfter,
-          amount,
-        });
-      }
-
-      await AuditLogger.log(
-        {
+        // Audit log
+        await AuditLogger.log({
           actorUserId: adminUserId,
           action: 'ADMIN_BULK_CREDIT_GRANT',
-          entityType: 'CREDIT_SYSTEM',
-          entityId: batchReference,
+          entityType: 'CREDIT_BULK_OPERATION',
+          entityId: bulkRecord.id,
           metadata: {
+            operationId: opId,
             targetScope,
-            amount,
-            totalCredits: affectedUsers.length * amount,
-            userCount: affectedUsers.length,
-            reason,
-            batchReference,
+            amountPerUser: numAmount,
+            totalCredits,
+            recipientCount: eligibleUsers.length,
+            reason: reason.trim(),
           },
-        },
-        client
-      );
+        });
+
+        return affectedUsers;
+      } catch (err: any) {
+        await query(
+          `UPDATE credit_bulk_operations
+           SET status = 'FAILED', error_message = $1, updated_at = NOW()
+           WHERE id = $2`,
+          [err.message, bulkRecord.id]
+        );
+        throw err;
+      }
+    };
+
+    if (params.async) {
+      setImmediate(() => {
+        processBatches().catch((e) => console.error('[BulkCreditWorker Error]:', e));
+      });
 
       return {
         success: true,
+        operationId: opId,
+        bulkOperationRecordId: bulkRecord.id,
+        batchReference: bulkRecord.id,
         targetScope,
-        count: affectedUsers.length,
-        totalCredits: affectedUsers.length * amount,
-        batchReference,
-        affectedUsers,
+        recipientCount: eligibleUsers.length,
+        count: eligibleUsers.length,
+        amountPerUser: numAmount,
+        totalCredits,
+        reason: reason.trim(),
+        performedBy: adminUserId,
+        status: 'PROCESSING',
+        message: 'Bulk credit grant queued and processing in background batches.',
       };
+    }
+
+    const affectedUsers = await processBatches();
+
+    return {
+      success: true,
+      operationId: opId,
+      bulkOperationRecordId: bulkRecord.id,
+      batchReference: bulkRecord.id,
+      targetScope,
+      recipientCount: affectedUsers.length,
+      count: affectedUsers.length,
+      amountPerUser: numAmount,
+      totalCredits,
+      reason: reason.trim(),
+      performedBy: adminUserId,
+      status: 'COMPLETED',
+      affectedUsers: affectedUsers.slice(0, 50),
+    };
+  }
+
+  /**
+   * Lists administrative bulk credit operations with pagination and performer details
+   */
+  static async listBulkOperations(filters?: { limit?: number; offset?: number }) {
+    const limit = Math.min(Math.max(Number(filters?.limit || 20), 1), 100);
+    const offset = Math.max(Number(filters?.offset || 0), 0);
+
+    const res = await query(
+      `SELECT bo.*, u.uid as performed_by_uid, u.email as performed_by_email, u.role as performed_by_role
+       FROM credit_bulk_operations bo
+       LEFT JOIN users u ON bo.performed_by = u.id
+       ORDER BY bo.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+
+    const countRes = await query(`SELECT COUNT(*)::int as total FROM credit_bulk_operations`);
+    const total = countRes.rows[0]?.total || 0;
+
+    return {
+      operations: res.rows,
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  /**
+   * Retrieves single bulk operation details along with sample individual ledger transactions
+   */
+  static async getBulkOperation(operationId: string) {
+    const opRes = await query(
+      `SELECT bo.*, u.uid as performed_by_uid, u.email as performed_by_email, u.role as performed_by_role
+       FROM credit_bulk_operations bo
+       LEFT JOIN users u ON bo.performed_by = u.id
+       WHERE bo.id::text = $1 OR bo.operation_id = $1`,
+      [operationId.trim()]
+    );
+
+    if (opRes.rows.length === 0) {
+      throw new Error(`Bulk operation not found: ${operationId}`);
+    }
+
+    const operation = opRes.rows[0];
+
+    const txRes = await query(
+      `SELECT ct.id, ct.type, ct.amount, ct.balance_before, ct.balance_after, ct.reference_id, ct.created_at,
+              u.id as user_id, u.uid as user_uid, u.email as user_email, u.role as user_role,
+              d.display_name as developer_name, d.username as developer_username
+       FROM credit_transactions ct
+       LEFT JOIN users u ON ct.user_id = u.id
+       LEFT JOIN developers d ON ct.developer_id = d.id
+       WHERE ct.bulk_operation_id = $1
+       ORDER BY ct.created_at ASC
+       LIMIT 50`,
+      [operation.id]
+    );
+
+    return {
+      operation,
+      sampleTransactions: txRes.rows,
+    };
+  }
+
+  /**
+   * Previews a bulk credit removal without mutating balances.
+   * Calculates eligible recipients with positive balance, total deductions, and breakdown.
+   */
+  static async previewBulkRemove(params: {
+    targetScope: 'ALL' | 'ALL_DEVELOPERS' | 'ALL_CLIENTS' | 'SELECTED' | 'CUSTOM' | 'FILTERED';
+    userIds?: string[];
+    filters?: BulkTargetFilters;
+    amount: number;
+    reason: string;
+    allowPartial?: boolean;
+  }): Promise<BulkRemovalPreviewResult> {
+    const { targetScope, userIds, filters, amount, reason, allowPartial = true } = params;
+
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      throw new Error('Credits to remove per user must be a positive integer between 1 and 1,000,000.');
+    }
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
+      throw new Error('Mandatory justification reason (at least 5 characters) required.');
+    }
+
+    const eligibleUsers = await this.resolveEligibleUsers({
+      targetScope: targetScope === 'CUSTOM' ? 'SELECTED' : targetScope,
+      userIds,
+      filters,
     });
+
+    // Only accounts with positive balances can have credits removed
+    const activeWithBalance = eligibleUsers.filter((u) => u.current_balance > 0);
+
+    const estimatedTotalCredits = activeWithBalance.reduce((sum, u) => {
+      if (allowPartial) {
+        return sum + Math.min(u.current_balance, numAmount);
+      }
+      return sum + (u.current_balance >= numAmount ? numAmount : 0);
+    }, 0);
+
+    const sampleRecipients = activeWithBalance.slice(0, 5).map((u) => ({
+      id: u.id,
+      uid: u.uid,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      currentBalance: u.current_balance,
+      creditsToDeduct: allowPartial ? Math.min(u.current_balance, numAmount) : numAmount,
+    }));
+
+    const breakdown = {
+      developers: activeWithBalance.filter((u) => u.role === 'DEVELOPER').length,
+      clients: activeWithBalance.filter((u) => u.role === 'CLIENT').length,
+      other: activeWithBalance.filter((u) => u.role !== 'DEVELOPER' && u.role !== 'CLIENT').length,
+    };
+
+    return {
+      targetScope,
+      recipientCount: activeWithBalance.length,
+      amountPerUser: numAmount,
+      estimatedTotalCredits,
+      reason: reason.trim(),
+      sampleRecipients,
+      breakdown,
+    };
   }
 
   /**
    * Bulk remove credits from multiple or all eligible users with non-negative balance protection
    */
   static async bulkRemoveCredits(params: {
-    targetScope: 'ALL' | 'ALL_DEVELOPERS' | 'ALL_CLIENTS' | 'CUSTOM';
+    targetScope: 'ALL' | 'ALL_DEVELOPERS' | 'ALL_CLIENTS' | 'SELECTED' | 'CUSTOM' | 'FILTERED';
     userIds?: string[];
+    filters?: BulkTargetFilters;
     amount: number;
     reason: string;
     adminUserId: string;
     allowPartial?: boolean;
     metadata?: any;
   }): Promise<BulkCreditResult> {
-    const { targetScope, userIds, amount, reason, adminUserId, allowPartial = true, metadata } = params;
+    const { targetScope, userIds, filters, amount, reason, adminUserId, allowPartial = true, metadata } = params;
 
-    if (!amount || amount <= 0 || !Number.isInteger(amount)) {
-      throw new Error('Bulk credit removal amount must be a positive integer.');
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      throw new Error('Bulk credit removal amount must be a positive integer between 1 and 1,000,000.');
     }
-    if (!reason || reason.trim().length < 5) {
-      throw new Error('Mandatory justification reason required for bulk credit removal.');
+    if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
+      throw new Error('Mandatory justification reason (at least 5 characters) required for bulk credit removal.');
     }
 
     return withTransaction(async (client) => {
-      let usersQuery = '';
-      let usersParams: any[] = [];
-
-      if (targetScope === 'ALL_DEVELOPERS') {
-        usersQuery = `
-          SELECT u.id, u.uid, u.email, u.role, d.id as developer_id
-          FROM users u
-          JOIN developers d ON d.user_id = u.id
-          WHERE u.status = 'ACTIVE' AND u.is_suspended = FALSE
-        `;
-      } else if (targetScope === 'ALL_CLIENTS') {
-        usersQuery = `
-          SELECT u.id, u.uid, u.email, u.role, NULL as developer_id
-          FROM users u
-          JOIN clients c ON c.user_id = u.id
-          WHERE u.status = 'ACTIVE' AND u.is_suspended = FALSE
-        `;
-      } else if (targetScope === 'ALL') {
-        usersQuery = `
-          SELECT u.id, u.uid, u.email, u.role, d.id as developer_id
-          FROM users u
-          LEFT JOIN developers d ON d.user_id = u.id
-          WHERE u.status = 'ACTIVE' AND u.is_suspended = FALSE
-            AND u.role IN ('DEVELOPER', 'CLIENT')
-        `;
-      } else if (targetScope === 'CUSTOM') {
-        if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-          throw new Error('userIds array is required for CUSTOM target scope.');
-        }
-        usersQuery = `
-          SELECT u.id, u.uid, u.email, u.role, d.id as developer_id
-          FROM users u
-          LEFT JOIN developers d ON d.user_id = u.id
-          WHERE u.id::text = ANY($1)
-             OR u.uid = ANY($1)
-             OR u.public_uid = ANY($1)
-             OR u.email = ANY($1)
-             OR d.id::text = ANY($1)
-        `;
-        usersParams = [userIds];
-      } else {
-        throw new Error(`Invalid target scope: ${targetScope}`);
-      }
-
-      const usersRes = await client.query(usersQuery, usersParams);
-      const eligibleUsers = usersRes.rows;
+      const eligibleUsers = await this.resolveEligibleUsers({
+        targetScope: targetScope === 'CUSTOM' ? 'SELECTED' : targetScope,
+        userIds,
+        filters,
+      });
 
       if (eligibleUsers.length === 0) {
         throw new Error('No eligible target users found for bulk credit removal.');
@@ -854,6 +1297,7 @@ export class CreditLedgerService {
         const accRes = await client.query(
           `SELECT id, balance FROM credit_accounts
            WHERE user_id = $1 OR (developer_id IS NOT NULL AND developer_id = $2)
+           ORDER BY user_id NULLS LAST
            FOR UPDATE`,
           [u.id, u.developer_id || null]
         );
@@ -863,8 +1307,8 @@ export class CreditLedgerService {
         const currentBal = Number(accRes.rows[0].balance);
         if (currentBal <= 0) continue;
 
-        let deductAmt = amount;
-        if (currentBal < amount) {
+        let deductAmt = numAmount;
+        if (currentBal < numAmount) {
           if (!allowPartial) continue;
           deductAmt = currentBal;
         }
@@ -891,22 +1335,23 @@ export class CreditLedgerService {
             currentBal,
             balanceAfter,
             batchReference,
-            reason,
-            `Bulk deduction by admin ${adminUserId}: ${reason}`,
+            reason.trim(),
+            `Bulk deduction by admin ${adminUserId}: ${reason.trim()}`,
             adminUserId,
             JSON.stringify({ ...metadata, batchReference, targetScope }),
           ]
         );
 
-        await NotificationService.createNotification({
-          userId: u.id,
-          type: 'CREDIT_REMOVED',
-          title: 'Credits Deducted from Your Account',
-          message: `An administrator deducted ${deductAmt} credits from your account. Reason: ${reason}. New balance: ${balanceAfter} credits.`,
-          link: '/wallet',
-          metadata: { amount: deductAmt, balanceAfter, balanceBefore: currentBal, referenceId: batchReference, reason, performedBy: adminUserId },
-          client,
-        });
+        const notifMsg = `An administrator deducted ${deductAmt} credits from your account. Reason: ${reason.trim()}. New balance: ${balanceAfter} credits.`;
+        await client.query(
+          `INSERT INTO notifications (user_id, type, title, message, link, metadata)
+           VALUES ($1, 'CREDIT_REMOVED', 'Credits Deducted from Your Account', $2, '/wallet', $3)`,
+          [
+            u.id,
+            notifMsg,
+            JSON.stringify({ amount: -deductAmt, balanceAfter, balanceBefore: currentBal, referenceId: batchReference, reason: reason.trim(), performedBy: adminUserId }),
+          ]
+        );
 
         affectedUsers.push({
           userId: u.id,
@@ -927,10 +1372,10 @@ export class CreditLedgerService {
           entityId: batchReference,
           metadata: {
             targetScope,
-            amountRequested: amount,
+            amountRequested: numAmount,
             totalCreditsRemoved: totalDeducted,
             userCount: affectedUsers.length,
-            reason,
+            reason: reason.trim(),
             batchReference,
           },
         },
@@ -941,6 +1386,7 @@ export class CreditLedgerService {
         success: true,
         targetScope,
         count: affectedUsers.length,
+        recipientCount: affectedUsers.length,
         totalCredits: totalDeducted,
         batchReference,
         affectedUsers,

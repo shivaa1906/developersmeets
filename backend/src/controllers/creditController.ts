@@ -151,22 +151,27 @@ export class CreditController {
     const { target, userId, developerId, amount, reason, referenceId, metadata } = req.body;
     const targetId = target || userId || developerId;
 
-    if (!targetId || amount === undefined || !reason) {
+    if (!targetId || amount === undefined || amount === null || !reason) {
       res.status(400).json({ error: 'target (userId, developerId, or public UID), amount, and reason are required' });
       return;
     }
 
-    const numAmount = parseInt(amount, 10);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      res.status(400).json({ error: 'Credit removal amount must be a positive integer greater than zero' });
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      res.status(400).json({ error: 'Credit removal amount must be a positive integer between 1 and 1,000,000.' });
+      return;
+    }
+
+    if (typeof reason !== 'string' || reason.trim().length < 5) {
+      res.status(400).json({ error: 'Mandatory justification reason (at least 5 characters) required for credit removal.' });
       return;
     }
 
     try {
       const result = await CreditLedgerService.removeCredits({
-        target: targetId,
+        target: String(targetId).trim(),
         amount: numAmount,
-        reason,
+        reason: reason.trim(),
         adminUserId: req.user!.userId,
         referenceId,
         metadata,
@@ -177,17 +182,55 @@ export class CreditController {
     }
   }
 
-  static async bulkGrant(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { targetScope = 'ALL_DEVELOPERS', userIds, amount, reason, metadata } = req.body;
+  static async previewBulkGrant(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { targetScope = 'ALL', userIds, filters, amount, reason } = req.body;
 
-    if (!amount || !reason) {
+    if (amount === undefined || amount === null || !reason) {
+      res.status(400).json({ error: 'amount and reason are required for bulk preview' });
+      return;
+    }
+
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      res.status(400).json({ error: 'Credits per user must be a positive integer between 1 and 1,000,000' });
+      return;
+    }
+
+    if (typeof reason !== 'string' || reason.trim().length < 5) {
+      res.status(400).json({ error: 'Mandatory justification reason (at least 5 characters) required.' });
+      return;
+    }
+
+    try {
+      const preview = await CreditLedgerService.previewBulkGrant({
+        targetScope,
+        userIds,
+        filters,
+        amount: numAmount,
+        reason: reason.trim(),
+      });
+      res.json(preview);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async bulkGrant(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { targetScope = 'ALL', userIds, filters, amount, reason, async: isAsync, metadata } = req.body;
+
+    if (amount === undefined || amount === null || !reason) {
       res.status(400).json({ error: 'amount and reason are required for bulk grant' });
       return;
     }
 
-    const numAmount = parseInt(amount, 10);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      res.status(400).json({ error: 'amount must be a positive integer greater than zero' });
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      res.status(400).json({ error: 'Credit amount per user must be a positive integer between 1 and 1,000,000' });
+      return;
+    }
+
+    if (typeof reason !== 'string' || reason.trim().length < 5) {
+      res.status(400).json({ error: 'Mandatory justification reason (at least 5 characters) required.' });
       return;
     }
 
@@ -195,28 +238,94 @@ export class CreditController {
       const result = await CreditLedgerService.bulkGrantCredits({
         targetScope,
         userIds,
+        filters,
         amount: numAmount,
-        reason,
+        reason: reason.trim(),
         adminUserId: req.user!.userId,
+        async: Boolean(isAsync),
         metadata,
       });
-      res.status(200).json(result);
+      res.status(result.status === 'PROCESSING' ? 202 : 200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async listBulkOperations(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { limit, offset } = req.query;
+
+    try {
+      const result = await CreditLedgerService.listBulkOperations({
+        limit: limit ? parseInt(limit as string, 10) : undefined,
+        offset: offset ? parseInt(offset as string, 10) : undefined,
+      });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async getBulkOperation(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { operationId } = req.params;
+
+    try {
+      const result = await CreditLedgerService.getBulkOperation(operationId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(404).json({ error: error.message });
+    }
+  }
+
+  static async previewBulkRemove(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { targetScope = 'ALL', userIds, filters, amount, reason, allowPartial = true } = req.body;
+
+    if (amount === undefined || amount === null || !reason) {
+      res.status(400).json({ error: 'amount and reason are required for bulk removal preview' });
+      return;
+    }
+
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      res.status(400).json({ error: 'Credits to remove per user must be a positive integer between 1 and 1,000,000' });
+      return;
+    }
+
+    if (typeof reason !== 'string' || reason.trim().length < 5) {
+      res.status(400).json({ error: 'Mandatory justification reason (at least 5 characters) required.' });
+      return;
+    }
+
+    try {
+      const preview = await CreditLedgerService.previewBulkRemove({
+        targetScope,
+        userIds,
+        filters,
+        amount: numAmount,
+        reason: reason.trim(),
+        allowPartial: Boolean(allowPartial),
+      });
+      res.json(preview);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   }
 
   static async bulkRemove(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { targetScope = 'ALL_DEVELOPERS', userIds, amount, reason, allowPartial = true, metadata } = req.body;
+    const { targetScope = 'ALL', userIds, filters, amount, reason, allowPartial = true, metadata } = req.body;
 
-    if (!amount || !reason) {
+    if (amount === undefined || amount === null || !reason) {
       res.status(400).json({ error: 'amount and reason are required for bulk removal' });
       return;
     }
 
-    const numAmount = parseInt(amount, 10);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      res.status(400).json({ error: 'amount must be a positive integer greater than zero' });
+    const numAmount = Number(amount);
+    if (!Number.isInteger(numAmount) || !Number.isSafeInteger(numAmount) || numAmount <= 0 || numAmount > 1_000_000) {
+      res.status(400).json({ error: 'amount must be a positive integer between 1 and 1,000,000' });
+      return;
+    }
+
+    if (typeof reason !== 'string' || reason.trim().length < 5) {
+      res.status(400).json({ error: 'Mandatory justification reason (at least 5 characters) required.' });
       return;
     }
 
@@ -224,10 +333,11 @@ export class CreditController {
       const result = await CreditLedgerService.bulkRemoveCredits({
         targetScope,
         userIds,
+        filters,
         amount: numAmount,
-        reason,
+        reason: reason.trim(),
         adminUserId: req.user!.userId,
-        allowPartial,
+        allowPartial: Boolean(allowPartial),
         metadata,
       });
       res.status(200).json(result);

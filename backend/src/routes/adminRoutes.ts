@@ -77,8 +77,12 @@ router.patch('/settings', requireRole(ROLES.CEO), AdminController.updateSettings
 router.post('/credits/adjust', requireCreditManagement, AdminController.adjustCredits);
 router.post('/credits/grant', requireCreditManagement, CreditController.grantCredits);
 router.post('/credits/remove', requireCreditManagement, CreditController.removeCredits);
+router.post('/credits/bulk-preview', requireCreditManagement, CreditController.previewBulkGrant);
 router.post('/credits/bulk-grant', requireCreditManagement, CreditController.bulkGrant);
+router.post('/credits/bulk-remove-preview', requireCreditManagement, CreditController.previewBulkRemove);
 router.post('/credits/bulk-remove', requireCreditManagement, CreditController.bulkRemove);
+router.get('/credits/bulk-operations', requireCreditManagement, CreditController.listBulkOperations);
+router.get('/credits/bulk-operations/:operationId', requireCreditManagement, CreditController.getBulkOperation);
 router.get('/credits/history', requireCreditManagement, CreditController.getCreditHistory);
 router.get('/credits/accounts', requireCreditManagement, CreditController.listAccounts);
 router.get('/credits/search-users', requireCreditManagement, CreditController.searchUsers);
