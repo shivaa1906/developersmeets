@@ -508,6 +508,7 @@ export class ProjectService {
   /**
    * Retrieves proposals for a project with identity shielding
    * Real developer names are masked as Developer #01, #02 etc.
+   * Competing developers cannot see other developers' proposals.
    */
   static async getProposals(
     projectId: string,
@@ -515,18 +516,38 @@ export class ProjectService {
   ) {
     const isLeadership = [ROLES.CEO, ROLES.MD, ROLES.ADMIN].includes(user.role as any);
 
-    const rows = await query(
-      `SELECT pr.id, pr.approach, pr.timeline, pr.price, pr.milestones, pr.technologies,
-              pr.additional_notes, pr.status, pr.created_at,
-              pc.id as claim_id, pc.anonymous_tag, pc.developer_id,
-              d.experience, d.role_title
-       FROM proposals pr
-       JOIN project_claims pc ON pr.project_claim_id = pc.id
-       JOIN developers d ON pc.developer_id = d.id
-       WHERE pc.project_id = $1
-       ORDER BY pr.created_at ASC`,
-      [projectId]
-    );
+    // If client, verify project ownership
+    if (user.role === ROLES.CLIENT && user.clientId) {
+      const projOwnerCheck = await query(`SELECT client_id FROM projects WHERE id = $1`, [projectId]);
+      if (projOwnerCheck.rows.length === 0 || projOwnerCheck.rows[0].client_id !== user.clientId) {
+        throw new Error('Forbidden: You can only view proposals for your own projects');
+      }
+    }
+
+    let sql = `
+      SELECT pr.id, pr.approach, pr.timeline, pr.price, pr.milestones, pr.technologies,
+             pr.additional_notes, pr.status, pr.created_at,
+             pc.id as claim_id, pc.anonymous_tag, pc.developer_id,
+             d.experience, d.role_title
+      FROM proposals pr
+      JOIN project_claims pc ON pr.project_claim_id = pc.id
+      JOIN developers d ON pc.developer_id = d.id
+      WHERE pc.project_id = $1
+    `;
+    const params: any[] = [projectId];
+
+    // Developer isolation: A developer can ONLY see their own proposal!
+    if (user.role === ROLES.DEVELOPER) {
+      if (!user.developerId) {
+        return [];
+      }
+      sql += ` AND pc.developer_id = $2`;
+      params.push(user.developerId);
+    }
+
+    sql += ` ORDER BY pr.created_at ASC`;
+
+    const rows = await query(sql, params);
 
     // If client or regular user, mask developerId unless leadership
     return rows.rows.map((row) => ({
@@ -536,16 +557,16 @@ export class ProjectService {
       anonymous_tag: row.anonymous_tag,
       approach: row.approach,
       timeline: row.timeline,
-      price: row.price,
-      milestones: row.milestones,
-      technologies: row.technologies,
+      price: Number(row.price),
+      milestones: typeof row.milestones === 'string' ? JSON.parse(row.milestones) : (row.milestones || []),
+      technologies: typeof row.technologies === 'string' ? JSON.parse(row.technologies) : (row.technologies || []),
       additionalNotes: row.additional_notes,
       status: row.status,
       created_at: row.created_at,
       developerProfile: {
         roleTitle: row.role_title,
         experienceYears: row.experience,
-        // Only leadership sees real developer ID
+        // Only leadership or proposal owner sees real developer ID
         developerId: isLeadership || row.developer_id === user.developerId ? row.developer_id : undefined,
       },
     }));
@@ -553,6 +574,7 @@ export class ProjectService {
 
   /**
    * Executes atomic developer selection by client with auto-refunds to unselected developers
+   * and automatic closure of unselected candidate chat channels
    */
   static async selectDeveloper(
     projectId: string,
@@ -617,7 +639,19 @@ export class ProjectService {
         client
       );
 
-      // 7. Notify winning developer
+      // 7. Close private conversations for unselected developers on this project
+      await client.query(
+        `UPDATE conversations
+         SET status = 'CLOSED', closed_at = NOW()
+         WHERE project_id = $1
+           AND type = 'PROJECT_PRIVATE'
+           AND id NOT IN (
+             SELECT conversation_id FROM conversation_members WHERE developer_id = $2
+           )`,
+        [projectId, selectedDeveloperId]
+      );
+
+      // 8. Notify winning developer
       const winDevUser = await client.query(
         `SELECT user_id FROM developers WHERE id = $1`,
         [selectedDeveloperId]

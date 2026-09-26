@@ -14,9 +14,10 @@ export class ChatController {
 
   static async getMessages(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { conversationId } = req.params;
+    const autoMarkRead = req.query.markRead === 'true';
     try {
-      const messages = await ChatService.getMessages(conversationId, req.user!.userId);
-      res.json({ messages });
+      const result = await ChatService.getMessages(conversationId, req.user!.userId, autoMarkRead);
+      res.json(result);
     } catch (error: any) {
       res.status(403).json({ error: error.message });
     }
@@ -37,5 +38,55 @@ export class ChatController {
     } catch (error: any) {
       res.status(403).json({ error: error.message });
     }
+  }
+
+  static async markAsRead(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { conversationId } = req.params;
+    try {
+      const result = await ChatService.markConversationAsRead(conversationId, req.user!.userId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(403).json({ error: error.message });
+    }
+  }
+
+  static async getUnread(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { conversationId } = req.params;
+    try {
+      const result = await ChatService.getUnreadState(conversationId, req.user!.userId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(403).json({ error: error.message });
+    }
+  }
+
+  static async streamMessages(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { conversationId } = req.params;
+    const userId = req.user!.userId;
+
+    // Verify membership first
+    try {
+      await ChatService.getUnreadState(conversationId, userId);
+    } catch (err: any) {
+      res.status(403).json({ error: err.message });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    res.write(`data: ${JSON.stringify({ type: 'CONNECTED', conversationId })}\n\n`);
+
+    const onMessageListener = (msg: any) => {
+      res.write(`data: ${JSON.stringify({ type: 'MESSAGE', ...msg })}\n\n`);
+    };
+
+    ChatService.onMessage(conversationId, onMessageListener);
+
+    req.on('close', () => {
+      ChatService.offMessage(conversationId, onMessageListener);
+    });
   }
 }
