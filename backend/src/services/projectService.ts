@@ -3,6 +3,7 @@ import { CreditLedgerService } from './creditLedgerService.js';
 import { PROJECT_STATUSES, ROLES } from '../config/constants.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { NotificationService } from './notificationService.js';
+import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
 
 export interface ProjectSubmissionInput {
   title: string;
@@ -62,7 +63,9 @@ export class ProjectService {
         seq = match ? parseInt(match[1], 10) : 1;
       }
 
-      const slug = `${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${seq}`;
+      const cleanTitle = sanitizeInput(data.title);
+      const cleanDescription = sanitizeRichText(data.description);
+      const slug = `${cleanTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${seq}`;
 
       const insertRes = await client.query(
         `INSERT INTO projects (
@@ -75,8 +78,8 @@ export class ProjectService {
         [
           projectNumber,
           slug,
-          data.title,
-          data.description,
+          cleanTitle,
+          cleanDescription,
           data.category,
           data.budgetMin,
           data.budgetMax,
@@ -180,10 +183,10 @@ export class ProjectService {
         `UPDATE projects
          SET status = 'OPEN_FOR_CLAIMS',
              max_claims = $1,
-             claim_deadline = NOW() + INTERVAL '${Math.max(1, deadlineDays)} days',
+             claim_deadline = NOW() + ($2 || ' days')::interval,
              updated_at = NOW()
-         WHERE id = $2`,
-        [maxClaims, projectId]
+         WHERE id = $3`,
+        [maxClaims, String(Math.max(1, deadlineDays)), projectId]
       );
 
       await AuditLogger.log({
@@ -479,12 +482,12 @@ export class ProjectService {
          RETURNING id, status`,
         [
           claim.id,
-          proposal.approach,
-          proposal.timeline,
+          sanitizeRichText(proposal.approach),
+          sanitizeInput(proposal.timeline),
           proposal.price,
           JSON.stringify(proposal.milestones || []),
           JSON.stringify(proposal.technologies || []),
-          proposal.additionalNotes || null,
+          proposal.additionalNotes ? sanitizeRichText(proposal.additionalNotes) : null,
         ]
       );
 

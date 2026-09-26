@@ -370,6 +370,22 @@ export class CreditLedgerService {
       throw new Error('Missing gateway payment identifier in webhook event');
     }
 
+    // Replay attack timestamp protection (max 5 minutes age)
+    const eventTime = event.timestamp || event.created || eventData.timestamp || eventData.created;
+    if (eventTime) {
+      const eventTimestampMs = typeof eventTime === 'number'
+        ? (eventTime < 1e12 ? eventTime * 1000 : eventTime)
+        : new Date(eventTime).getTime();
+      const now = Date.now();
+      const ageSeconds = (now - eventTimestampMs) / 1000;
+      if (ageSeconds > 300) {
+        throw new Error('Webhook rejected: Timestamp expired (replay protection).');
+      }
+      if (ageSeconds < -60) {
+        throw new Error('Webhook rejected: Future timestamp detected.');
+      }
+    }
+
     return withTransaction(async (client) => {
       // 2. Fetch payment record with row lock FOR UPDATE
       const paymentRes = await client.query(

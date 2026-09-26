@@ -15,12 +15,14 @@ import communityRoutes from './routes/communityRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import { LEADERSHIP } from './config/constants.js';
+import { apiRateLimiter } from './middlewares/rateLimiter.js';
 
 const app = express();
 
 // Security & utility middlewares
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+app.use('/api', apiRateLimiter());
 app.use(
   express.json({
     verify: (req: any, _res, buf) => {

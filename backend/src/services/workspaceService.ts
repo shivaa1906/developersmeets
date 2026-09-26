@@ -508,6 +508,19 @@ export class WorkspaceService {
       throw new Error(`Unsupported or prohibited file type: ${fileData.mimeType}`);
     }
 
+    const dangerousExtensions = ['.exe', '.sh', '.bat', '.cmd', '.msi', '.bin', '.js', '.py', '.apk', '.vbs', '.php', '.jar', '.com'];
+    const lowerName = fileData.fileName.toLowerCase();
+    const ext = lowerName.lastIndexOf('.') !== -1 ? lowerName.slice(lowerName.lastIndexOf('.')) : '';
+
+    if (dangerousExtensions.includes(ext)) {
+      throw new Error(`Upload of executable or dangerous file extension '${ext}' is prohibited.`);
+    }
+
+    const safeExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.zip', '.txt', '.json', '.ts', '.docx', '.csv'];
+    if (ext && !safeExtensions.includes(ext)) {
+      throw new Error(`Unsupported file extension '${ext}'. Allowed extensions: ${safeExtensions.join(', ')}`);
+    }
+
     const res = await query(
       `INSERT INTO project_files (project_id, milestone_id, file_name, file_url, file_size, mime_type, uploaded_by_user_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)

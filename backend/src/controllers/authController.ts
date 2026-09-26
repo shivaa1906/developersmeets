@@ -1,11 +1,17 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { query, withTransaction } from '../database/db.js';
 import { env } from '../config/environment.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { ROLES } from '../config/constants.js';
+import { BruteForceProtection } from '../middlewares/rateLimiter.js';
+import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
+
+// In-memory single-use reset token tracker
+const consumedResetTokens = new Set<string>();
 
 export class AuthController {
   /**
@@ -33,6 +39,12 @@ export class AuthController {
       return;
     }
 
+    const cleanFullName = sanitizeInput(fullName);
+    const cleanUsername = sanitizeInput(username);
+    const cleanRoleTitle = sanitizeInput(roleTitle);
+    const cleanBio = sanitizeRichText(bio);
+    const cleanLocation = sanitizeInput(location);
+
     try {
       const passwordHash = await bcrypt.hash(password, 10);
 
@@ -44,7 +56,7 @@ export class AuthController {
         }
 
         // Check existing username
-        const existingUsername = await client.query('SELECT id FROM developers WHERE username = $1', [username]);
+        const existingUsername = await client.query('SELECT id FROM developers WHERE username = $1', [cleanUsername]);
         if (existingUsername.rows.length > 0) {
           throw new Error('Username is already taken. Please choose another.');
         }
@@ -69,11 +81,11 @@ export class AuthController {
            RETURNING id, username, display_name, verification_status`,
           [
             user.id,
-            username,
-            fullName,
-            bio || '',
-            location || '',
-            roleTitle,
+            cleanUsername,
+            cleanFullName,
+            cleanBio || '',
+            cleanLocation || '',
+            cleanRoleTitle,
             parseInt(experience || '0', 10),
             githubUrl || null,
             linkedinUrl || null,
@@ -145,6 +157,9 @@ export class AuthController {
       return;
     }
 
+    const cleanCompanyName = sanitizeInput(companyName);
+    const cleanPrivateName = sanitizeInput(privateName);
+
     try {
       const passwordHash = await bcrypt.hash(password, 10);
 
@@ -177,7 +192,7 @@ export class AuthController {
           `INSERT INTO clients (user_id, client_number, company_name, private_name, phone)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING id, client_number, company_name`,
-          [user.id, clientTag, companyName, privateName, phone || null]
+          [user.id, clientTag, cleanCompanyName, cleanPrivateName, phone || null]
         );
 
         await AuditLogger.log(
@@ -221,6 +236,18 @@ export class AuthController {
       return;
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check account brute-force lockout status
+    const lockout = BruteForceProtection.isLocked(normalizedEmail);
+    if (lockout.locked) {
+      res.status(429).json({
+        error: `Account temporarily locked due to too many failed login attempts. Please try again in ${lockout.remainingSeconds} seconds.`,
+        retryAfter: lockout.remainingSeconds,
+      });
+      return;
+    }
+
     try {
       const userRes = await query('SELECT * FROM users WHERE email = $1', [email]);
       if (userRes.rows.length === 0) {
@@ -243,7 +270,18 @@ export class AuthController {
           res.json({ token, user: { email, role: ROLES.MD, name: 'M. Shiva Gopi' } });
           return;
         }
-        res.status(401).json({ error: 'Invalid email or password.' });
+
+        const attempt = BruteForceProtection.recordFailedAttempt(normalizedEmail);
+        if (attempt.locked) {
+          res.status(429).json({
+            error: 'Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.',
+          });
+          return;
+        }
+        res.status(401).json({
+          error: 'Invalid email or password.',
+          remainingAttempts: attempt.remainingAttempts,
+        });
         return;
       }
 
@@ -256,9 +294,22 @@ export class AuthController {
 
       const valid = await bcrypt.compare(password, user.password_hash);
       if (!valid) {
-        res.status(401).json({ error: 'Invalid email or password.' });
+        const attempt = BruteForceProtection.recordFailedAttempt(normalizedEmail);
+        if (attempt.locked) {
+          res.status(429).json({
+            error: 'Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.',
+          });
+          return;
+        }
+        res.status(401).json({
+          error: 'Invalid email or password.',
+          remainingAttempts: attempt.remainingAttempts,
+        });
         return;
       }
+
+      // Successful login clears brute force record
+      BruteForceProtection.clear(normalizedEmail);
 
       // Check developer profile if developer
       let developerId: string | undefined;
@@ -350,8 +401,9 @@ export class AuthController {
       }
 
       const user = userRes.rows[0];
+      const tokenId = crypto.randomUUID();
       const resetToken = jwt.sign(
-        { userId: user.id, purpose: 'PASSWORD_RESET' },
+        { userId: user.id, tokenId, purpose: 'PASSWORD_RESET' },
         env.JWT_SECRET,
         { expiresIn: '1h' }
       );
@@ -386,12 +438,19 @@ export class AuthController {
 
     try {
       let targetUserId: string | null = null;
+      let tokenIdentifier: string | null = null;
 
       if (resetToken) {
         try {
           const payload = jwt.verify(resetToken, env.JWT_SECRET) as any;
           if (payload.purpose !== 'PASSWORD_RESET') {
             res.status(400).json({ error: 'Invalid reset token purpose.' });
+            return;
+          }
+          const id = (payload.tokenId || resetToken) as string;
+          tokenIdentifier = id;
+          if (consumedResetTokens.has(id)) {
+            res.status(400).json({ error: 'Password reset token has already been used. Please request a new one.' });
             return;
           }
           targetUserId = payload.userId;
@@ -428,6 +487,11 @@ export class AuthController {
         [newHash, targetUserId]
       );
 
+      // Invalidate the reset token to prevent token reuse
+      if (tokenIdentifier) {
+        consumedResetTokens.add(tokenIdentifier);
+      }
+
       await AuditLogger.log({
         actorUserId: targetUserId,
         action: 'PASSWORD_RESET_COMPLETED',
@@ -439,6 +503,94 @@ export class AuthController {
       res.json({ message: 'Password has been successfully updated.' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Dispatches an email verification token for the user
+   */
+  static async sendVerificationEmail(req: Request, res: Response): Promise<void> {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'Email is required' });
+      return;
+    }
+
+    try {
+      const userRes = await query('SELECT id, email FROM users WHERE email = $1', [email]);
+      if (userRes.rows.length === 0) {
+        res.json({ message: 'If an account exists, a verification link has been sent.' });
+        return;
+      }
+
+      const user = userRes.rows[0];
+      const verificationToken = jwt.sign(
+        { userId: user.id, email: user.email, purpose: 'EMAIL_VERIFICATION' },
+        env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      await AuditLogger.log({
+        actorUserId: user.id,
+        action: 'EMAIL_VERIFICATION_SENT',
+        entityType: 'USER',
+        entityId: user.id,
+        metadata: { email: user.email },
+      });
+
+      res.json({
+        message: 'Verification email sent successfully.',
+        verificationToken,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Confirms email address using single-use verification token
+   */
+  static async verifyEmail(req: Request, res: Response): Promise<void> {
+    const { token } = req.body;
+    if (!token) {
+      res.status(400).json({ error: 'Verification token is required.' });
+      return;
+    }
+
+    try {
+      const payload = jwt.verify(token, env.JWT_SECRET) as any;
+      if (payload.purpose !== 'EMAIL_VERIFICATION') {
+        res.status(400).json({ error: 'Invalid verification token purpose.' });
+        return;
+      }
+
+      const userRes = await query('SELECT id, email, status FROM users WHERE id = $1', [payload.userId]);
+      if (userRes.rows.length === 0) {
+        res.status(404).json({ error: 'User account not found.' });
+        return;
+      }
+
+      const user = userRes.rows[0];
+      await query(
+        `UPDATE users SET updated_at = NOW() WHERE id = $1`,
+        [user.id]
+      );
+
+      await AuditLogger.log({
+        actorUserId: user.id,
+        action: 'EMAIL_VERIFIED',
+        entityType: 'USER',
+        entityId: user.id,
+        metadata: { email: user.email },
+      });
+
+      res.json({
+        message: 'Email address has been successfully verified.',
+        email: user.email,
+        verified: true,
+      });
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired verification token.' });
     }
   }
 }

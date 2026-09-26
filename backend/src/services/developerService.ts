@@ -1,4 +1,5 @@
 import { query, withTransaction } from '../database/db.js';
+import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
 
 export interface DeveloperExperienceInput {
   company: string;
@@ -397,9 +398,9 @@ export class DeveloperService {
              updated_at = NOW()
          WHERE id = $9`,
         [
-          data.displayName || null,
-          data.roleTitle || null,
-          data.bio || null,
+          data.displayName ? sanitizeInput(data.displayName) : null,
+          data.roleTitle ? sanitizeInput(data.roleTitle) : null,
+          data.bio ? sanitizeRichText(data.bio) : null,
           data.experience !== undefined ? data.experience : null,
           data.availability || null,
           data.githubUrl || null,

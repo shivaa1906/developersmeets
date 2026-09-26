@@ -1,5 +1,6 @@
 import { query } from '../database/db.js';
 import { scrubPrivateContactInfo } from '../utils/privacyScrubber.js';
+import { sanitizeRichText } from '../utils/sanitizer.js';
 import { EventEmitter } from 'events';
 import { NotificationService } from './notificationService.js';
 
@@ -239,13 +240,14 @@ export class ChatService {
 
     // 3. Run Privacy Scrubber
     const scrubbed = scrubPrivateContactInfo(rawText);
+    const sanitizedText = sanitizeRichText(scrubbed.scrubbedText);
 
     // 4. Insert message
     const msgRes = await query(
       `INSERT INTO messages (conversation_id, sender_user_id, message, message_type)
        VALUES ($1, $2, $3, 'TEXT')
        RETURNING id, conversation_id, sender_user_id, message, created_at`,
-      [conversationId, senderUserId, scrubbed.scrubbedText]
+      [conversationId, senderUserId, sanitizedText]
     );
 
     // 5. Update sender's last_read_at so sender never has unread count for own messages

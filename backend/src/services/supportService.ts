@@ -2,6 +2,7 @@ import { withTransaction, query } from '../database/db.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { ChatService } from './chatService.js';
 import { NotificationService } from './notificationService.js';
+import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
 
 export class SupportService {
   /**
@@ -38,14 +39,17 @@ export class SupportService {
         ticketNumber = `SUP-2026-${String(seq).padStart(4, '0')}`;
       }
 
-      // 3. Create ticket
+      // 3. Create ticket with sanitized input
+      const cleanSubject = sanitizeInput(subject);
+      const cleanDescription = sanitizeRichText(description);
+
       const ticketRes = await client.query(
         `INSERT INTO support_tickets (
             ticket_number, project_id, client_id, developer_id, subject, description, priority, status
          )
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'OPEN')
          RETURNING *`,
-        [ticketNumber, projectId, clientId, project.lead_developer_id, subject, description, priority]
+        [ticketNumber, projectId, clientId, project.lead_developer_id, cleanSubject, cleanDescription, priority]
       );
       const ticket = ticketRes.rows[0];
 

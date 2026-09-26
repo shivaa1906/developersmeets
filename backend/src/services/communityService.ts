@@ -1,6 +1,7 @@
 import { query, withTransaction } from '../database/db.js';
 import { ChatService } from './chatService.js';
 import { NotificationService } from './notificationService.js';
+import { sanitizeRichText } from '../utils/sanitizer.js';
 
 export class CommunityService {
   /**
@@ -314,6 +315,8 @@ export class CommunityService {
       }
     }
 
+    const sanitizedContent = sanitizeRichText(content);
+
     const insRes = await query(
       `INSERT INTO channel_messages (
          channel_id, author_user_id, author_developer_id, content,
@@ -324,7 +327,7 @@ export class CommunityService {
         channel.id,
         userId,
         developerId || null,
-        content,
+        sanitizedContent,
         replyToId || null,
         JSON.stringify(mentions),
         JSON.stringify(attachments),
