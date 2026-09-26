@@ -8,13 +8,13 @@ export const siteConfig = {
     description: 'Developer-powered technology company building high-performance digital products and systems.',
     leadership: {
       ceo: {
-        name: 'Ritesh Lingamallu',
-        title: 'CEO / Founder / Admin',
+        name: 'M. Shiva Gopi',
+        title: 'Chief Executive Officer',
         role: 'CEO',
         bio: 'Leading strategic vision, platform administration, developer verification, and enterprise client relations.',
       },
       md: {
-        name: 'M. Shiva Gopi',
+        name: 'Ritesh Lingamallu',
         title: 'Managing Director',
         role: 'MD',
         bio: 'Directing technical project oversight, business operations, developer success, and platform monitoring.',

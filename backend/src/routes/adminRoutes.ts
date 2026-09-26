@@ -6,21 +6,55 @@ import { ROLES } from '../config/constants.js';
 
 const router = Router();
 
+// Base administrative authorization guard:
+// Strictly permits CEO, MD, and ADMIN. Developers and Clients are denied (403 Forbidden).
 router.use(authenticateJwt);
 router.use(requireRole(ROLES.CEO, ROLES.MD, ROLES.ADMIN));
 
-// Developer review endpoints
+// Developer administration
 router.get('/developers/pending', AdminController.listPendingDevelopers);
 router.post('/developers/:developerId/approve', AdminController.approveDeveloper);
 router.post('/developers/:developerId/reject', AdminController.rejectDeveloper);
 router.post('/developers/:developerId/suspend', AdminController.suspendDeveloper);
+router.post('/developers/:developerId/verify', AdminController.verifyDeveloper);
+router.get('/developers/:developerId/wallet', AdminController.getDeveloperWallet);
 
-// Operations & Audit endpoints
+// Project administration
 router.get('/projects', AdminController.listAllProjects);
 router.post('/projects/:projectId/review', AdminController.reviewProject);
 router.post('/projects/:projectId/approve', AdminController.approveProject);
+router.patch('/projects/:projectId', AdminController.editProject);
+router.post('/projects/:projectId/cancel', AdminController.cancelProject);
+router.post('/projects/:projectId/reopen', AdminController.reopenProject);
+router.get('/projects/:projectId/claims', AdminController.getProjectClaims);
+router.get('/projects/:projectId/proposals', AdminController.getProjectProposals);
+router.get('/projects/:projectId/completion', AdminController.getProjectCompletion);
+
+// Client administration
+router.get('/clients', AdminController.listClients);
+
+// Claims monitoring
+router.get('/claims', AdminController.listAllClaims);
+
+// Users & financial ledger
 router.get('/users', AdminController.listAllUsers);
 router.get('/ledger', AdminController.listFinancialLedger);
+
+// Payments (strictly non-secret exposing)
+router.get('/payments', AdminController.listPayments);
+
+// Support administration
+router.get('/support/tickets', AdminController.listSupportTickets);
+
+// Analytics
+router.get('/analytics', AdminController.getAnalytics);
+
+// Audit logs
 router.get('/audit-logs', AdminController.listAuditLogs);
+
+// System Settings & Financial Manual Adjustments (CEO ONLY - Prohibited to MD)
+router.get('/settings', AdminController.getSettings);
+router.patch('/settings', requireRole(ROLES.CEO), AdminController.updateSettings);
+router.post('/credits/adjust', requireRole(ROLES.CEO), AdminController.adjustCredits);
 
 export default router;

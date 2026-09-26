@@ -1,11 +1,11 @@
 export const LEADERSHIP = {
   CEO: {
-    NAME: 'Ritesh Lingamallu',
+    NAME: 'M. Shiva Gopi',
     ROLE: 'CEO',
-    TITLE: 'CEO / Founder / Admin',
+    TITLE: 'Chief Executive Officer',
   },
   MD: {
-    NAME: 'M. Shiva Gopi',
+    NAME: 'Ritesh Lingamallu',
     ROLE: 'MD',
     TITLE: 'Managing Director',
   },

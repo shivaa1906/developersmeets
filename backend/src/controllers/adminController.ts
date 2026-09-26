@@ -15,7 +15,7 @@ export class AdminController {
                 d.github_url, d.linkedin_url, d.portfolio_url, d.bio, d.created_at, u.email, d.verification_status
          FROM developers d
          JOIN users u ON d.user_id = u.id
-         WHERE d.verification_status IN ('PENDING', 'PENDING_VERIFICATION')
+         WHERE d.verification_status = 'PENDING'
          ORDER BY d.created_at ASC`
       );
       res.json({ pendingDevelopers: result.rows });
@@ -306,6 +306,455 @@ export class AdminController {
       res.json({ message: 'Project approved and opened for developer claims.', ...result });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Directly verify a developer profile
+   */
+  static async verifyDeveloper(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { developerId } = req.params;
+    try {
+      await withTransaction(async (client) => {
+        const devRes = await client.query(
+          `UPDATE developers SET verification_status = 'VERIFIED', verified_at = NOW(), updated_at = NOW()
+           WHERE id = $1 RETURNING user_id, username, display_name`,
+          [developerId]
+        );
+        if (devRes.rows.length === 0) {
+          throw new Error('Developer profile not found');
+        }
+        await client.query(
+          `UPDATE users SET status = 'ACTIVE', updated_at = NOW() WHERE id = $1`,
+          [devRes.rows[0].user_id]
+        );
+        await AuditLogger.log({
+          actorUserId: req.user!.userId,
+          action: 'DEVELOPER_VERIFIED_DIRECT',
+          entityType: 'DEVELOPER',
+          entityId: developerId,
+          metadata: { username: devRes.rows[0].username, verifiedBy: req.user!.role },
+        });
+      });
+      res.json({ success: true, message: 'Developer verified successfully.', developerId, status: 'VERIFIED' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
+   * View a developer's wallet balance and transaction ledger
+   */
+  static async getDeveloperWallet(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { developerId } = req.params;
+    try {
+      const accRes = await query(`SELECT balance FROM credit_accounts WHERE developer_id = $1`, [developerId]);
+      const balance = Number(accRes.rows[0]?.balance || 0);
+      const txRes = await query(
+        `SELECT id, type, amount, balance_after, description, created_at
+         FROM credit_transactions WHERE developer_id = $1 ORDER BY created_at DESC LIMIT 50`,
+        [developerId]
+      );
+      res.json({ developerId, balance, transactions: txRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Edit project parameters (budget, timeline, requirements, technologies)
+   */
+  static async editProject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const { title, description, budgetMin, budgetMax, timeline, requirements, requiredTechnologies } = req.body;
+    try {
+      const resProj = await query(
+        `UPDATE projects
+         SET title = COALESCE($1, title),
+             description = COALESCE($2, description),
+             budget_min = COALESCE($3, budget_min),
+             budget_max = COALESCE($4, budget_max),
+             timeline = COALESCE($5, timeline),
+             requirements = COALESCE($6::jsonb, requirements),
+             required_technologies = COALESCE($7::jsonb, required_technologies),
+             updated_at = NOW()
+         WHERE id = $8
+         RETURNING *`,
+        [
+          title || null,
+          description || null,
+          budgetMin !== undefined ? Number(budgetMin) : null,
+          budgetMax !== undefined ? Number(budgetMax) : null,
+          timeline || null,
+          requirements ? JSON.stringify(requirements) : null,
+          requiredTechnologies ? JSON.stringify(requiredTechnologies) : null,
+          projectId,
+        ]
+      );
+      if (resProj.rows.length === 0) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+      await AuditLogger.log({
+        actorUserId: req.user!.userId,
+        action: 'PROJECT_EDITED_BY_ADMIN',
+        entityType: 'PROJECT',
+        entityId: projectId,
+        metadata: { editedBy: req.user!.role, changes: req.body },
+      });
+      res.json({ message: 'Project updated successfully', project: resProj.rows[0] });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Cancel project
+   */
+  static async cancelProject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const { reason } = req.body;
+    try {
+      const resProj = await query(
+        `UPDATE projects SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1 RETURNING *`,
+        [projectId]
+      );
+      if (resProj.rows.length === 0) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+      await AuditLogger.log({
+        actorUserId: req.user!.userId,
+        action: 'PROJECT_CANCELLED_BY_ADMIN',
+        entityType: 'PROJECT',
+        entityId: projectId,
+        metadata: { reason },
+      });
+      res.json({ message: 'Project cancelled.', project: resProj.rows[0] });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Reopen project
+   */
+  static async reopenProject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    try {
+      const resProj = await query(
+        `UPDATE projects SET status = 'OPEN_FOR_CLAIMS', updated_at = NOW() WHERE id = $1 RETURNING *`,
+        [projectId]
+      );
+      if (resProj.rows.length === 0) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+      await AuditLogger.log({
+        actorUserId: req.user!.userId,
+        action: 'PROJECT_REOPENED_BY_ADMIN',
+        entityType: 'PROJECT',
+        entityId: projectId,
+      });
+      res.json({ message: 'Project reopened for developer claims.', project: resProj.rows[0] });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Monitor claims on a specific project
+   */
+  static async getProjectClaims(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    try {
+      const claimsRes = await query(
+        `SELECT pc.*, d.username, d.display_name, d.role_title
+         FROM project_claims pc
+         JOIN developers d ON pc.developer_id = d.id
+         WHERE pc.project_id = $1
+         ORDER BY pc.claimed_at ASC`,
+        [projectId]
+      );
+      res.json({ projectId, claims: claimsRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * View developer proposals on a project
+   */
+  static async getProjectProposals(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    try {
+      const propRes = await query(
+        `SELECT p.*, pc.project_id, pc.developer_id,
+                d.username as developer_username, d.display_name as developer_name
+         FROM proposals p
+         JOIN project_claims pc ON p.project_claim_id = pc.id
+         JOIN developers d ON pc.developer_id = d.id
+         WHERE pc.project_id = $1
+         ORDER BY p.created_at DESC`,
+        [projectId]
+      );
+      res.json({ projectId, proposals: propRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Monitor project completion state and milestone progress
+   */
+  static async getProjectCompletion(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    try {
+      const projRes = await query(
+        `SELECT id, project_number, title, status, lead_developer_id, client_id, created_at, updated_at
+         FROM projects WHERE id = $1`,
+        [projectId]
+      );
+      if (projRes.rows.length === 0) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+      const milesRes = await query(
+        `SELECT id, title, description, status, order_index, completed_at
+         FROM project_milestones WHERE project_id = $1 ORDER BY order_index ASC`,
+        [projectId]
+      );
+      res.json({ project: projRes.rows[0], milestones: milesRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * List clients across platform
+   */
+  static async listClients(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const clientsRes = await query(
+        `SELECT c.id, c.client_number, c.company_name, c.private_name, c.phone, c.created_at,
+                u.email, u.status as user_status,
+                COUNT(p.id) as projects_count
+         FROM clients c
+         JOIN users u ON c.user_id = u.id
+         LEFT JOIN projects p ON p.client_id = c.id
+         GROUP BY c.id, u.id
+         ORDER BY c.created_at DESC`
+      );
+      res.json({ clients: clientsRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * List claims across all projects
+   */
+  static async listAllClaims(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const claimsRes = await query(
+        `SELECT pc.*, p.project_number, p.title as project_title,
+                d.username as developer_username, d.display_name as developer_name
+         FROM project_claims pc
+         JOIN projects p ON pc.project_id = p.id
+         JOIN developers d ON pc.developer_id = d.id
+         ORDER BY pc.claimed_at DESC LIMIT 100`
+      );
+      res.json({ claims: claimsRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Manual credit adjustment (CEO ONLY)
+   * Enforces that every adjustment requires an explicit, non-empty reason!
+   */
+  static async adjustCredits(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { developerId, amount, reason } = req.body;
+
+    if (!developerId || amount === undefined) {
+      res.status(400).json({ error: 'developerId and amount are required' });
+      return;
+    }
+
+    if (!reason || !reason.trim()) {
+      res.status(400).json({ error: 'A valid reason is required for manual credit adjustments' });
+      return;
+    }
+
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount === 0) {
+      res.status(400).json({ error: 'Adjustment amount must be a non-zero number' });
+      return;
+    }
+
+    try {
+      const result = await withTransaction(async (client) => {
+        // Update credit account
+        const accRes = await client.query(
+          `INSERT INTO credit_accounts (developer_id, balance)
+           VALUES ($1, $2)
+           ON CONFLICT (developer_id)
+           DO UPDATE SET balance = credit_accounts.balance + $2, updated_at = NOW()
+           RETURNING balance`,
+          [developerId, numAmount]
+        );
+        const newBalance = Number(accRes.rows[0].balance);
+
+        // Record credit transaction
+        const txRes = await client.query(
+          `INSERT INTO credit_transactions (developer_id, type, amount, balance_after, description)
+           VALUES ($1, 'ADMIN_ADJUSTMENT', $2, $3, $4)
+           RETURNING *`,
+          [developerId, numAmount, newBalance, reason]
+        );
+
+        // Log audit record
+        await AuditLogger.log({
+          actorUserId: req.user!.userId,
+          action: 'CREDIT_MANUAL_ADJUSTMENT',
+          entityType: 'CREDIT_ACCOUNT',
+          entityId: developerId,
+          metadata: { amount: numAmount, newBalance, reason, actorRole: req.user!.role },
+        });
+
+        return { balance: newBalance, transaction: txRes.rows[0] };
+      });
+
+      res.json({ success: true, message: 'Credit balance adjusted successfully', ...result });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
+   * View payment status and orders (strictly shielding all secret keys)
+   */
+  static async listPayments(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const payRes = await query(
+        `SELECT p.id, p.user_id, p.amount, p.currency, p.gateway, p.gateway_payment_id, p.status, p.created_at,
+                u.email as user_email, u.role as user_role
+         FROM payments p
+         JOIN users u ON p.user_id = u.id
+         ORDER BY p.created_at DESC LIMIT 100`
+      );
+
+      // Verify no payment secrets are returned
+      const sanitized = payRes.rows.map((row) => {
+        const { ...safeRow } = row;
+        delete (safeRow as any).secret_key;
+        delete (safeRow as any).key_secret;
+        delete (safeRow as any).webhook_secret;
+        delete (safeRow as any).private_key;
+        return safeRow;
+      });
+
+      res.json({ payments: sanitized });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * List support tickets
+   */
+  static async listSupportTickets(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const ticketsRes = await query(
+        `SELECT st.*, p.title as project_title, c.client_number, c.company_name,
+                d.username as developer_username, d.display_name as developer_name,
+                sb.id as bridge_id, sb.bridge_number
+         FROM support_tickets st
+         JOIN projects p ON st.project_id = p.id
+         JOIN clients c ON st.client_id = c.id
+         LEFT JOIN developers d ON st.developer_id = d.id
+         LEFT JOIN support_bridges sb ON sb.ticket_id = st.id
+         ORDER BY st.created_at DESC`
+      );
+      res.json({ tickets: ticketsRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Platform analytics
+   */
+  static async getAnalytics(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const devCount = await query(`SELECT COUNT(*)::int as count FROM developers WHERE verification_status = 'VERIFIED'`);
+      const clientCount = await query(`SELECT COUNT(*)::int as count FROM clients`);
+      const projCount = await query(`SELECT status, COUNT(*)::int as count FROM projects GROUP BY status`);
+      const creditTotal = await query(`SELECT SUM(balance)::int as total FROM credit_accounts`);
+      const paymentTotal = await query(`SELECT COALESCE(SUM(amount), 0)::int as total FROM payments WHERE status = 'SUCCESS'`);
+
+      res.json({
+        analytics: {
+          verifiedDevelopers: devCount.rows[0]?.count || 0,
+          clients: clientCount.rows[0]?.count || 0,
+          projectsByStatus: projCount.rows,
+          totalCreditsInCirculation: creditTotal.rows[0]?.total || 0,
+          totalRevenueInr: paymentTotal.rows[0]?.total || 0,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Get platform settings (CEO governance)
+   */
+  static async getSettings(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const setRes = await query(`SELECT key, value, description, updated_at FROM platform_settings ORDER BY key ASC`);
+      res.json({ settings: setRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Update platform settings (CEO ONLY)
+   */
+  static async updateSettings(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { key, value } = req.body;
+    if (!key || value === undefined) {
+      res.status(400).json({ error: 'key and value are required' });
+      return;
+    }
+
+    try {
+      const updateRes = await query(
+        `UPDATE platform_settings
+         SET value = $1::jsonb, updated_by = $2, updated_at = NOW()
+         WHERE key = $3
+         RETURNING *`,
+        [JSON.stringify(value), req.user!.userId, key]
+      );
+
+      if (updateRes.rows.length === 0) {
+        res.status(404).json({ error: `Setting '${key}' not found` });
+        return;
+      }
+
+      await AuditLogger.log({
+        actorUserId: req.user!.userId,
+        action: 'PLATFORM_SETTINGS_UPDATED',
+        entityType: 'PLATFORM_SETTING',
+        entityId: key,
+        metadata: { key, newValue: value },
+      });
+
+      res.json({ message: 'Setting updated successfully', setting: updateRes.rows[0] });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
     }
   }
 }

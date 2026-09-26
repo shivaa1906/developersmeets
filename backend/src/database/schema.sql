@@ -466,3 +466,13 @@ CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id
 CREATE INDEX IF NOT EXISTS idx_project_files_milestone ON project_files(milestone_id);
 CREATE INDEX IF NOT EXISTS idx_project_files_uploader ON project_files(uploaded_by_user_id);
 
+-- 22. PLATFORM SETTINGS (CEO GOVERNANCE)
+CREATE TABLE IF NOT EXISTS platform_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value JSONB NOT NULL,
+    description TEXT,
+    updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+
