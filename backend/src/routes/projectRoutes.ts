@@ -41,6 +41,14 @@ router.post(
 router.patch('/:projectId', authenticateJwt, ProjectController.updateProject);
 router.put('/:projectId', authenticateJwt, ProjectController.updateProject);
 
+// Check developer claim eligibility for project
+router.get(
+  '/:projectId/eligibility',
+  authenticateJwt,
+  requireVerifiedDeveloper,
+  ProjectController.checkEligibility
+);
+
 // Developer claim project slot
 router.post(
   '/:projectId/claim',

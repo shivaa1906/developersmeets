@@ -25,6 +25,14 @@ export interface ProposalInput {
   additionalNotes?: string;
 }
 
+export interface EligibilityResult {
+  eligible: boolean;
+  missingSkills: string[];
+  matchedSkills: string[];
+  requiredSkills: string[];
+  reason?: string;
+}
+
 export class ProjectService {
   /**
    * Client submits a new project, entering the PENDING / SUBMITTED state for admin review
@@ -190,6 +198,88 @@ export class ProjectService {
   }
 
   /**
+   * Checks whether a developer possesses all required skills for a project
+   */
+  static async checkEligibility(
+    projectId: string,
+    developerId: string,
+    dbClient?: any
+  ): Promise<EligibilityResult> {
+    const runner = dbClient ? dbClient.query.bind(dbClient) : query;
+
+    // 1. Fetch project requirements and technologies
+    const projRes = await runner(
+      `SELECT requirements, required_technologies, status FROM projects WHERE id = $1`,
+      [projectId]
+    );
+
+    if (projRes.rows.length === 0) {
+      throw new Error('Project not found');
+    }
+
+    const project = projRes.rows[0];
+
+    // Collect skills required by the project
+    const rawRequirements: string[] = Array.isArray(project.requirements) ? project.requirements : [];
+    const rawTech: string[] = Array.isArray(project.required_technologies)
+      ? project.required_technologies
+      : [];
+
+    const requiredSkills = Array.from(new Set([...rawRequirements, ...rawTech])).filter(
+      (s) => typeof s === 'string' && s.trim().length > 0
+    );
+
+    // 2. Fetch developer skills
+    const devSkillsRes = await runner(
+      `SELECT s.name 
+       FROM developer_skills ds
+       JOIN skills s ON ds.skill_id = s.id
+       WHERE ds.developer_id = $1`,
+      [developerId]
+    );
+
+    const devSkillList = devSkillsRes.rows.map((r: any) => r.name.toLowerCase().trim());
+
+    // 3. Match each required skill
+    const matchedSkills: string[] = [];
+    const missingSkills: string[] = [];
+
+    const normalizeSkill = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    for (const reqSkill of requiredSkills) {
+      const normReq = normalizeSkill(reqSkill);
+      const hasMatch = devSkillList.some((devSkill: string) => {
+        const normDev = normalizeSkill(devSkill);
+        return (
+          normDev === normReq ||
+          (normReq === 'postgresql' && (normDev === 'postgres' || normDev === 'pg')) ||
+          (normReq === 'postgres' && normDev === 'postgresql') ||
+          (normReq === 'nodejs' && (normDev === 'node' || normDev === 'nodeexpress')) ||
+          (normReq === 'react' && normDev === 'reactjs')
+        );
+      });
+
+      if (hasMatch) {
+        matchedSkills.push(reqSkill);
+      } else {
+        missingSkills.push(reqSkill);
+      }
+    }
+
+    const eligible = missingSkills.length === 0;
+
+    return {
+      eligible,
+      missingSkills,
+      matchedSkills,
+      requiredSkills,
+      reason: eligible
+        ? 'Developer satisfies all skill requirements'
+        : `Missing required skills: ${missingSkills.join(', ')}`,
+    };
+  }
+
+  /**
    * Executes atomic project claim with slot limit checks and anonymous conversation creation
    */
   static async claimProject(
@@ -218,6 +308,14 @@ export class ProjectService {
       );
       if (devRes.rows.length === 0 || devRes.rows[0].verification_status !== 'VERIFIED') {
         throw new Error('Forbidden: Only verified developers can claim project slots.');
+      }
+
+      // 2b. Verify skill eligibility
+      const eligibility = await ProjectService.checkEligibility(projectId, developerId, client);
+      if (!eligibility.eligible) {
+        throw new Error(
+          `Forbidden: Developer is not eligible to claim this project. Missing required skills: ${eligibility.missingSkills.join(', ')}`
+        );
       }
 
       // 3. Verify project status
@@ -270,11 +368,11 @@ export class ProjectService {
       );
       const claimId = claimRes.rows[0].id;
 
-      // 9. Update project state if full
+      // 9. Update project state if full: transitions to CLAIMS_CLOSED
       if (currentClaimsCount + 1 >= project.max_claims) {
         await client.query(
           `UPDATE projects SET status = $1, updated_at = NOW() WHERE id = $2`,
-          [PROJECT_STATUSES.SELECTION_PENDING, projectId]
+          [PROJECT_STATUSES.CLAIMS_CLOSED, projectId]
         );
       } else {
         await client.query(

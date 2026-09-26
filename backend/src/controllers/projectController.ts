@@ -362,6 +362,26 @@ export class ProjectController {
   }
 
   /**
+   * Check developer claim eligibility for project
+   */
+  static async checkEligibility(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const developerId = req.user?.developerId;
+
+    if (!developerId) {
+      res.status(403).json({ error: 'Verified developer profile required to check eligibility' });
+      return;
+    }
+
+    try {
+      const eligibility = await ProjectService.checkEligibility(projectId, developerId);
+      res.json(eligibility);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  /**
    * Developer claims a project slot (-1 Credit)
    */
   static async claim(req: AuthenticatedRequest, res: Response): Promise<void> {
