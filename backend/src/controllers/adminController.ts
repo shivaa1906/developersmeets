@@ -232,7 +232,7 @@ export class AdminController {
   static async listAllUsers(_req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const result = await query(
-        `SELECT u.id, u.public_uid, u.email, u.phone, u.role, u.status, u.email_verified, u.is_suspended, u.last_login_at, u.created_at,
+        `SELECT u.id, u.uid, u.public_uid, u.email, u.phone, u.role, u.status, u.email_verified, u.is_suspended, u.last_login_at, u.created_at,
                 d.username, d.display_name, d.verification_status,
                 c.client_number, c.company_name
          FROM users u
@@ -397,7 +397,7 @@ export class AdminController {
   static async listAuditLogs(_req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const result = await query(
-        `SELECT a.*, u.email as actor_email, u.role as actor_role
+        `SELECT a.*, u.uid as actor_uid, u.public_uid as actor_public_uid, u.email as actor_email, u.role as actor_role
          FROM audit_logs a
          LEFT JOIN users u ON a.actor_user_id = u.id
          ORDER BY a.created_at DESC LIMIT 100`
@@ -678,7 +678,7 @@ export class AdminController {
     try {
       const clientsRes = await query(
         `SELECT c.id, c.client_number, c.company_name, c.private_name, c.phone, c.created_at,
-                u.email, u.status as user_status,
+                u.uid as user_uid, u.public_uid as user_public_uid, u.email, u.status as user_status,
                 COUNT(p.id) as projects_count
          FROM clients c
          JOIN users u ON c.user_id = u.id

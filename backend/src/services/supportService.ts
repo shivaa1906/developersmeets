@@ -409,6 +409,8 @@ export class SupportService {
              st.response_due_at, st.resolution_due_at, st.escalated_at, st.escalation_reason,
              COALESCE(p.title, 'Platform Support') as project_title,
              sb.id as bridge_id, sb.bridge_number, sb.conversation_id,
+             u_assigned.uid as assigned_agent_uid,
+             u_assigned.public_uid as assigned_agent_public_uid,
              u_assigned.email as assigned_agent_email,
              ss.title as assigned_agent_title,
              ss.department as assigned_agent_department
@@ -515,6 +517,8 @@ export class SupportService {
     const tRes = await query(
       `SELECT st.*, COALESCE(p.title, 'Platform Support') as project_title, p.project_number,
               sb.id as bridge_id, sb.bridge_number, sb.conversation_id,
+              u_assigned.uid as assigned_agent_uid,
+              u_assigned.public_uid as assigned_agent_public_uid,
               u_assigned.email as assigned_agent_email
        FROM support_tickets st
        LEFT JOIN projects p ON st.project_id = p.id
@@ -600,7 +604,7 @@ export class SupportService {
 
     // Fetch members with privacy sanitization
     const membersRes = await query(
-      `SELECT sbm.role, u.id as user_id,
+      `SELECT sbm.role, u.id as user_id, u.uid as user_uid, u.public_uid as user_public_uid,
               CASE
                 WHEN sbm.role = 'CLIENT' THEN 'Client'
                 WHEN sbm.role = 'DEVELOPER' THEN 'Technical Developer'

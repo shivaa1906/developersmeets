@@ -51,6 +51,8 @@ export class SupportStaffService {
         ss.permissions,
         ss.created_at,
         ss.updated_at,
+        u.uid as user_uid,
+        u.public_uid as user_public_uid,
         u.email,
         u.role as user_role,
         u.status as account_status,
@@ -82,7 +84,7 @@ export class SupportStaffService {
    */
   static async getStaffById(staffId: string) {
     const res = await query(
-      `SELECT ss.*, u.email, u.role as user_role, u.status as account_status
+      `SELECT ss.*, u.uid as user_uid, u.public_uid as user_public_uid, u.email, u.role as user_role, u.status as account_status
        FROM support_staff ss
        JOIN users u ON ss.user_id = u.id
        WHERE ss.id = $1 OR ss.user_id = $1`,
@@ -205,7 +207,7 @@ export class SupportStaffService {
       const userRes = await client.query(
         `INSERT INTO users (email, phone, password_hash, role, status)
          VALUES ($1, $2, $3, 'SUPPORT', 'ACTIVE')
-         RETURNING id, email, role`,
+         RETURNING id, uid, public_uid, email, role`,
         [cleanEmail, params.phone || null, passwordHash]
       );
       const newUser = userRes.rows[0];
@@ -241,6 +243,8 @@ export class SupportStaffService {
 
       return {
         ...staff,
+        uid: newUser.uid,
+        publicUid: newUser.uid || newUser.public_uid,
         email: newUser.email,
         temporaryAccessNotice: 'Invitation record created. Credentials dispatched securely via platform auth mailer.',
       };

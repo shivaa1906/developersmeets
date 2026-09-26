@@ -84,7 +84,7 @@ async function runTest() {
       assert(!!data.token, `${acc.role} JWT token issued`);
       assert(data.user?.role === acc.role, `${acc.role} Server-verified role matches`, `Expected ${acc.role}, got ${data.user?.role}`);
       assert(!!data.user?.id, `${acc.role} Has internal database UUID`);
-      assert(!!data.user?.publicUid && data.user.publicUid.startsWith('usr_'), `${acc.role} Has valid public_uid (${data.user?.publicUid})`);
+      assert(!!data.user?.publicUid && (data.user.publicUid.startsWith('usr_') || data.user.publicUid.length === 16), `${acc.role} Has valid public_uid (${data.user?.publicUid})`);
       assert(data.user?.emailVerified === true, `${acc.role} emailVerified state true`);
       assert(!!data.user?.lastLoginAt, `${acc.role} lastLoginAt recorded`);
       assert(!('password_hash' in data.user) && !('password' in data.user), `${acc.role} Zero password credential leakage`);

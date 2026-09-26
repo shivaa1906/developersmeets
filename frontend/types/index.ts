@@ -4,6 +4,7 @@ export type UserStatus = 'ACTIVE' | 'PENDING_VERIFICATION' | 'SUSPENDED' | 'DISA
 
 export interface User {
   id: string;
+  uid?: string;
   public_uid?: string;
   email: string;
   phone?: string;

@@ -122,8 +122,10 @@ export class DeveloperService {
     const devRes = await query(
       `SELECT d.id, d.username, d.display_name, d.profile_image as avatar_url, d.bio, d.role_title,
               d.experience, d.availability, d.verification_status, d.verified_at,
-              d.github_url, d.linkedin_url, d.portfolio_url, d.profile_views_count
+              d.github_url, d.linkedin_url, d.portfolio_url, d.profile_views_count,
+              u.uid as user_uid, u.public_uid as user_public_uid
        FROM developers d
+       JOIN users u ON d.user_id = u.id
        WHERE d.username = $1 AND d.verification_status = 'VERIFIED'`,
       [username]
     );
@@ -206,7 +208,7 @@ export class DeveloperService {
       `SELECT d.id, d.user_id, d.username, d.display_name, d.profile_image as avatar_url, d.bio, d.role_title,
               d.experience, d.availability, d.verification_status, d.verified_at,
               d.github_url, d.linkedin_url, d.portfolio_url, d.profile_views_count,
-              u.email, u.status as user_status
+              u.uid as user_uid, u.public_uid as user_public_uid, u.email, u.status as user_status
        FROM developers d
        JOIN users u ON d.user_id = u.id
        WHERE d.id = $1`,

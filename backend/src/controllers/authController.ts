@@ -158,7 +158,7 @@ export class AuthController {
         const userRes = await client.query(
           `INSERT INTO users (email, phone, password_hash, role, status, email_verified)
            VALUES ($1, $2, $3, $4, 'PENDING_VERIFICATION', FALSE)
-           RETURNING id, public_uid, email, role, status, email_verified, created_at`,
+           RETURNING id, uid, public_uid, email, role, status, email_verified, created_at`,
           [normalizedEmail, phone || null, passwordHash, ROLES.DEVELOPER]
         );
         const user = userRes.rows[0];
@@ -275,7 +275,8 @@ export class AuthController {
         },
         user: {
           id: result.user.id,
-          publicUid: result.user.public_uid,
+          uid: result.user.uid,
+          publicUid: result.user.uid,
           email: result.user.email,
           role: result.user.role,
           status: result.user.status,
@@ -328,7 +329,7 @@ export class AuthController {
         const userRes = await client.query(
           `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at)
            VALUES ($1, $2, $3, $4, 'ACTIVE', TRUE, NOW())
-           RETURNING id, public_uid, email, role, status, email_verified, created_at`,
+           RETURNING id, uid, public_uid, email, role, status, email_verified, created_at`,
           [normalizedEmail, phone || null, passwordHash, ROLES.CLIENT]
         );
         const user = userRes.rows[0];
@@ -381,7 +382,8 @@ export class AuthController {
       const token = jwt.sign(
         {
           userId: result.user.id,
-          publicUid: result.user.public_uid,
+          uid: result.user.uid,
+          publicUid: result.user.uid,
           email: result.user.email,
           role: ROLES.CLIENT,
           clientId: result.client.id,
@@ -395,7 +397,8 @@ export class AuthController {
         token,
         user: {
           id: result.user.id,
-          publicUid: result.user.public_uid,
+          uid: result.user.uid,
+          publicUid: result.user.uid,
           email: result.user.email,
           role: ROLES.CLIENT,
           status: result.user.status,
@@ -438,13 +441,13 @@ export class AuthController {
     try {
       const aliasMap: Record<string, string> = {
         'developer@nexus.dev': 'rahul@nexus.dev',
-        'client@nexus.dev': 'client001@apexretail.io',
-        'client1@apexretail.io': 'client001@apexretail.io',
+        'client@nexus.dev': 'client1@apexretail.io',
+        'client001@apexretail.io': 'client1@apexretail.io',
       };
       const effectiveEmail = aliasMap[normalizedEmail] || normalizedEmail;
 
       const userRes = await query(
-        `SELECT id, public_uid, email, phone, password_hash, role, status, email_verified, is_suspended, suspension_reason, last_login_at 
+        `SELECT id, uid, public_uid, email, phone, password_hash, role, status, email_verified, is_suspended, suspension_reason, last_login_at 
          FROM users WHERE email = $1 OR email = $2`,
         [normalizedEmail, effectiveEmail]
       );
@@ -591,7 +594,8 @@ export class AuthController {
       const token = jwt.sign(
         {
           userId: user.id,
-          publicUid: user.public_uid,
+          uid: user.uid,
+          publicUid: user.uid || user.public_uid,
           email: user.email,
           role: user.role,
           developerId,
@@ -624,7 +628,8 @@ export class AuthController {
         token,
         user: {
           id: user.id,
-          publicUid: user.public_uid,
+          uid: user.uid,
+          publicUid: user.uid || user.public_uid,
           email: user.email,
           role: user.role,
           status: user.status,
@@ -655,7 +660,7 @@ export class AuthController {
 
     try {
       const userRes = await query(
-        `SELECT id, public_uid, email, phone, role, status, email_verified, is_suspended, last_login_at, created_at, updated_at 
+        `SELECT id, uid, public_uid, email, phone, role, status, email_verified, is_suspended, last_login_at, created_at, updated_at 
          FROM users WHERE id = $1`,
         [req.user.userId]
       );
@@ -670,7 +675,7 @@ export class AuthController {
       if (user.role === ROLES.DEVELOPER) {
         const devRes = await query(
           `SELECT id, username, display_name, verification_status, experience, role_title, availability 
-           FROM developers WHERE user_id = $1`,
+            FROM developers WHERE user_id = $1`,
           [user.id]
         );
         if (devRes.rows.length > 0) {
@@ -682,7 +687,7 @@ export class AuthController {
       if (user.role === ROLES.CLIENT) {
         const clientRes = await query(
           `SELECT id, client_number, company_name, private_name, phone 
-           FROM clients WHERE user_id = $1`,
+            FROM clients WHERE user_id = $1`,
           [user.id]
         );
         if (clientRes.rows.length > 0) {
@@ -694,7 +699,7 @@ export class AuthController {
       if (user.role === ROLES.SUPPORT) {
         const staffRes = await query(
           `SELECT id, department, title, support_level, permissions, status 
-           FROM support_staff WHERE user_id = $1`,
+            FROM support_staff WHERE user_id = $1`,
           [user.id]
         );
         if (staffRes.rows.length > 0) {
@@ -705,7 +710,8 @@ export class AuthController {
       res.json({
         user: {
           id: user.id,
-          publicUid: user.public_uid,
+          uid: user.uid,
+          publicUid: user.uid || user.public_uid,
           email: user.email,
           phone: user.phone,
           role: user.role,

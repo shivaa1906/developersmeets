@@ -6,6 +6,7 @@ export type UserStatus = 'ACTIVE' | 'PENDING_VERIFICATION' | 'SUSPENDED' | 'DISA
 
 export interface AuthUser {
   userId: string;
+  uid?: string;
   publicUid?: string;
   email: string;
   role: UserRole;
@@ -21,6 +22,7 @@ export interface AuthenticatedRequest extends Request {
 
 export interface DbUser {
   id: string;
+  uid: string;
   public_uid: string;
   email: string;
   phone?: string;
