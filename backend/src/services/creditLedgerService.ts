@@ -1505,15 +1505,111 @@ export class CreditLedgerService {
   }
 
   /**
-   * List all user credit accounts
+   * Calculates platform credit statistics live from the double-entry ledger.
+   * Do not fabricate statistics: Every metric is computed directly from database tables.
    */
-  static async listCreditAccounts(filters?: { search?: string; role?: string; limit?: number; offset?: number }) {
+  static async getCreditStats() {
+    // 1. Total Credits Held across all user accounts
+    const heldRes = await query(
+      `SELECT COALESCE(SUM(balance), 0)::bigint as total_held, COUNT(*)::int as total_accounts FROM credit_accounts`
+    );
+    const totalCreditsHeld = Number(heldRes.rows[0]?.total_held || 0);
+    const totalAccounts = Number(heldRes.rows[0]?.total_accounts || 0);
+
+    // 2. Aggregate transactions by type
+    const txAggRes = await query(`
+      SELECT 
+        type,
+        COUNT(*)::int as tx_count,
+        COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0)::bigint as positive_sum,
+        COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0)::bigint as negative_sum,
+        COALESCE(SUM(amount), 0)::bigint as net_sum
+      FROM credit_transactions
+      GROUP BY type
+    `);
+
+    let creditsPurchased = 0;
+    let creditsGranted = 0;
+    let creditsRemoved = 0;
+    let creditsConsumed = 0;
+    let creditsRefunded = 0;
+
+    for (const row of txAggRes.rows) {
+      const type = String(row.type);
+      const pos = Number(row.positive_sum);
+      const neg = Number(row.negative_sum);
+
+      if (type === 'PURCHASE') {
+        creditsPurchased += pos;
+      } else if (type === 'ADMIN_CREDIT_GRANT') {
+        creditsGranted += pos;
+      } else if (type === 'ADMIN_CREDIT_REMOVAL') {
+        creditsRemoved += neg > 0 ? neg : Math.abs(Number(row.net_sum));
+      } else if (type === 'PROJECT_CLAIM' || type === 'USAGE' || type === 'CONSUMPTION') {
+        creditsConsumed += neg;
+      } else if (
+        type === 'PROJECT_NOT_SELECTED_REFUND' ||
+        type === 'PROJECT_CANCEL_REFUND' ||
+        type === 'WITHDRAWAL_REFUND' ||
+        type === 'EXPIRATION_REFUND' ||
+        type === 'REFUND'
+      ) {
+        creditsRefunded += pos;
+      }
+    }
+
+    return {
+      totalCreditsHeld,
+      creditsPurchased,
+      creditsGranted,
+      creditsRemoved,
+      creditsConsumed,
+      creditsRefunded,
+      totalAccounts,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * List all user credit accounts with granular transaction breakdown
+   */
+  static async listCreditAccounts(filters?: {
+    search?: string;
+    role?: string;
+    balanceFilter?: 'ALL' | 'POSITIVE' | 'ZERO';
+    minBalance?: number;
+    maxBalance?: number;
+    uid?: string;
+    limit?: number;
+    offset?: number;
+  }) {
     const params: any[] = [];
     const conditions: string[] = [];
 
-    if (filters?.role) {
+    if (filters?.role && filters.role !== 'ALL') {
       params.push(filters.role);
       conditions.push(`u.role = $${params.length}`);
+    }
+
+    if (filters?.uid && filters.uid.trim().length > 0) {
+      params.push(filters.uid.trim());
+      conditions.push(`(u.uid = $${params.length} OR u.public_uid = $${params.length})`);
+    }
+
+    if (filters?.balanceFilter === 'POSITIVE') {
+      conditions.push(`ca.balance > 0`);
+    } else if (filters?.balanceFilter === 'ZERO') {
+      conditions.push(`ca.balance = 0`);
+    }
+
+    if (filters?.minBalance !== undefined && !isNaN(Number(filters.minBalance))) {
+      params.push(Number(filters.minBalance));
+      conditions.push(`ca.balance >= $${params.length}`);
+    }
+
+    if (filters?.maxBalance !== undefined && !isNaN(Number(filters.maxBalance))) {
+      params.push(Number(filters.maxBalance));
+      conditions.push(`ca.balance <= $${params.length}`);
     }
 
     if (filters?.search && filters.search.trim().length > 0) {
@@ -1522,6 +1618,7 @@ export class CreditLedgerService {
       conditions.push(`(
         u.email ILIKE $${sIdx}
         OR u.uid ILIKE $${sIdx}
+        OR u.public_uid ILIKE $${sIdx}
         OR d.username ILIKE $${sIdx}
         OR d.display_name ILIKE $${sIdx}
         OR c.company_name ILIKE $${sIdx}
@@ -1552,9 +1649,16 @@ export class CreditLedgerService {
       SELECT ca.id as account_id, ca.balance, ca.currency, ca.created_at, ca.updated_at,
              u.id as user_id, u.uid as user_uid, u.public_uid as user_public_uid,
              u.email as user_email, u.role as user_role, u.status as user_status,
+             COALESCE(d.display_name, c.company_name, split_part(u.email, '@', 1)) as name,
              d.id as developer_id, d.username as developer_username, d.display_name as developer_name,
              c.id as client_id, c.company_name,
-             (SELECT COUNT(*) FROM credit_transactions ct WHERE ct.user_id = u.id OR ct.developer_id = d.id) as transaction_count
+             (SELECT COUNT(*) FROM credit_transactions ct WHERE ct.user_id = u.id OR ct.developer_id = d.id)::int as transaction_count,
+             COALESCE((SELECT SUM(amount) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type = 'PURCHASE'), 0)::int as purchased,
+             COALESCE((SELECT SUM(amount) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type = 'ADMIN_CREDIT_GRANT'), 0)::int as granted,
+             COALESCE((SELECT ABS(SUM(amount)) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type = 'ADMIN_CREDIT_REMOVAL'), 0)::int as removed,
+             COALESCE((SELECT ABS(SUM(amount)) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type IN ('PROJECT_CLAIM', 'USAGE', 'CONSUMPTION') AND ct.amount < 0), 0)::int as consumed,
+             COALESCE((SELECT SUM(amount) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type IN ('PROJECT_NOT_SELECTED_REFUND', 'PROJECT_CANCEL_REFUND', 'WITHDRAWAL_REFUND', 'EXPIRATION_REFUND', 'REFUND') AND ct.amount > 0), 0)::int as refunded,
+             (SELECT MAX(created_at) FROM credit_transactions ct WHERE ct.user_id = u.id OR ct.developer_id = d.id) as last_transaction
       FROM credit_accounts ca
       LEFT JOIN users u ON ca.user_id = u.id
       LEFT JOIN developers d ON ca.developer_id = d.id
@@ -1570,6 +1674,166 @@ export class CreditLedgerService {
       total,
       limit,
       offset,
+    };
+  }
+
+  /**
+   * Retrieves comprehensive credit profile, balances, summary statistics, and transaction timeline for a user
+   */
+  static async getUserCreditDetail(target: string) {
+    const user = await this.findUserAndAccount(target);
+    if (!user) {
+      throw new Error(`User not found for identifier: ${target}`);
+    }
+
+    const accRes = await query(
+      `SELECT ca.id as account_id, ca.balance, ca.currency, ca.created_at, ca.updated_at
+       FROM credit_accounts ca
+       WHERE ca.user_id = $1 OR (ca.developer_id IS NOT NULL AND ca.developer_id = $2)
+       LIMIT 1`,
+      [user.id, user.developer_id || null]
+    );
+
+    const balance = accRes.rows.length > 0 ? Number(accRes.rows[0].balance) : 0;
+
+    // Get aggregated user statistics
+    const statsRes = await query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN type = 'PURCHASE' THEN amount ELSE 0 END), 0)::int as purchased,
+         COALESCE(SUM(CASE WHEN type = 'ADMIN_CREDIT_GRANT' THEN amount ELSE 0 END), 0)::int as granted,
+         COALESCE(ABS(SUM(CASE WHEN type = 'ADMIN_CREDIT_REMOVAL' THEN amount ELSE 0 END)), 0)::int as removed,
+         COALESCE(ABS(SUM(CASE WHEN type IN ('PROJECT_CLAIM', 'USAGE', 'CONSUMPTION') AND amount < 0 THEN amount ELSE 0 END)), 0)::int as consumed,
+         COALESCE(SUM(CASE WHEN type IN ('PROJECT_NOT_SELECTED_REFUND', 'PROJECT_CANCEL_REFUND', 'WITHDRAWAL_REFUND', 'EXPIRATION_REFUND', 'REFUND') AND amount > 0 THEN amount ELSE 0 END), 0)::int as refunded,
+         MAX(created_at) as last_transaction
+       FROM credit_transactions
+       WHERE user_id = $1 OR (developer_id IS NOT NULL AND developer_id = $2)`,
+      [user.id, user.developer_id || null]
+    );
+
+    // Get transaction history timeline
+    const historyRes = await query(
+      `SELECT ct.id, ct.type, ct.amount, ct.balance_before, ct.balance_after,
+              ct.reference_id, ct.reason, ct.description, ct.created_at,
+              u_perf.uid as performed_by_uid, u_perf.email as performed_by_email, u_perf.role as performed_by_role
+       FROM credit_transactions ct
+       LEFT JOIN users u_perf ON ct.performed_by = u_perf.id
+       WHERE ct.user_id = $1 OR (ct.developer_id IS NOT NULL AND ct.developer_id = $2)
+       ORDER BY ct.created_at DESC
+       LIMIT 100`,
+      [user.id, user.developer_id || null]
+    );
+
+    return {
+      user: {
+        id: user.id,
+        uid: user.uid,
+        public_uid: user.public_uid,
+        name: user.name || user.developer_name || user.email,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        developer_id: user.developer_id,
+        developer_username: user.developer_username,
+      },
+      account: {
+        balance,
+        currency: accRes.rows[0]?.currency || 'INR',
+        updated_at: accRes.rows[0]?.updated_at || null,
+        created_at: accRes.rows[0]?.created_at || null,
+      },
+      summary: statsRes.rows[0] || {
+        purchased: 0,
+        granted: 0,
+        removed: 0,
+        consumed: 0,
+        refunded: 0,
+        last_transaction: null,
+      },
+      transactions: historyRes.rows,
+    };
+  }
+
+  /**
+   * Generates secure CSV export of platform credit ledger with injection prevention and auditing
+   */
+  static async exportCreditTransactions(filters?: CreditHistoryFilter & { adminUserId: string }) {
+    const result = await this.getCreditHistory({
+      ...filters,
+      limit: 5000,
+      offset: 0,
+    });
+
+    const rows = result.history || [];
+
+    const headers = [
+      'Transaction ID',
+      'Created At',
+      'User UID',
+      'User Email',
+      'User Role',
+      'Transaction Type',
+      'Amount',
+      'Balance Before',
+      'Balance After',
+      'Reference ID',
+      'Reason',
+      'Description',
+      'Performed By Email',
+      'Performed By Role',
+    ];
+
+    const escapeCsv = (val: any): string => {
+      if (val === null || val === undefined) return '""';
+      let str = String(val);
+      if (str.startsWith('=') || str.startsWith('+') || str.startsWith('-') || str.startsWith('@')) {
+        str = `'` + str;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const csvLines = [headers.join(',')];
+    for (const r of rows) {
+      csvLines.push([
+        escapeCsv(r.id),
+        escapeCsv(r.created_at ? new Date(r.created_at).toISOString() : ''),
+        escapeCsv(r.user_uid || r.user_public_uid || ''),
+        escapeCsv(r.user_email || ''),
+        escapeCsv(r.user_role || ''),
+        escapeCsv(r.type || ''),
+        escapeCsv(r.amount),
+        escapeCsv(r.balance_before ?? ''),
+        escapeCsv(r.balance_after ?? ''),
+        escapeCsv(r.reference_id || ''),
+        escapeCsv(r.reason || ''),
+        escapeCsv(r.description || ''),
+        escapeCsv(r.performed_by_email || ''),
+        escapeCsv(r.performed_by_role || ''),
+      ].join(','));
+    }
+
+    const csvContent = csvLines.join('\n');
+
+    if (filters?.adminUserId) {
+      await AuditLogger.log({
+        actorUserId: filters.adminUserId,
+        action: 'ADMIN_EXPORT_CREDIT_LEDGER',
+        entityType: 'CREDIT_SYSTEM',
+        metadata: {
+          recordCount: rows.length,
+          filters: {
+            type: filters.type,
+            startDate: filters.startDate,
+            endDate: filters.endDate,
+            search: filters.search,
+          },
+        },
+      });
+    }
+
+    return {
+      csvContent,
+      filename: `credit_transactions_export_${new Date().toISOString().slice(0, 10)}.csv`,
+      recordCount: rows.length,
     };
   }
 
