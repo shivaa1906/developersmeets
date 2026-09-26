@@ -154,8 +154,58 @@ const developerDatabase: Record<string, any> = {
   },
 };
 
-export default function DeveloperDetailPage({ params }: DeveloperProfileProps) {
-  const dev = developerDatabase[params.username];
+async function getDeveloper(username: string) {
+  if (developerDatabase[username]) {
+    return developerDatabase[username];
+  }
+  try {
+    const res = await fetch(`http://127.0.0.1:5000/api/v1/developers/profile/${username}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.developer) return null;
+    const d = data.developer;
+    return {
+      name: d.display_name,
+      username: d.username,
+      role: d.role_title,
+      location: d.location || 'Global / Remote',
+      experience: d.experience || 0,
+      verification_status: d.verification_status,
+      bio: d.bio,
+      skills: Array.isArray(d.skills)
+        ? d.skills.map((s: any) => (typeof s === 'string' ? s : s.name))
+        : [],
+      certifications: Array.isArray(d.certifications)
+        ? d.certifications.map((c: any) => (typeof c === 'string' ? c : c.name))
+        : [],
+      achievements: [
+        'Verified Platform Engineering Specialist',
+        'Direct project delivery signoff',
+      ],
+      github: d.github_url,
+      linkedin: d.linkedin_url,
+      portfolio: d.portfolio_url,
+      associatedProjects: Array.isArray(d.attributedProjects)
+        ? d.attributedProjects.map((p: any) => ({
+            slug: p.slug,
+            title: p.title,
+            project_number: p.project_number,
+            role: p.project_role || 'Contributor',
+            timeline: p.timeline || 'Enterprise',
+            category: p.category || 'Engineering',
+            status: 'PUBLISHED',
+          }))
+        : [],
+    };
+  } catch (_err) {
+    return null;
+  }
+}
+
+export default async function DeveloperDetailPage({ params }: DeveloperProfileProps) {
+  const dev = await getDeveloper(params.username);
 
   if (!dev) {
     notFound();

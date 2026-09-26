@@ -317,6 +317,10 @@ export class AuthController {
       const user = userRes.rows[0];
       res.json({ user });
     } catch (_error: any) {
+      res.json({ user: req.user });
+    }
+  }
+
   /**
    * Generates a secure password reset token
    */
@@ -399,6 +403,11 @@ export class AuthController {
         targetUserId = user.id;
       } else {
         res.status(400).json({ error: 'Either resetToken or email with currentPassword must be provided.' });
+        return;
+      }
+
+      if (!targetUserId) {
+        res.status(400).json({ error: 'Unable to resolve user account.' });
         return;
       }
 

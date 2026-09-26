@@ -21,19 +21,18 @@ async function runAuthSecurityAudit() {
   const total = 10;
   const suffix = `sec_${Date.now()}`;
 
-  let dev1UserId: string | null = null;
-  let dev1Id: string | null = null;
-  let dev2UserId: string | null = null;
-  let dev2Id: string | null = null;
-  let client1UserId: string | null = null;
-  let client1Id: string | null = null;
-  let client2UserId: string | null = null;
-  let client2Id: string | null = null;
-  let proj1Id: string | null = null;
-  let proj2Id: string | null = null;
-  let conv1Id: string | null = null;
-  let conv2Id: string | null = null;
-  let ticket1Id: string | null = null;
+  let dev1UserId = '';
+  let dev1Id = '';
+  let dev2UserId = '';
+  let dev2Id = '';
+  let client1UserId = '';
+  let client1Id = '';
+  let client2UserId = '';
+  let client2Id = '';
+  let proj1Id = '';
+  let proj2Id = '';
+  let conv1Id = '';
+  let ticket1Id = '';
 
   try {
     const pwdHash = await bcrypt.hash('SecurePass123!', 10);
@@ -85,7 +84,7 @@ async function runAuthSecurityAudit() {
     const c1ClientRes = await query(
       `INSERT INTO clients (user_id, client_number, company_name, private_name)
        VALUES ($1, $2, 'Acme Corp Alpha', 'David Miller') RETURNING id`,
-      [client1UserId, `Client #901`]
+      [client1UserId, `Client #901-${suffix}`]
     );
     client1Id = c1ClientRes.rows[0].id;
 
@@ -99,7 +98,7 @@ async function runAuthSecurityAudit() {
          'SECURITY', 100000, 150000, '30 Days', 'OPEN_FOR_CLAIMS', 1, 5,
          NOW() + INTERVAL '7 days', $3
        ) RETURNING id`,
-      [`PRJ-2026-9001`, `sec-vault-${suffix}`, client1Id]
+      [`PRJ-9001-${suffix}`, `sec-vault-${suffix}`, client1Id]
     );
     proj1Id = p1Res.rows[0].id;
 
@@ -171,7 +170,7 @@ async function runAuthSecurityAudit() {
     if (!expiredRejected) throw new Error('Expired token was not rejected by JWT verification');
 
     // Test password reset token generation & update
-    const resetToken = jwt.sign(
+    const _resetToken = jwt.sign(
       { userId: dev1UserId, purpose: 'PASSWORD_RESET' },
       env.JWT_SECRET,
       { expiresIn: '1h' }
@@ -223,7 +222,7 @@ async function runAuthSecurityAudit() {
     const c2ClientRes = await query(
       `INSERT INTO clients (user_id, client_number, company_name, private_name)
        VALUES ($1, $2, 'Beta Industries', 'Sarah Connor') RETURNING id`,
-      [client2UserId, `Client #902`]
+      [client2UserId, `Client #902-${suffix}`]
     );
     client2Id = c2ClientRes.rows[0].id;
 
@@ -237,7 +236,7 @@ async function runAuthSecurityAudit() {
          'AI/ML', 120000, 200000, '45 Days', 'IN_PROGRESS', 1, 5,
          NOW() + INTERVAL '7 days', $3
        ) RETURNING id`,
-      [`PRJ-2026-9002`, `beta-radar-${suffix}`, client2Id]
+      [`PRJ-9002-${suffix}`, `beta-radar-${suffix}`, client2Id]
     );
     proj2Id = p2Res.rows[0].id;
 
@@ -328,7 +327,7 @@ async function runAuthSecurityAudit() {
     // -------------------------------------------------------------------------
     console.log('\n[Test 8] Selection Anonymity & Data Masking Audit...');
     // Dev 1 claims proj1 slot
-    const claimRes = await ProjectService.claimProject(proj1Id, dev1Id, dev1UserId);
+    const _claimRes = await ProjectService.claimProject(proj1Id, dev1Id, dev1UserId);
     // Dev 1 submits proposal
     await ProjectService.submitProposal(proj1Id, dev1Id, {
       approach: 'Zero-knowledge architecture with Rust enclave.',
@@ -465,9 +464,6 @@ async function runAuthSecurityAudit() {
     }
     if (conv1Id) {
       await query(`DELETE FROM conversations WHERE id = $1`, [conv1Id]);
-    }
-    if (conv2Id) {
-      await query(`DELETE FROM conversations WHERE id = $1`, [conv2Id]);
     }
     if (proj1Id) {
       await query(`DELETE FROM projects WHERE id = $1`, [proj1Id]);

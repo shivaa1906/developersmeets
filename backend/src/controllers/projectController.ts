@@ -273,10 +273,11 @@ export class ProjectController {
 
       if (req.user?.developerId) {
         const rows = await query(
-          `SELECT p.*, pc.status as claim_status, pc.anonymous_tag
+          `SELECT DISTINCT p.*, COALESCE(pc.status, 'ASSIGNED') as claim_status, pc.anonymous_tag
            FROM projects p
-           JOIN project_claims pc ON p.id = pc.project_id
-           WHERE pc.developer_id = $1
+           LEFT JOIN project_claims pc ON (p.id = pc.project_id AND pc.developer_id = $1)
+           LEFT JOIN project_members pm ON (p.id = pm.project_id AND pm.developer_id = $1)
+           WHERE pc.developer_id = $1 OR pm.developer_id = $1 OR p.lead_developer_id = $1
            ORDER BY p.created_at DESC`,
           [req.user.developerId]
         );

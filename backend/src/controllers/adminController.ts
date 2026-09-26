@@ -84,7 +84,16 @@ export class AdminController {
         });
       });
 
-      res.json({ success: true, message: 'Developer approved and verified with 10 welcome credits.' });
+      res.json({
+        success: true,
+        message: 'Developer approved and verified with 10 welcome credits.',
+        developer: {
+          id: developerId,
+          status: 'APPROVED',
+          verification_status: 'VERIFIED',
+          verified: true,
+        },
+      });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -122,7 +131,16 @@ export class AdminController {
         });
       });
 
-      res.json({ success: true, message: 'Developer application rejected.' });
+      res.json({
+        success: true,
+        message: 'Developer application rejected.',
+        developer: {
+          id: developerId,
+          status: 'REJECTED',
+          verification_status: 'REJECTED',
+          verified: false,
+        },
+      });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
@@ -164,7 +182,16 @@ export class AdminController {
         });
       });
 
-      res.json({ success: true, message: 'Developer suspended.' });
+      res.json({
+        success: true,
+        message: 'Developer suspended.',
+        developer: {
+          id: developerId,
+          status: 'SUSPENDED',
+          verification_status: 'SUSPENDED',
+          verified: false,
+        },
+      });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }

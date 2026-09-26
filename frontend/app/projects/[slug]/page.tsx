@@ -129,7 +129,7 @@ export default function ProjectDetailPage({ params }: ProjectDetailProps) {
                 href={`/developers/${project.lead_developer.username}`}
                 className="hover:text-accent transition-colors flex items-center space-x-2"
               >
-                <span>{project.lead_developer.name}</span>
+                <span>Built by {project.lead_developer.name}</span>
                 <ExternalLink className="h-4 w-4 text-accent" />
               </Link>
             </CardTitle>

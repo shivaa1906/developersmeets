@@ -342,7 +342,7 @@ export class ProjectService {
    */
   static async getProposals(
     projectId: string,
-    user: { role: string; clientId?: string; developerId?: string }
+    user: { role: string; userId?: string; clientId?: string; developerId?: string }
   ) {
     const isLeadership = [ROLES.CEO, ROLES.MD, ROLES.ADMIN].includes(user.role as any);
 
@@ -364,6 +364,7 @@ export class ProjectService {
       id: row.id,
       claimId: row.claim_id,
       anonymousTag: row.anonymous_tag,
+      anonymous_tag: row.anonymous_tag,
       approach: row.approach,
       timeline: row.timeline,
       price: row.price,

@@ -14,25 +14,53 @@ import {
   ArrowRight,
   Clock,
   ShieldCheck,
+  Eye,
+  Mail,
+  CheckCircle2,
 } from 'lucide-react';
 
 export default function DashboardOverviewPage() {
   const { user } = useAuth();
   const [balance, setBalance] = React.useState<number | null>(null);
   const [myProjects, setMyProjects] = React.useState<any[]>([]);
+  const [dashboardMetrics, setDashboardMetrics] = React.useState<{
+    projects: number;
+    claims: number;
+    credits: number;
+    messages: number;
+    inquiries: number;
+    profileViews: number;
+  }>({
+    projects: 0,
+    claims: 0,
+    credits: 0,
+    messages: 0,
+    inquiries: 0,
+    profileViews: 0,
+  });
+
+  const isClient = user?.role === 'CLIENT';
+  const isVerified = user?.verificationStatus === 'VERIFIED' || user?.role === 'CEO' || user?.role === 'MD';
 
   React.useEffect(() => {
     apiClient.get<{ balance: number }>('/credits/balance')
       .then((res) => setBalance(res.balance))
-      .catch(() => setBalance(10));
+      .catch(() => setBalance(0));
 
     apiClient.get<{ projects: any[] }>('/projects/my-projects')
       .then((res) => setMyProjects(res.projects || []))
       .catch(() => setMyProjects([]));
-  }, []);
 
-  const isClient = user?.role === 'CLIENT';
-  const isVerified = user?.verificationStatus === 'VERIFIED' || user?.role === 'CEO' || user?.role === 'MD';
+    if (!isClient && isVerified) {
+      apiClient.get<{ metrics: any }>('/developers/dashboard')
+        .then((res) => {
+          if (res.metrics) {
+            setDashboardMetrics(res.metrics);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isClient, isVerified]);
 
   return (
     <div className="space-y-8">
@@ -70,59 +98,89 @@ export default function DashboardOverviewPage() {
         </div>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {!isClient && (
-          <Card className="bg-surface-elevated">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <span className="text-xs font-medium text-muted uppercase tracking-wider">Credit Wallet</span>
-              <Coins className="h-4 w-4 text-accent" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold font-mono text-accent">
-                {balance !== null ? `${balance} Credits` : '...'}
-              </div>
-              <p className="text-[11px] text-muted mt-1">₹{balance !== null ? balance * 50 : 500} platform value</p>
-            </CardContent>
-          </Card>
-        )}
-
+      {/* Metrics Row - Real Database Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* Credits */}
         <Card className="bg-surface-elevated">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">
-              {isClient ? 'Submitted Projects' : 'Active Claims'}
-            </span>
-            <Clock className="h-4 w-4 text-electric-purple" />
+            <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Credits</span>
+            <Coins className="h-4 w-4 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono text-foreground">{myProjects.length} Active</div>
-            <p className="text-[11px] text-muted mt-1">In platform queue</p>
+            <div className="text-2xl font-bold font-mono text-accent">
+              {balance !== null ? balance : dashboardMetrics.credits}
+            </div>
+            <p className="text-[10px] text-muted mt-1">Ledger balance</p>
           </CardContent>
         </Card>
 
+        {/* Projects */}
         <Card className="bg-surface-elevated">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Active Workspace</span>
+            <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Projects</span>
             <FolderGit2 className="h-4 w-4 text-status-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono text-status-success">
-              {myProjects.filter((p) => p.status === 'IN_PROGRESS').length} In Progress
+            <div className="text-2xl font-bold font-mono text-foreground">
+              {isClient ? myProjects.length : dashboardMetrics.projects || myProjects.length}
             </div>
-            <p className="text-[11px] text-muted mt-1">Milestone delivery tracking</p>
+            <p className="text-[10px] text-muted mt-1">Associated projects</p>
           </CardContent>
         </Card>
 
+        {/* Claims */}
         <Card className="bg-surface-elevated">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Completed</span>
-            <ShieldCheck className="h-4 w-4 text-muted" />
+            <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Claims</span>
+            <Clock className="h-4 w-4 text-electric-purple" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-foreground">
-              {myProjects.filter((p) => p.status === 'PUBLISHED').length} Published
+              {dashboardMetrics.claims}
             </div>
-            <p className="text-[11px] text-muted mt-1">Public portfolio attributed</p>
+            <p className="text-[10px] text-muted mt-1">Project claims</p>
+          </CardContent>
+        </Card>
+
+        {/* Messages */}
+        <Card className="bg-surface-elevated">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Messages</span>
+            <MessageSquare className="h-4 w-4 text-accent" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-mono text-foreground">
+              {dashboardMetrics.messages}
+            </div>
+            <p className="text-[10px] text-muted mt-1">Encrypted chat</p>
+          </CardContent>
+        </Card>
+
+        {/* Inquiries */}
+        <Card className="bg-surface-elevated">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Inquiries</span>
+            <Mail className="h-4 w-4 text-warning" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-mono text-foreground">
+              {dashboardMetrics.inquiries}
+            </div>
+            <p className="text-[10px] text-muted mt-1">Confidential leads</p>
+          </CardContent>
+        </Card>
+
+        {/* Profile Views */}
+        <Card className="bg-surface-elevated">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <span className="text-[11px] font-medium text-muted uppercase tracking-wider">Profile Views</span>
+            <Eye className="h-4 w-4 text-muted" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold font-mono text-foreground">
+              {dashboardMetrics.profileViews}
+            </div>
+            <p className="text-[10px] text-muted mt-1">Public visits</p>
           </CardContent>
         </Card>
       </div>
