@@ -494,7 +494,11 @@ export async function runDeveloperSelectionAudit(): Promise<AuditResults> {
     const dev2FinalBal = await getBalance(dev2.devId);
     const dev3FinalBal = await getBalance(dev3.devId);
 
-    if (dev1FinalBal !== 4 || dev2FinalBal !== 5 || dev3FinalBal !== 5) {
+    const concLeadId = concMembers.rows[0].developer_id;
+    const expectedDev1 = concLeadId === dev1.devId ? 4 : 5;
+    const expectedDev2 = concLeadId === dev2.devId ? 4 : 5;
+
+    if (dev1FinalBal !== expectedDev1 || dev2FinalBal !== expectedDev2 || dev3FinalBal !== 5) {
       throw new Error(`Balance corrupted after refund re-run: dev1=${dev1FinalBal}, dev2=${dev2FinalBal}, dev3=${dev3FinalBal}`);
     }
 

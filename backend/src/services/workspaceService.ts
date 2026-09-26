@@ -1,6 +1,7 @@
 import { withTransaction, query } from '../database/db.js';
 import { ROLES } from '../config/constants.js';
 import { AuditLogger } from '../utils/auditLogger.js';
+import { NotificationService } from './notificationService.js';
 
 export interface WorkspaceUserContext {
   userId: string;
@@ -382,44 +383,57 @@ export class WorkspaceService {
     const updated = updateRes.rows[0];
 
     // 4. Notifications & Audit Logs
+    const milestoneLink = `/workspace/${milestone.project_id}/milestones`;
     if (status === 'SUBMITTED') {
       const clientUser = await query(`SELECT user_id FROM clients WHERE id = $1`, [milestone.client_id]);
       if (clientUser.rows.length > 0) {
-        await query(
-          `INSERT INTO notifications (user_id, type, title, message)
-           VALUES ($1, 'MILESTONE_SUBMITTED', 'Milestone Submitted for Review', $2)`,
-          [
-            clientUser.rows[0].user_id,
-            `Developer submitted milestone "${milestone.title}" for project "${milestone.project_title}". Notes: ${options?.submissionNotes || 'Ready for review.'}`,
-          ]
-        );
+        await NotificationService.createNotification({
+          userId: clientUser.rows[0].user_id,
+          type: 'MILESTONE_UPDATE',
+          title: 'Milestone Submitted for Review',
+          message: `Developer submitted milestone "${milestone.title}" for project "${milestone.project_title}". Notes: ${options?.submissionNotes || 'Ready for review.'}`,
+          link: milestoneLink,
+          metadata: {
+            milestoneId,
+            projectId: milestone.project_id,
+            status: 'SUBMITTED',
+          },
+        });
       }
     } else if (status === 'CHANGES_REQUESTED') {
       if (milestone.lead_developer_id) {
         const devUser = await query(`SELECT user_id FROM developers WHERE id = $1`, [milestone.lead_developer_id]);
         if (devUser.rows.length > 0) {
-          await query(
-            `INSERT INTO notifications (user_id, type, title, message)
-             VALUES ($1, 'CHANGES_REQUESTED', 'Changes Requested on Milestone', $2)`,
-            [
-              devUser.rows[0].user_id,
-              `Client requested changes for milestone "${milestone.title}". Feedback: ${options?.feedback || 'Please revise and resubmit.'}`,
-            ]
-          );
+          await NotificationService.createNotification({
+            userId: devUser.rows[0].user_id,
+            type: 'MILESTONE_UPDATE',
+            title: 'Changes Requested on Milestone',
+            message: `Client requested changes for milestone "${milestone.title}". Feedback: ${options?.feedback || 'Please revise and resubmit.'}`,
+            link: milestoneLink,
+            metadata: {
+              milestoneId,
+              projectId: milestone.project_id,
+              status: 'CHANGES_REQUESTED',
+            },
+          });
         }
       }
     } else if (status === 'APPROVED') {
       if (milestone.lead_developer_id) {
         const devUser = await query(`SELECT user_id FROM developers WHERE id = $1`, [milestone.lead_developer_id]);
         if (devUser.rows.length > 0) {
-          await query(
-            `INSERT INTO notifications (user_id, type, title, message)
-             VALUES ($1, 'MILESTONE_APPROVED', 'Milestone Approved', $2)`,
-            [
-              devUser.rows[0].user_id,
-              `Congratulations! Client approved milestone "${milestone.title}".`,
-            ]
-          );
+          await NotificationService.createNotification({
+            userId: devUser.rows[0].user_id,
+            type: 'MILESTONE_UPDATE',
+            title: 'Milestone Approved',
+            message: `Congratulations! Client approved milestone "${milestone.title}".`,
+            link: milestoneLink,
+            metadata: {
+              milestoneId,
+              projectId: milestone.project_id,
+              status: 'APPROVED',
+            },
+          });
         }
       }
     }
@@ -703,14 +717,15 @@ export class WorkspaceService {
           [project.lead_developer_id]
         );
         if (devUserRes.rows.length > 0) {
-          await client.query(
-            `INSERT INTO notifications (user_id, type, title, message)
-             VALUES ($1, 'PROJECT_COMPLETED', 'Project Completed & Attributed!', $2)`,
-            [
-              devUserRes.rows[0].user_id,
-              `Congratulations! "${project.title}" has been signed off by the client and is now published to your public portfolio!`,
-            ]
-          );
+          await NotificationService.createNotification({
+            userId: devUserRes.rows[0].user_id,
+            type: 'PROJECT_COMPLETED',
+            title: 'Project Completed & Attributed!',
+            message: `Congratulations! "${project.title}" has been signed off by the client and is now published to your public portfolio!`,
+            link: `/projects/${project.project_number || project.id}`,
+            metadata: { projectId, projectCode: project.project_number },
+            client,
+          });
         }
       }
 

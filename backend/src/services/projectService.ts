@@ -2,6 +2,7 @@ import { withTransaction, query } from '../database/db.js';
 import { CreditLedgerService } from './creditLedgerService.js';
 import { PROJECT_STATUSES, ROLES } from '../config/constants.js';
 import { AuditLogger } from '../utils/auditLogger.js';
+import { NotificationService } from './notificationService.js';
 
 export interface ProjectSubmissionInput {
   title: string;
@@ -285,12 +286,12 @@ export class ProjectService {
   static async claimProject(
     projectId: string,
     developerId: string,
-    userId: string
+    userId?: string
   ): Promise<{ claimId: string; anonymousTag: string; remainingCredits: number; conversationId: string }> {
     return withTransaction(async (client) => {
       // 1. Fetch project with row lock
       const projectRes = await client.query(
-        `SELECT id, status, claim_cost, max_claims, claim_deadline, client_id
+        `SELECT id, status, claim_cost, max_claims, claim_deadline, client_id, title, project_number
          FROM projects WHERE id = $1 FOR UPDATE`,
         [projectId]
       );
@@ -303,12 +304,14 @@ export class ProjectService {
 
       // 2. Verify developer is verified
       const devRes = await client.query(
-        `SELECT verification_status FROM developers WHERE id = $1`,
+        `SELECT verification_status, user_id FROM developers WHERE id = $1`,
         [developerId]
       );
       if (devRes.rows.length === 0 || devRes.rows[0].verification_status !== 'VERIFIED') {
         throw new Error('Forbidden: Only verified developers can claim project slots.');
       }
+
+      const devUserId = userId || devRes.rows[0].user_id;
 
       // 2b. Verify skill eligibility
       const eligibility = await ProjectService.checkEligibility(projectId, developerId, client);
@@ -394,7 +397,7 @@ export class ProjectService {
       await client.query(
         `INSERT INTO conversation_members (conversation_id, user_id, developer_id, role)
          VALUES ($1, $2, $3, 'DEVELOPER')`,
-        [convId, userId, developerId]
+        [convId, devUserId, developerId]
       );
 
       // Add client to conversation
@@ -412,14 +415,20 @@ export class ProjectService {
 
       // Notify Client that a developer claimed a slot
       if (clientUserRes.rows.length > 0) {
-        await client.query(
-          `INSERT INTO notifications (user_id, type, title, message)
-           VALUES ($1, 'PROJECT_CLAIMED', 'New Project Claim', $2)`,
-          [
-            clientUserRes.rows[0].user_id,
-            `${anonymousTag} has claimed your project and is preparing a proposal.`,
-          ]
-        );
+        await NotificationService.createNotification({
+          userId: clientUserRes.rows[0].user_id,
+          type: 'PROJECT_CLAIMED',
+          title: 'New Project Claim',
+          message: `${anonymousTag} has claimed your project "${project.title}" and is preparing a proposal.`,
+          link: `/projects/${project.project_number || project.id}`,
+          metadata: {
+            projectId: project.id,
+            projectCode: project.project_number,
+            claimId,
+            anonymousTag,
+          },
+          client,
+        });
       }
 
       return {
@@ -488,14 +497,19 @@ export class ProjectService {
       );
 
       if (projectRes.rows.length > 0) {
-        await client.query(
-          `INSERT INTO notifications (user_id, type, title, message)
-           VALUES ($1, 'PROPOSAL_RECEIVED', 'Proposal Received', $2)`,
-          [
-            projectRes.rows[0].user_id,
-            `${claim.anonymous_tag} submitted a proposal for "${projectRes.rows[0].title}".`,
-          ]
-        );
+        await NotificationService.createNotification({
+          userId: projectRes.rows[0].user_id,
+          type: 'PROPOSAL_RECEIVED',
+          title: 'Proposal Received',
+          message: `${claim.anonymous_tag} submitted a proposal for "${projectRes.rows[0].title}".`,
+          link: `/projects/${projectId}/proposals`,
+          metadata: {
+            projectId,
+            proposalId: propRes.rows[0].id,
+            anonymousTag: claim.anonymous_tag,
+          },
+          client,
+        });
       }
 
       return {
@@ -703,14 +717,19 @@ export class ProjectService {
         [selectedDeveloperId]
       );
       if (winDevUser.rows.length > 0) {
-        await client.query(
-          `INSERT INTO notifications (user_id, type, title, message)
-           VALUES ($1, 'PROPOSAL_ACCEPTED', 'Proposal Accepted!', $2)`,
-          [
-            winDevUser.rows[0].user_id,
-            `Congratulations! You have been selected for "${project.title}". The workspace is now open.`,
-          ]
-        );
+        await NotificationService.createNotification({
+          userId: winDevUser.rows[0].user_id,
+          type: 'DEVELOPER_SELECTED',
+          title: 'Developer Selected!',
+          message: `Congratulations! You have been selected as lead developer for "${project.title}". The workspace is now open.`,
+          link: `/workspace/${project.project_number || project.id}`,
+          metadata: {
+            projectId: project.id,
+            projectCode: project.project_number,
+            role: 'LEAD',
+          },
+          client,
+        });
       }
 
       return {

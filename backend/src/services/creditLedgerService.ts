@@ -2,6 +2,7 @@ import { withTransaction, query } from '../database/db.js';
 import { env } from '../config/environment.js';
 import crypto from 'crypto';
 import type { PoolClient } from 'pg';
+import { NotificationService } from './notificationService.js';
 
 export interface CreditLedgerResult {
   success: boolean;
@@ -143,6 +144,37 @@ export class CreditLedgerService {
               [refundTx.rows[0].id, claim.id]
             );
 
+            // Fetch developer and project details for notifications
+            const devInfo = await client.query(`SELECT user_id FROM developers WHERE id = $1`, [devId]);
+            const projInfo = await client.query(`SELECT title, project_number FROM projects WHERE id = $1`, [projectId]);
+            const devUserId = devInfo.rows[0]?.user_id;
+            const projectTitle = projInfo.rows[0]?.title || 'Project';
+            const projectCode = projInfo.rows[0]?.project_number || projectId;
+
+            if (devUserId) {
+              // 1. DEVELOPER_NOT_SELECTED Notification
+              await NotificationService.createNotification({
+                userId: devUserId,
+                type: 'DEVELOPER_NOT_SELECTED',
+                title: 'Project Selection Update',
+                message: `A candidate has been selected for project "${projectTitle}". Thank you for your proposal.`,
+                link: `/projects/${projectCode}`,
+                metadata: { projectId, projectCode, status: 'NOT_SELECTED' },
+                client,
+              });
+
+              // 2. CREDIT_REFUNDED Notification
+              await NotificationService.createNotification({
+                userId: devUserId,
+                type: 'CREDIT_REFUNDED',
+                title: 'Credit Refunded',
+                message: `${refundAmt} claim credit has been refunded to your wallet for project "${projectTitle}". New balance: ${balanceAfter} credits.`,
+                link: '/wallet',
+                metadata: { projectId, projectCode, amount: refundAmt, balanceAfter, referenceId: refundReference },
+                client,
+              });
+            }
+
             refundedCount++;
           }
         }
@@ -222,6 +254,20 @@ export class CreditLedgerService {
          VALUES ($1, 'CREDIT_ADMIN_ADJUSTMENT', 'CREDIT_ACCOUNT', $2, $3)`,
         [adminId, developerId, JSON.stringify({ amount, balanceAfter, reason, referenceId })]
       );
+
+      // Notify developer of credit adjustment / refund
+      const devRes = await client.query(`SELECT user_id FROM developers WHERE id = $1`, [developerId]);
+      if (devRes.rows[0]?.user_id) {
+        await NotificationService.createNotification({
+          userId: devRes.rows[0].user_id,
+          type: amount > 0 ? 'CREDIT_REFUNDED' : 'CREDIT_ADJUSTED',
+          title: amount > 0 ? 'Credits Added to Wallet' : 'Credit Adjustment',
+          message: `Wallet adjustment of ${amount > 0 ? '+' : ''}${amount} credits: ${reason}. New balance: ${balanceAfter} credits.`,
+          link: '/wallet',
+          metadata: { amount, balanceAfter, referenceId, reason },
+          client,
+        });
+      }
 
       return {
         success: true,
@@ -429,6 +475,21 @@ export class CreditLedgerService {
           ]
         );
 
+        // Notify developer of credit purchase
+        const devRes = await client.query(`SELECT user_id FROM developers WHERE id = $1`, [developerId]);
+        const devUserId = devRes.rows[0]?.user_id || payment.user_id;
+        if (devUserId) {
+          await NotificationService.createNotification({
+            userId: devUserId,
+            type: 'CREDIT_PURCHASED',
+            title: 'Credits Purchased Successfully',
+            message: `Payment successful! Added ${credits} credits to your wallet. Your new balance is ${balanceAfter} credits.`,
+            link: '/wallet',
+            metadata: { credits, balanceAfter, transactionId: txRes.rows[0].id, paymentId: payment.id },
+            client,
+          });
+        }
+
         return {
           success: true,
           status: 'SUCCESS',
@@ -500,6 +561,21 @@ export class CreditLedgerService {
           `Credit purchase of ${credits} credits for ₹${amount}`,
         ]
       );
+
+      // 5. Notify developer of credit purchase
+      const devRes = await client.query(`SELECT user_id FROM developers WHERE id = $1`, [developerId]);
+      const devUserId = devRes.rows[0]?.user_id || userId;
+      if (devUserId) {
+        await NotificationService.createNotification({
+          userId: devUserId,
+          type: 'CREDIT_PURCHASED',
+          title: 'Credits Purchased Successfully',
+          message: `Successfully purchased ${credits} credits. Your new balance is ${balanceAfter} credits.`,
+          link: '/wallet',
+          metadata: { credits, balanceAfter, transactionId: txRes.rows[0].id },
+          client,
+        });
+      }
 
       return {
         success: true,

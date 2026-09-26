@@ -1,5 +1,6 @@
 import { query, withTransaction } from '../database/db.js';
 import { ChatService } from './chatService.js';
+import { NotificationService } from './notificationService.js';
 
 export class CommunityService {
   /**
@@ -330,6 +331,47 @@ export class CommunityService {
         hasCodeBlock,
       ]
     );
+
+    // Dispatch notifications for community mentions
+    if (mentions.length > 0) {
+      const snippet = content.length > 80 ? `${content.substring(0, 80)}...` : content;
+      for (const mention of mentions) {
+        const cleanHandle = mention.replace(/^@/, '');
+        try {
+          const devMatch = await query(
+            `SELECT user_id, username FROM developers WHERE LOWER(username) = LOWER($1)`,
+            [cleanHandle]
+          );
+          let targetUserId = devMatch.rows[0]?.user_id;
+          if (!targetUserId) {
+            const userMatch = await query(
+              `SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR LOWER(role) = LOWER($1)`,
+              [cleanHandle]
+            );
+            if (userMatch.rows.length > 0) {
+              targetUserId = userMatch.rows[0].id;
+            }
+          }
+
+          if (targetUserId && targetUserId !== userId) {
+            await NotificationService.createNotification({
+              userId: targetUserId,
+              type: 'COMMUNITY_MENTION',
+              title: `New Mention in #${channel.slug}`,
+              message: `You were mentioned in #${channel.slug}: "${snippet}"`,
+              link: `/community/channels/${channel.slug}`,
+              metadata: {
+                channelId: channel.id,
+                channelSlug: channel.slug,
+                messageId: insRes.rows[0].id,
+              },
+            });
+          }
+        } catch (e: any) {
+          console.error('Error dispatching mention notification:', e.message);
+        }
+      }
+    }
 
     return insRes.rows[0];
   }

@@ -1,6 +1,7 @@
 import { withTransaction, query } from '../database/db.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { ChatService } from './chatService.js';
+import { NotificationService } from './notificationService.js';
 
 export class SupportService {
   /**
@@ -104,16 +105,28 @@ export class SupportService {
           );
 
           // Notification to developer
-          await client.query(
-            `INSERT INTO notifications (user_id, type, title, message)
-             VALUES ($1, 'SUPPORT_TICKET_OPENED', 'Support Ticket Opened', $2)`,
-            [
-              devUserId,
-              `A support ticket (${ticketNumber}) has been opened for "${project.title}".`,
-            ]
-          );
+          await NotificationService.createNotification({
+            userId: devUserId,
+            type: 'SUPPORT_TICKET_OPENED',
+            title: 'Support Ticket Opened',
+            message: `A support ticket (${ticketNumber}) has been opened for "${project.title}".`,
+            link: `/support/tickets/${ticket.id}`,
+            metadata: { ticketId: ticket.id, ticketNumber, projectId },
+            client,
+          });
         }
       }
+
+      // Notification to client confirming ticket creation
+      await NotificationService.createNotification({
+        userId,
+        type: 'SUPPORT_TICKET_CREATED',
+        title: 'Support Ticket Created',
+        message: `Your support ticket (${ticketNumber}) has been submitted for "${project.title}".`,
+        link: `/support/tickets/${ticket.id}`,
+        metadata: { ticketId: ticket.id, ticketNumber, projectId },
+        client,
+      });
 
       await AuditLogger.log({
         actorUserId: userId,

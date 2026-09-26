@@ -334,10 +334,14 @@ CREATE TABLE IF NOT EXISTS notifications (
     type VARCHAR(100) NOT NULL,
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
+    link VARCHAR(500),
+    metadata JSONB DEFAULT '{}'::jsonb,
     read BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
 
 -- 16. SUPPORT TICKETS & BRIDGES
 CREATE TYPE ticket_priority AS ENUM ('LOW', 'NORMAL', 'HIGH', 'URGENT');

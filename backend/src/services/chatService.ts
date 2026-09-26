@@ -1,6 +1,7 @@
 import { query } from '../database/db.js';
 import { scrubPrivateContactInfo } from '../utils/privacyScrubber.js';
 import { EventEmitter } from 'events';
+import { NotificationService } from './notificationService.js';
 
 export const chatEventEmitter = new EventEmitter();
 chatEventEmitter.setMaxListeners(100);
@@ -265,6 +266,72 @@ export class ChatService {
     // 6. Broadcast realtime event
     chatEventEmitter.emit(`message:${conversationId}`, messageData);
     chatEventEmitter.emit('message', messageData);
+
+    // 7. Notify other conversation members
+    try {
+      const otherMembers = await query(
+        `SELECT cm.user_id, cm.role as member_role,
+                c.project_id,
+                p.title as project_title, p.project_number
+         FROM conversation_members cm
+         JOIN conversations c ON cm.conversation_id = c.id
+         LEFT JOIN projects p ON c.project_id = p.id
+         WHERE cm.conversation_id = $1 AND cm.user_id != $2`,
+        [conversationId, senderUserId]
+      );
+
+      const senderRes = await query(
+        `SELECT cm.role, u.role as system_role,
+                pc.anonymous_tag, cl.client_number
+         FROM conversation_members cm
+         JOIN users u ON cm.user_id = u.id
+         LEFT JOIN projects p ON p.id = (SELECT project_id FROM conversations WHERE id = $1)
+         LEFT JOIN project_claims pc ON (cm.developer_id = pc.developer_id AND pc.project_id = p.id)
+         LEFT JOIN clients cl ON cm.client_id = cl.id
+         WHERE cm.conversation_id = $1 AND cm.user_id = $2`,
+        [conversationId, senderUserId]
+      );
+
+      let senderDisplayName = 'Participant';
+      if (senderRes.rows.length > 0) {
+        const s = senderRes.rows[0];
+        if (s.anonymous_tag) {
+          senderDisplayName = s.anonymous_tag;
+        } else if (s.client_number) {
+          senderDisplayName = s.client_number;
+        } else if (s.role === 'DEVELOPER') {
+          senderDisplayName = 'Lead Developer';
+        } else if (s.role === 'CLIENT') {
+          senderDisplayName = 'Client';
+        } else if (s.system_role === 'CEO' || s.system_role === 'MD' || s.system_role === 'ADMIN') {
+          senderDisplayName = 'Platform Support';
+        }
+      }
+
+      const rawSnippet = scrubbed.scrubbedText;
+      const snippet = rawSnippet.length > 60 ? `${rawSnippet.substring(0, 60)}...` : rawSnippet;
+
+      for (const m of otherMembers.rows) {
+        const projContext = m.project_title ? ` on "${m.project_title}"` : '';
+        const deepLink = m.project_id ? `/workspace/${m.project_id}/chat` : `/chat/${conversationId}`;
+
+        await NotificationService.createNotification({
+          userId: m.user_id,
+          type: 'NEW_PROJECT_MESSAGE',
+          title: 'New Project Message',
+          message: `${senderDisplayName}${projContext}: ${snippet}`,
+          link: deepLink,
+          metadata: {
+            conversationId,
+            projectId: m.project_id,
+            messageId: msgRes.rows[0].id,
+            sender: senderDisplayName,
+          },
+        });
+      }
+    } catch (e: any) {
+      console.error('Error creating chat notification:', e.message);
+    }
 
     return {
       message: msgRes.rows[0],

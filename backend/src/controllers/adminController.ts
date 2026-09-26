@@ -3,6 +3,7 @@ import { query, withTransaction } from '../database/db.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { ProjectService } from '../services/projectService.js';
+import { NotificationService } from '../services/notificationService.js';
 
 export class AdminController {
   /**
@@ -69,11 +70,15 @@ export class AdminController {
         );
 
         // 5. Notify developer
-        await client.query(
-          `INSERT INTO notifications (user_id, type, title, message)
-           VALUES ($1, 'DEVELOPER_VERIFIED', 'Profile Verified!', 'Congratulations! Your developer profile has been verified by platform executive leadership. 10 credits have been added to your wallet.')`,
-          [dev.user_id]
-        );
+        await NotificationService.createNotification({
+          userId: dev.user_id,
+          type: 'DEVELOPER_APPROVED',
+          title: 'Profile Approved & Verified!',
+          message: 'Congratulations! Your developer profile has been verified by platform executive leadership. 10 credits have been added to your wallet.',
+          link: '/wallet',
+          metadata: { developerId, creditsGranted: 10 },
+          client,
+        });
 
         // 6. Log audit action
         await AuditLogger.log({
@@ -328,6 +333,15 @@ export class AdminController {
           `UPDATE users SET status = 'ACTIVE', updated_at = NOW() WHERE id = $1`,
           [devRes.rows[0].user_id]
         );
+        await NotificationService.createNotification({
+          userId: devRes.rows[0].user_id,
+          type: 'DEVELOPER_APPROVED',
+          title: 'Profile Verified!',
+          message: 'Congratulations! Your developer profile has been verified by platform executive leadership.',
+          link: '/dashboard',
+          metadata: { developerId },
+          client,
+        });
         await AuditLogger.log({
           actorUserId: req.user!.userId,
           action: 'DEVELOPER_VERIFIED_DIRECT',
