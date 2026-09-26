@@ -115,7 +115,11 @@ export class SupportController {
       );
       res.json({ tickets });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      if (error.message?.includes('Forbidden') || error.message?.includes('Access denied')) {
+        res.status(403).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: error.message });
+      }
     }
   }
 

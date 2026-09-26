@@ -102,15 +102,16 @@ export class SupportService {
 
       const ticketRes = await client.query(
         `INSERT INTO support_tickets (
-            ticket_number, project_id, client_id, developer_id, subject, description, priority, category, attachments, status, assigned_to_user_id, response_due_at, resolution_due_at
+            ticket_number, project_id, client_id, developer_id, created_by_user_id, subject, description, priority, category, attachments, status, assigned_to_user_id, response_due_at, resolution_due_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW() + ($12 || ' hours')::interval, NOW() + ($13 || ' hours')::interval)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW() + ($13 || ' hours')::interval, NOW() + ($14 || ' hours')::interval)
          RETURNING *`,
         [
           ticketNumber,
           projectId || null,
           effectiveClientId || null,
           effectiveDevId || null,
+          userId,
           cleanSubject,
           cleanDescription,
           priority,
@@ -260,6 +261,10 @@ export class SupportService {
 
       return {
         ...ticket,
+        created_by_user_id: ticket.created_by_user_id,
+        createdByUserId: ticket.created_by_user_id,
+        assigned_support_user_id: ticket.assigned_to_user_id,
+        assignedSupportUserId: ticket.assigned_to_user_id,
         bridgeId,
         bridge_id: bridgeId,
         bridgeNumber,
@@ -403,7 +408,8 @@ export class SupportService {
   ) {
     let sql = `
       SELECT st.id, st.ticket_number, st.subject, st.description, st.priority, st.status,
-             st.category, st.attachments, st.assigned_to_user_id,
+             st.category, st.attachments, st.assigned_to_user_id, st.created_by_user_id,
+             st.assigned_to_user_id as assigned_support_user_id,
              st.created_at, st.updated_at, st.closed_at, st.project_id,
              st.developer_id, st.client_id,
              st.response_due_at, st.resolution_due_at, st.escalated_at, st.escalation_reason,
@@ -423,9 +429,10 @@ export class SupportService {
     const conditions: string[] = [];
     const params: any[] = [];
 
-    const isStaff = ['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(user.role);
+    const isLeadership = ['CEO', 'MD', 'ADMIN'].includes(user.role);
+    const isSupport = user.role === 'SUPPORT';
 
-    if (isStaff) {
+    if (isLeadership) {
       if (filters?.assigned === 'me') {
         params.push(user.userId);
         conditions.push(`st.assigned_to_user_id = $${params.length}`);
@@ -435,37 +442,104 @@ export class SupportService {
         params.push(filters.assigned);
         conditions.push(`st.assigned_to_user_id = $${params.length}`);
       }
-    } else {
-      let clId = user.clientId;
-      let devId = user.developerId;
+    } else if (isSupport) {
+      const staffRes = await query(
+        `SELECT id, status, permissions FROM support_staff WHERE user_id = $1`,
+        [user.userId]
+      );
+      if (staffRes.rows.length === 0 || staffRes.rows[0].status === 'SUSPENDED') {
+        throw new Error('Forbidden: Support staff account is inactive or suspended');
+      }
+      const staff = staffRes.rows[0];
+      const permissions: string[] = Array.isArray(staff.permissions) ? staff.permissions : [];
+      if (!permissions.includes('SUPPORT_VIEW_TICKETS') && !permissions.includes('SUPPORT_VIEW_ALL_TICKETS')) {
+        throw new Error('Forbidden: Support staff account does not have ticket view permissions');
+      }
 
-      if (user.role === 'CLIENT' && !clId) {
+      if (permissions.includes('SUPPORT_VIEW_ALL_TICKETS')) {
+        if (filters?.assigned === 'me') {
+          params.push(user.userId);
+          conditions.push(`st.assigned_to_user_id = $${params.length}`);
+        } else if (filters?.assigned === 'unassigned') {
+          conditions.push(`st.assigned_to_user_id IS NULL`);
+        } else if (filters?.assigned && filters.assigned !== 'ALL') {
+          params.push(filters.assigned);
+          conditions.push(`st.assigned_to_user_id = $${params.length}`);
+        }
+      } else {
+        params.push(user.userId);
+        const uIdx = params.length;
+        params.push(staff.id);
+        const sIdx = params.length;
+
+        conditions.push(`(
+          st.assigned_to_user_id = $${uIdx}
+          OR st.assigned_to_user_id IS NULL
+          OR st.team_id IN (SELECT team_id FROM support_team_members WHERE staff_id = $${sIdx})
+          OR EXISTS (
+            SELECT 1 FROM support_bridge_members sbm
+            JOIN support_bridges sbb ON sbm.bridge_id = sbb.id
+            WHERE sbb.ticket_id = st.id AND sbm.user_id = $${uIdx}
+          )
+        )`);
+
+        if (filters?.assigned === 'me') {
+          conditions.push(`st.assigned_to_user_id = $${uIdx}`);
+        } else if (filters?.assigned === 'unassigned') {
+          conditions.push(`st.assigned_to_user_id IS NULL`);
+        }
+      }
+    } else if (user.role === 'CLIENT') {
+      let clId = user.clientId;
+      if (!clId) {
         const cRes = await query('SELECT id FROM clients WHERE user_id = $1', [user.userId]);
         if (cRes.rows.length > 0) clId = cRes.rows[0].id;
-      } else if (user.role === 'DEVELOPER' && !devId) {
+      }
+
+      params.push(user.userId);
+      const uIdx = params.length;
+      if (clId) {
+        params.push(clId);
+        const cIdx = params.length;
+        conditions.push(`(st.client_id = $${cIdx} OR st.created_by_user_id = $${uIdx})`);
+      } else {
+        conditions.push(`st.created_by_user_id = $${uIdx}`);
+      }
+    } else if (user.role === 'DEVELOPER') {
+      let devId = user.developerId;
+      if (!devId) {
         const dRes = await query('SELECT id FROM developers WHERE user_id = $1', [user.userId]);
         if (dRes.rows.length > 0) devId = dRes.rows[0].id;
       }
 
-      if (clId) {
-        params.push(clId);
-        conditions.push(`st.client_id = $${params.length}`);
-      } else if (devId) {
+      params.push(user.userId);
+      const uIdx = params.length;
+      if (devId) {
         params.push(devId);
-        const devIdx = params.length;
-        params.push(user.userId);
-        const userIdx = params.length;
+        const dIdx = params.length;
         conditions.push(`(
-          st.developer_id = $${devIdx}
+          st.developer_id = $${dIdx}
+          OR st.created_by_user_id = $${uIdx}
           OR EXISTS (
             SELECT 1 FROM support_bridge_members sbm
             JOIN support_bridges sbb ON sbm.bridge_id = sbb.id
-            WHERE sbb.ticket_id = st.id AND sbm.user_id = $${userIdx}
+            WHERE sbb.ticket_id = st.id AND sbm.user_id = $${uIdx}
+          )
+          OR EXISTS (
+            SELECT 1 FROM projects p
+            WHERE p.id = st.project_id
+              AND (
+                p.lead_developer_id = $${dIdx}
+                OR EXISTS (SELECT 1 FROM project_claims pc WHERE pc.project_id = p.id AND pc.developer_id = $${dIdx} AND pc.status IN ('CLAIMED', 'SELECTED'))
+                OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.developer_id = $${dIdx})
+              )
           )
         )`);
       } else {
-        return [];
+        conditions.push(`st.created_by_user_id = $${uIdx}`);
       }
+    } else {
+      return [];
     }
 
     if (filters?.status) {
@@ -499,6 +573,10 @@ export class SupportService {
 
     return res.rows.map((row) => ({
       ...row,
+      created_by_user_id: row.created_by_user_id,
+      createdByUserId: row.created_by_user_id,
+      assigned_support_user_id: row.assigned_to_user_id,
+      assignedSupportUserId: row.assigned_to_user_id,
       clientIdentity: 'Client #001',
       developerIdentity: 'Technical Developer',
       supportAgent: row.assigned_agent_email
@@ -515,7 +593,8 @@ export class SupportService {
     user: { userId: string; role: string; clientId?: string; developerId?: string }
   ) {
     const tRes = await query(
-      `SELECT st.*, COALESCE(p.title, 'Platform Support') as project_title, p.project_number,
+      `SELECT st.*, st.created_by_user_id, st.assigned_to_user_id as assigned_support_user_id,
+              COALESCE(p.title, 'Platform Support') as project_title, p.project_number,
               sb.id as bridge_id, sb.bridge_number, sb.conversation_id,
               u_assigned.uid as assigned_agent_uid,
               u_assigned.public_uid as assigned_agent_public_uid,
@@ -534,26 +613,98 @@ export class SupportService {
 
     const ticket = tRes.rows[0];
 
-    // Authorization check
-    const isLeadershipOrSupport = ['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(user.role);
-    const isClientOwner = Boolean(user.clientId && user.clientId === ticket.client_id);
-    const isAssignedDev = Boolean(user.developerId && user.developerId === ticket.developer_id);
+    const isLeadership = ['CEO', 'MD', 'ADMIN'].includes(user.role);
 
-    let isBridgeMember = false;
-    if (ticket.bridge_id && user.userId) {
-      const bRes = await query('SELECT 1 FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2', [ticket.bridge_id, user.userId]);
-      isBridgeMember = bRes.rows.length > 0;
+    // Resolve client ID server-side
+    let resolvedClientId = user.clientId;
+    if (user.role === 'CLIENT' && !resolvedClientId) {
+      const cRes = await query('SELECT id FROM clients WHERE user_id = $1', [user.userId]);
+      if (cRes.rows.length > 0) resolvedClientId = cRes.rows[0].id;
     }
 
-    if (!isLeadershipOrSupport && !isClientOwner && !isAssignedDev && !isBridgeMember) {
+    // Resolve developer ID server-side
+    let resolvedDevId = user.developerId;
+    if (user.role === 'DEVELOPER' && !resolvedDevId) {
+      const dRes = await query('SELECT id FROM developers WHERE user_id = $1', [user.userId]);
+      if (dRes.rows.length > 0) resolvedDevId = dRes.rows[0].id;
+    }
+
+    let isAuthorized = false;
+
+    if (isLeadership) {
+      isAuthorized = true;
+    } else if (user.role === 'SUPPORT') {
+      const staffRes = await query(
+        `SELECT id, status, permissions FROM support_staff WHERE user_id = $1`,
+        [user.userId]
+      );
+      if (staffRes.rows.length === 0 || staffRes.rows[0].status === 'SUSPENDED') {
+        throw new Error('Forbidden: Support staff account is inactive or suspended');
+      }
+      const staff = staffRes.rows[0];
+      const permissions: string[] = Array.isArray(staff.permissions) ? staff.permissions : [];
+      if (!permissions.includes('SUPPORT_VIEW_TICKETS') && !permissions.includes('SUPPORT_VIEW_ALL_TICKETS')) {
+        throw new Error('Forbidden: Support staff account does not have ticket view permissions');
+      }
+
+      if (permissions.includes('SUPPORT_VIEW_ALL_TICKETS')) {
+        isAuthorized = true;
+      } else {
+        const isAssignedToMe = ticket.assigned_to_user_id === user.userId;
+        const isUnassigned = !ticket.assigned_to_user_id;
+        const isMyTeam = ticket.team_id ? (await query('SELECT 1 FROM support_team_members WHERE staff_id = $1 AND team_id = $2', [staff.id, ticket.team_id])).rows.length > 0 : false;
+        let isBridgeMember = false;
+        if (ticket.bridge_id && user.userId) {
+          const bRes = await query('SELECT 1 FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2', [ticket.bridge_id, user.userId]);
+          isBridgeMember = bRes.rows.length > 0;
+        }
+        isAuthorized = isAssignedToMe || isUnassigned || isMyTeam || isBridgeMember;
+      }
+    } else if (user.role === 'CLIENT') {
+      const isClientOwner = Boolean(
+        (resolvedClientId && resolvedClientId === ticket.client_id) ||
+        (ticket.created_by_user_id && ticket.created_by_user_id === user.userId)
+      );
+      isAuthorized = isClientOwner;
+    } else if (user.role === 'DEVELOPER') {
+      const isCreatedByDev = Boolean(ticket.created_by_user_id && ticket.created_by_user_id === user.userId);
+      const isAssignedDev = Boolean(resolvedDevId && resolvedDevId === ticket.developer_id);
+
+      let isBridgeMember = false;
+      if (ticket.bridge_id && user.userId) {
+        const bRes = await query('SELECT 1 FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2', [ticket.bridge_id, user.userId]);
+        isBridgeMember = bRes.rows.length > 0;
+      }
+
+      let isProjectDev = false;
+      if (ticket.project_id && resolvedDevId) {
+        const pRes = await query(
+          `SELECT 1 FROM projects p WHERE p.id = $1 AND (
+            p.lead_developer_id = $2
+            OR EXISTS (SELECT 1 FROM project_claims pc WHERE pc.project_id = p.id AND pc.developer_id = $2 AND pc.status IN ('CLAIMED', 'SELECTED'))
+            OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.developer_id = $2)
+          )`,
+          [ticket.project_id, resolvedDevId]
+        );
+        isProjectDev = pRes.rows.length > 0;
+      }
+
+      isAuthorized = isCreatedByDev || isAssignedDev || isBridgeMember || isProjectDev;
+    }
+
+    if (!isAuthorized) {
       throw new Error('Forbidden: Access denied to support ticket');
     }
 
-    // Shield internal notes from clients and developers
-    const internalNotes = isLeadershipOrSupport ? ticket.internal_notes : undefined;
+    const isInternalNotesAuthorized = isLeadership || (user.role === 'SUPPORT');
+    const internalNotes = isInternalNotesAuthorized ? ticket.internal_notes : undefined;
 
     return {
       ...ticket,
+      created_by_user_id: ticket.created_by_user_id,
+      createdByUserId: ticket.created_by_user_id,
+      assigned_support_user_id: ticket.assigned_to_user_id,
+      assignedSupportUserId: ticket.assigned_to_user_id,
       internal_notes: internalNotes,
       clientIdentity: 'Client #001',
       developerIdentity: 'Technical Developer',
@@ -586,21 +737,8 @@ export class SupportService {
 
     const bridge = bridgeRes.rows[0];
 
-    // Authorization check
-    const isLeadershipOrSupport = ['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(user.role);
-    const isClientOwner = Boolean(user.clientId && user.clientId === bridge.client_id);
-    const isAssignedDev = Boolean(user.developerId && user.developerId === bridge.developer_id);
-
-    // Also check direct membership in support_bridge_members
-    const memCheck = await query(
-      `SELECT role FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2`,
-      [bridge.id, user.userId]
-    );
-    const isDirectMember = memCheck.rows.length > 0;
-
-    if (!isLeadershipOrSupport && !isClientOwner && !isAssignedDev && !isDirectMember) {
-      throw new Error('Forbidden: Access denied to support bridge');
-    }
+    // Authorization check via canonical getTicketById
+    await this.getTicketById(bridge.ticket_id, user);
 
     // Fetch members with privacy sanitization
     const membersRes = await query(
@@ -639,7 +777,11 @@ export class SupportService {
         conversationId: bridge.conversation_id,
         createdAt: bridge.created_at,
         closedAt: bridge.closed_at,
-        internalNotes: isLeadershipOrSupport ? bridge.internal_notes : undefined,
+        created_by_user_id: bridge.created_by_user_id,
+        createdByUserId: bridge.created_by_user_id,
+        assigned_support_user_id: bridge.assigned_to_user_id,
+        assignedSupportUserId: bridge.assigned_to_user_id,
+        internalNotes: ['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(user.role) ? bridge.internal_notes : undefined,
       },
       members: membersRes.rows,
       messages,
@@ -726,8 +868,8 @@ export class SupportService {
     const ticketCheck = await query(
       `SELECT st.*, cl.user_id as client_user_id, d.user_id as dev_user_id, p.title as project_title, sb.id as bridge_id
        FROM support_tickets st
-       JOIN clients cl ON st.client_id = cl.id
-       JOIN projects p ON st.project_id = p.id
+       LEFT JOIN clients cl ON st.client_id = cl.id
+       LEFT JOIN projects p ON st.project_id = p.id
        LEFT JOIN developers d ON st.developer_id = d.id
        LEFT JOIN support_bridges sb ON sb.ticket_id = st.id
        WHERE st.id = $1`,
@@ -742,9 +884,16 @@ export class SupportService {
 
     // Authorization check
     if (!isLeadershipOrSupport) {
+      let resolvedClientId = clientId;
+      if (!resolvedClientId) {
+        const cRes = await query('SELECT id FROM clients WHERE user_id = $1', [userId]);
+        if (cRes.rows.length > 0) resolvedClientId = cRes.rows[0].id;
+      }
+
       const isClientOwner = Boolean(
-        (clientId && clientId === currentTicket.client_id) ||
-        (currentTicket.client_user_id === userId)
+        (resolvedClientId && resolvedClientId === currentTicket.client_id) ||
+        (currentTicket.client_user_id === userId) ||
+        (currentTicket.created_by_user_id === userId)
       );
 
       if (isClientOwner && ['RESOLVED', 'CLOSED'].includes(status)) {

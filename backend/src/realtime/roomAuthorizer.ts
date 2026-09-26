@@ -125,7 +125,18 @@ export async function authorizeSubscription(
   if (scope === 'support') {
     if (!id) return { authorized: false, reason: 'Missing support identifier' };
 
-    if (['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(user.role)) {
+    if (['CEO', 'MD', 'ADMIN'].includes(user.role)) {
+      return { authorized: true };
+    }
+
+    if (user.role === 'SUPPORT') {
+      const staffCheck = await query(
+        `SELECT id, status, permissions FROM support_staff WHERE user_id = $1`,
+        [user.userId]
+      );
+      if (staffCheck.rows.length === 0 || staffCheck.rows[0].status === 'SUSPENDED') {
+        return { authorized: false, reason: 'Forbidden: Support staff account inactive or suspended' };
+      }
       return { authorized: true };
     }
 
@@ -141,15 +152,29 @@ export async function authorizeSubscription(
       return { authorized: true };
     }
 
-    // Check ticket client
+    // Check ticket client (by client_id or created_by_user_id)
     const ticketCheck = await query(
       `SELECT st.id FROM support_tickets st
-       JOIN clients cl ON st.client_id = cl.id
-       WHERE (st.id::text = $1) AND cl.user_id = $2`,
+       LEFT JOIN clients cl ON st.client_id = cl.id
+       WHERE (st.id::text = $1 OR EXISTS (SELECT 1 FROM support_bridges sb WHERE sb.id::text = $1 AND sb.ticket_id = st.id))
+         AND (cl.user_id = $2 OR st.created_by_user_id = $2)`,
       [id, user.userId]
     );
 
     if (ticketCheck.rows.length > 0) {
+      return { authorized: true };
+    }
+
+    // Check ticket developer
+    const devCheck = await query(
+      `SELECT st.id FROM support_tickets st
+       LEFT JOIN developers d ON st.developer_id = d.id
+       WHERE (st.id::text = $1 OR EXISTS (SELECT 1 FROM support_bridges sb WHERE sb.id::text = $1 AND sb.ticket_id = st.id))
+         AND (d.user_id = $2 OR st.created_by_user_id = $2)`,
+      [id, user.userId]
+    );
+
+    if (devCheck.rows.length > 0) {
       return { authorized: true };
     }
 
