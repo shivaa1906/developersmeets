@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../types/index.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { ProjectService } from '../services/projectService.js';
 import { NotificationService } from '../services/notificationService.js';
+import { ROLES } from '../config/constants.js';
 
 export class AdminController {
   /**
@@ -231,7 +232,7 @@ export class AdminController {
   static async listAllUsers(_req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const result = await query(
-        `SELECT u.id, u.email, u.phone, u.role, u.status, u.created_at,
+        `SELECT u.id, u.public_uid, u.email, u.phone, u.role, u.status, u.email_verified, u.is_suspended, u.last_login_at, u.created_at,
                 d.username, d.display_name, d.verification_status,
                 c.client_number, c.company_name
          FROM users u
@@ -242,6 +243,132 @@ export class AdminController {
       res.json({ users: result.rows });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Suspend any platform user account
+   */
+  static async suspendUser(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { userId } = req.params;
+    const { reason } = req.body || {};
+
+    try {
+      await withTransaction(async (client) => {
+        const userRes = await client.query(
+          `UPDATE users 
+           SET status = 'SUSPENDED', is_suspended = TRUE, suspended_at = NOW(), suspension_reason = $1, updated_at = NOW() 
+           WHERE id = $2 
+           RETURNING id, email, role, status`,
+          [reason || 'Administrative suspension', userId]
+        );
+
+        if (userRes.rows.length === 0) {
+          throw new Error('User not found');
+        }
+
+        const user = userRes.rows[0];
+
+        // If developer, suspend developer profile
+        if (user.role === ROLES.DEVELOPER) {
+          await client.query(
+            `UPDATE developers SET verification_status = 'SUSPENDED', updated_at = NOW() WHERE user_id = $1`,
+            [userId]
+          );
+        }
+
+        await AuditLogger.log({
+          actorUserId: req.user!.userId,
+          action: 'USER_SUSPENDED',
+          entityType: 'USER',
+          entityId: userId,
+          metadata: { email: user.email, role: user.role, reason },
+        });
+      });
+
+      res.json({ success: true, message: 'User account has been suspended.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Unsuspend a previously suspended user account
+   */
+  static async unsuspendUser(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { userId } = req.params;
+
+    try {
+      await withTransaction(async (client) => {
+        const userRes = await client.query(
+          `UPDATE users 
+           SET status = 'ACTIVE', is_suspended = FALSE, suspended_at = NULL, suspension_reason = NULL, updated_at = NOW() 
+           WHERE id = $1 
+           RETURNING id, email, role, status`,
+          [userId]
+        );
+
+        if (userRes.rows.length === 0) {
+          throw new Error('User not found');
+        }
+
+        const user = userRes.rows[0];
+
+        // If developer, restore verified status
+        if (user.role === ROLES.DEVELOPER) {
+          await client.query(
+            `UPDATE developers SET verification_status = 'VERIFIED', updated_at = NOW() WHERE user_id = $1`,
+            [userId]
+          );
+        }
+
+        await AuditLogger.log({
+          actorUserId: req.user!.userId,
+          action: 'USER_UNSUSPENDED',
+          entityType: 'USER',
+          entityId: userId,
+          metadata: { email: user.email, role: user.role },
+        });
+      });
+
+      res.json({ success: true, message: 'User account has been reactivated.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Disable a user account
+   */
+  static async disableUser(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { userId } = req.params;
+
+    try {
+      await withTransaction(async (client) => {
+        const userRes = await client.query(
+          `UPDATE users 
+           SET status = 'DISABLED', updated_at = NOW() 
+           WHERE id = $1 
+           RETURNING id, email, role, status`,
+          [userId]
+        );
+
+        if (userRes.rows.length === 0) {
+          throw new Error('User not found');
+        }
+
+        await AuditLogger.log({
+          actorUserId: req.user!.userId,
+          action: 'USER_DISABLED',
+          entityType: 'USER',
+          entityId: userId,
+          metadata: { email: userRes.rows[0].email },
+        });
+      });
+
+      res.json({ success: true, message: 'User account has been disabled.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
     }
   }
 

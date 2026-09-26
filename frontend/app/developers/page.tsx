@@ -172,6 +172,24 @@ export default function DevelopersPage() {
           </Card>
         ))}
       </div>
+
+      {/* Developer Recruitment CTA */}
+      <div className="rounded-xl border border-accent/30 bg-surface-elevated p-8 sm:p-10 text-center space-y-4 shadow-accent-glow max-w-4xl mx-auto">
+        <Badge variant="default">Engineering Excellence</Badge>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          Are you a world-class engineer?
+        </h2>
+        <p className="text-xs text-muted max-w-lg mx-auto leading-relaxed">
+          Join the Nexus verified engineering network. Access verified client projects, anonymous merit-based claims, instant credit settlements, and permanent portfolio attribution.
+        </p>
+        <div className="pt-2">
+          <Link href="/register/developer">
+            <Button size="lg" rightIcon={<ArrowRight className="h-4 w-4" />}>
+              Join Developer Network
+            </Button>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

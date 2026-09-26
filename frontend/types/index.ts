@@ -1,13 +1,17 @@
 export type UserRole = 'CEO' | 'ADMIN' | 'MD' | 'DEVELOPER' | 'CLIENT' | 'SUPPORT' | 'GUEST';
 
-export type UserStatus = 'ACTIVE' | 'PENDING_VERIFICATION' | 'SUSPENDED';
+export type UserStatus = 'ACTIVE' | 'PENDING_VERIFICATION' | 'SUSPENDED' | 'DISABLED';
 
 export interface User {
   id: string;
+  public_uid?: string;
   email: string;
   phone?: string;
   role: UserRole;
   status: UserStatus;
+  email_verified?: boolean;
+  is_suspended?: boolean;
+  last_login_at?: string;
   created_at: string;
   updated_at: string;
 }

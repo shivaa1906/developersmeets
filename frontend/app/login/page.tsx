@@ -9,7 +9,16 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/hooks/use-auth';
 import { apiClient } from '@/lib/api-client';
-import { Terminal, Shield, ArrowRight } from 'lucide-react';
+import { Terminal, Shield, ArrowRight, Lock, KeyRound, AlertTriangle } from 'lucide-react';
+
+function getSafeRedirect(candidate: string | null): string | null {
+  if (!candidate) return null;
+  const trimmed = candidate.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/\\')) return null;
+  if (trimmed.includes('://') || /^(?:javascript|data|vbscript):/i.test(trimmed)) return null;
+  if (!/^\/[a-zA-Z0-9_\-\/\?=&%#\.]*$/.test(trimmed)) return null;
+  return trimmed;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,57 +28,68 @@ export default function LoginPage() {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMessage(null);
 
     try {
-      const data = await apiClient.post<{ token: string; user: any }>('/auth/login', {
+      const data = await apiClient.post<{ token: string; user: any; redirectUrl?: string }>('/auth/login', {
         email,
         password,
       });
 
       setAuthSession(data.token, data.user);
 
-      const redirect = searchParams.get('redirect');
-      if (redirect && redirect.startsWith('/')) {
-        addToast('success', 'Authentication Successful', `Welcome back, ${data.user.email}`);
-        router.push(redirect);
-        return;
-      }
+      // Check for user-specified safe destination query param (?redirect or ?next)
+      const requestedNext = searchParams.get('redirect') || searchParams.get('next');
+      const safeNext = getSafeRedirect(requestedNext);
+      const destination = safeNext || data.redirectUrl || '/dashboard';
 
-      if (data.user.role === 'CEO' || data.user.role === 'ADMIN' || data.user.role === 'MD') {
-        addToast('success', 'Executive Authenticated', `Logged in as ${data.user.name || data.user.email}`);
-        router.push('/admin/dashboard');
-      } else {
-        addToast('success', 'Authentication Successful', `Welcome back, ${data.user.email}`);
-        router.push('/dashboard');
-      }
+      addToast(
+        'success',
+        'Authentication Successful',
+        `Signed in as ${data.user.name || data.user.email} (${data.user.role})`
+      );
+
+      router.push(destination);
     } catch (err: any) {
-      addToast('error', 'Login Failed', err.message || 'Invalid email or password.');
+      const msg = err.message || 'Invalid email or password.';
+      setErrorMessage(msg);
+      addToast('error', 'Authentication Failed', msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleQuickLogin = (role: 'CLIENT' | 'DEVELOPER' | 'CEO' | 'MD') => {
+  const handleQuickLogin = (role: 'CLIENT' | 'DEVELOPER' | 'SUPPORT' | 'ADMIN' | 'CEO' | 'MD') => {
+    setErrorMessage(null);
     if (role === 'CLIENT') {
       setEmail('client001@apexretail.io');
-      setPassword('password123');
-      addToast('info', 'Client Profile Loaded', 'Signing in as Client #001 (Apex Retail Labs)');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'Client Profile Autofilled', 'Apex Retail Labs (Client #001)');
     } else if (role === 'DEVELOPER') {
       setEmail('rahul@nexus.dev');
-      setPassword('password123');
-      addToast('info', 'Verified Developer Profile Loaded', 'Signing in as Rahul Kumar');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'Verified Developer Autofilled', 'Rahul Kumar');
+    } else if (role === 'SUPPORT') {
+      setEmail('support@nexus.dev');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'Support Specialist Autofilled', 'Platform Support Operations');
+    } else if (role === 'ADMIN') {
+      setEmail('admin@nexus.dev');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'Platform Admin Autofilled', 'Platform Administrator');
     } else if (role === 'CEO') {
       setEmail('ritesh@nexus.dev');
-      setPassword('password123');
-      addToast('info', 'Executive CEO Profile Loaded', 'Signing in as Ritesh Lingamallu');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'CEO Profile Autofilled', 'Ritesh Lingamallu');
     } else if (role === 'MD') {
       setEmail('shiva@nexus.dev');
-      setPassword('password123');
-      addToast('info', 'Managing Director Profile Loaded', 'Signing in as M. Shiva Gopi');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'MD Profile Autofilled', 'M. Shiva Gopi');
     }
   };
 
@@ -86,32 +106,52 @@ export default function LoginPage() {
             </span>
           </Link>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Sign In to Platform</h1>
-          <p className="text-xs text-muted">Access your workspace, credits ledger, and anonymous project chat.</p>
+          <p className="text-xs text-muted">
+            Enter your credentials. Your verified role and permissions are server-authenticated.
+          </p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Authentication</CardTitle>
-            <CardDescription>Enter your credentials to continue</CardDescription>
+            <CardTitle className="text-base flex items-center justify-between">
+              <span>Authentication</span>
+              <Shield className="h-4 w-4 text-accent" />
+            </CardTitle>
+            <CardDescription>Enter your email and password to access your portal</CardDescription>
           </CardHeader>
           <CardContent>
+            {errorMessage && (
+              <div className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-start space-x-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
             <form onSubmit={handleLogin} className="space-y-4">
               <Input
-                label="Email"
+                label="Email Address"
                 type="email"
-                placeholder="name@domain.com"
+                placeholder="name@nexus.dev or name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              <Input
-                label="Password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-foreground">Password</span>
+                  <Link href="/forgot-password" className="text-accent hover:underline text-[11px]">
+                    Forgot password?
+                  </Link>
+                </div>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
               <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
                 Sign In
               </Button>
@@ -120,9 +160,9 @@ export default function LoginPage() {
             {/* Quick Demo Access Bar */}
             <div className="mt-6 pt-4 border-t border-border">
               <span className="text-[10px] uppercase font-bold text-muted tracking-wider block mb-2">
-                Quick Role Autofill
+                Quick Role Autofill (Demo & Testing)
               </span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -140,6 +180,24 @@ export default function LoginPage() {
                   className="text-[11px] h-8"
                 >
                   Developer
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickLogin('SUPPORT')}
+                  className="text-[11px] h-8"
+                >
+                  Support
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickLogin('ADMIN')}
+                  className="text-[11px] h-8"
+                >
+                  Admin
                 </Button>
                 <Button
                   type="button"
@@ -166,8 +224,9 @@ export default function LoginPage() {
             <Link href="/" className="hover:text-foreground">
               Return Home
             </Link>
-            <Link href="/register" className="text-accent hover:underline">
-              New Developer? Register
+            <Link href="/register" className="text-accent hover:underline flex items-center space-x-1 font-medium">
+              <span>Create Account</span>
+              <ArrowRight className="h-3 w-3" />
             </Link>
           </CardFooter>
         </Card>

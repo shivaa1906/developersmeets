@@ -31,10 +31,31 @@ const iconMap: Record<string, React.ReactNode> = {
   Messages: <MessageSquare className="h-4 w-4" />,
   Community: <Users2 className="h-4 w-4" />,
   Support: <LifeBuoy className="h-4 w-4" />,
+  Notifications: <Bell className="h-4 w-4" />,
   Inquiries: <Mail className="h-4 w-4" />,
   'Credits & Wallet': <Coins className="h-4 w-4" />,
   Settings: <Settings className="h-4 w-4" />,
 };
+
+const clientNav = [
+  { label: 'Overview', href: '/dashboard' },
+  { label: 'Projects', href: '/dashboard/projects' },
+  { label: 'Messages', href: '/dashboard/messages' },
+  { label: 'Support', href: '/dashboard/support' },
+  { label: 'Notifications', href: '/dashboard/notifications' },
+  { label: 'Settings', href: '/dashboard/settings' },
+];
+
+const developerNav = [
+  { label: 'Overview', href: '/dashboard' },
+  { label: 'Profile', href: '/dashboard/profile' },
+  { label: 'Projects', href: '/dashboard/projects' },
+  { label: 'Messages', href: '/dashboard/messages' },
+  { label: 'Community', href: '/dashboard/community' },
+  { label: 'Support', href: '/dashboard/support' },
+  { label: 'Credits & Wallet', href: '/dashboard/credits' },
+  { label: 'Settings', href: '/dashboard/settings' },
+];
 
 export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
@@ -45,15 +66,18 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [unreadCount, setUnreadCount] = React.useState(0);
 
+  const isClient = user?.role === 'CLIENT';
+  const navItems = isClient ? clientNav : developerNav;
+
   React.useEffect(() => {
     if (!isLoading && (!token || !user)) {
-      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+      router.push(`/login?next=${encodeURIComponent(pathname)}&redirect=${encodeURIComponent(pathname)}`);
     }
   }, [isLoading, token, user, pathname, router]);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'User';
-  const roleDisplay = user?.role === 'CLIENT'
-    ? (user.clientNumber || 'Client #001')
+  const roleDisplay = isClient
+    ? user?.clientNumber || 'Client'
     : user?.role === 'CEO'
     ? 'Chief Executive Officer'
     : user?.role === 'MD'
@@ -109,9 +133,9 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
           <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-            Workspace
+            {isClient ? 'Client Portal' : 'Developer Workspace'}
           </div>
-          {siteConfig.dashboardNav.map((item) => {
+          {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
@@ -163,33 +187,40 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
             >
               <Terminal className="h-5 w-5 text-accent" />
             </button>
-            <span className="hidden sm:inline text-xs font-semibold uppercase tracking-wider text-muted">Portal</span>
+            <span className="hidden sm:inline text-xs font-semibold uppercase tracking-wider text-muted">
+              {isClient ? 'Client Portal' : 'Developer Portal'}
+            </span>
             <span className="hidden sm:inline text-muted">/</span>
             <span className="text-xs font-medium text-foreground truncate max-w-[120px] sm:max-w-none">
-              {siteConfig.dashboardNav.find((n) => n.href === pathname)?.label || 'Dashboard'}
+              {navItems.find((n) => n.href === pathname)?.label || 'Dashboard'}
             </span>
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
-            {/* Credit Counter Pill */}
-            <Link
-              href="/dashboard/credits"
-              className="flex items-center space-x-1.5 sm:space-x-2 rounded-full border border-accent/30 bg-accent/10 px-2.5 sm:px-3 py-1 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
-            >
-              <Coins className="h-3.5 w-3.5" />
-              <span>10 Cr</span>
-              <span className="hidden sm:inline text-[10px] text-muted">(₹500 value)</span>
-            </Link>
+            {/* Credit Counter Pill - Only for Developers */}
+            {!isClient && (
+              <Link
+                href="/dashboard/credits"
+                className="flex items-center space-x-1.5 sm:space-x-2 rounded-full border border-accent/30 bg-accent/10 px-2.5 sm:px-3 py-1 text-xs font-medium text-accent hover:bg-accent/20 transition-colors"
+              >
+                <Coins className="h-3.5 w-3.5" />
+                <span>Wallet</span>
+              </Link>
+            )}
 
             {/* Notification Bell */}
-            <button className="relative rounded-lg p-2 text-muted hover:bg-surface-elevated hover:text-foreground transition-colors" aria-label="Notifications">
+            <Link
+              href="/dashboard/notifications"
+              className="relative rounded-lg p-2 text-muted hover:bg-surface-elevated hover:text-foreground transition-colors"
+              aria-label="Notifications"
+            >
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold text-black">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
-            </button>
+            </Link>
           </div>
         </header>
 
@@ -197,9 +228,9 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
         {mobileMenuOpen && (
           <div className="md:hidden border-b border-border bg-[#0a0a0a] px-4 py-4 space-y-2">
             <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-              Workspace Menu
+              {isClient ? 'Client Portal Menu' : 'Workspace Menu'}
             </div>
-            {siteConfig.dashboardNav.map((item) => {
+            {navItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -219,7 +250,7 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
               );
             })}
             <div className="pt-2 border-t border-border flex items-center justify-between">
-              <span className="text-xs text-muted truncate">{displayName}</span>
+              <span className="text-xs text-muted truncate">{displayName} ({roleDisplay})</span>
               <button
                 onClick={logout}
                 className="flex items-center space-x-1 text-xs text-status-danger hover:underline"

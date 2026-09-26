@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { SupportService } from '../services/supportService.js';
 import { SupportStaffService } from '../services/supportStaffService.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import { query } from '../database/db.js';
 
 export class SupportController {
   static async createTicket(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -16,46 +17,76 @@ export class SupportController {
       preferredBridgeNumber,
     } = req.body;
 
-    if (!projectId || !subject || !description) {
-      res.status(400).json({ error: 'projectId, subject, and description are required' });
+    if (!subject || !description) {
+      res.status(400).json({ error: 'subject and description are required' });
       return;
     }
 
     let clientId = req.user?.clientId;
-    if (!clientId) {
-      if (req.user?.role === 'DEVELOPER' && req.user.developerId) {
-        const projRes = await SupportStaffService.findProjectClient(projectId, req.user.developerId);
+    if (!clientId && req.user?.role === 'CLIENT') {
+      const cRes = await query('SELECT id FROM clients WHERE user_id = $1', [req.user.userId]);
+      if (cRes.rows.length > 0) {
+        clientId = cRes.rows[0].id;
+      }
+    }
+
+    let developerId = req.user?.developerId;
+    if (!developerId && req.user?.role === 'DEVELOPER') {
+      const dRes = await query('SELECT id FROM developers WHERE user_id = $1', [req.user.userId]);
+      if (dRes.rows.length > 0) {
+        developerId = dRes.rows[0].id;
+      }
+    }
+
+    // Role-specific validation
+    if (req.user?.role === 'CLIENT') {
+      if (!clientId) {
+        res.status(403).json({ error: 'Client account required' });
+        return;
+      }
+      if (projectId) {
+        const projCheck = await query('SELECT id FROM projects WHERE id = $1 AND client_id = $2', [projectId, clientId]);
+        if (projCheck.rows.length === 0) {
+          res.status(403).json({ error: 'Forbidden: You do not own this project.' });
+          return;
+        }
+      }
+    } else if (req.user?.role === 'DEVELOPER') {
+      if (!developerId) {
+        res.status(403).json({ error: 'Developer profile required' });
+        return;
+      }
+      if (projectId) {
+        const projRes = await SupportStaffService.findProjectClient(projectId, developerId);
         if (projRes) {
           clientId = projRes;
         } else {
-          res.status(403).json({ error: 'You are not an assigned or claimed developer on this project.' });
+          res.status(403).json({ error: 'Forbidden: You are not an authorized or claimed developer on this project.' });
           return;
         }
-      } else if (['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(req.user?.role || '')) {
-        const projRes = await SupportStaffService.findProjectClient(projectId);
-        if (projRes) {
-          clientId = projRes;
-        }
       }
-
-      if (!clientId) {
-        res.status(403).json({ error: 'Client or assigned project developer account required to create support ticket' });
-        return;
+    } else if (['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(req.user?.role || '')) {
+      if (projectId) {
+        clientId = (await SupportStaffService.findProjectClient(projectId)) || undefined;
       }
+    } else {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
     }
 
     try {
       const ticket = await SupportService.createTicket(
-        clientId,
+        clientId || null,
         req.user!.userId,
-        projectId,
+        projectId || null,
         subject,
         description,
         priority,
         preferredTicketNumber,
         preferredBridgeNumber,
         category,
-        attachments
+        attachments,
+        developerId || null
       );
       res.status(201).json({ ticket });
     } catch (error: any) {

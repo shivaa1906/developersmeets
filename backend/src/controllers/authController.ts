@@ -6,16 +6,70 @@ import { query, withTransaction } from '../database/db.js';
 import { env } from '../config/environment.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { AuditLogger } from '../utils/auditLogger.js';
-import { ROLES } from '../config/constants.js';
+import { ROLES, LEADERSHIP } from '../config/constants.js';
 import { BruteForceProtection } from '../middlewares/rateLimiter.js';
 import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
 
-// In-memory single-use reset token tracker
+// In-memory single-use reset token tracker for JWT reset tokens
 const consumedResetTokens = new Set<string>();
+
+/**
+ * Validates and sanitizes destination redirect URLs to prevent Open Redirect attacks
+ */
+export function validateRedirectUrl(target: any, defaultUrl: string): string {
+  if (!target || typeof target !== 'string') {
+    return defaultUrl;
+  }
+
+  const trimmed = target.trim();
+
+  // Strictly enforce leading single slash and reject protocol-relative (//) or backslash (\)
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/\\')) {
+    return defaultUrl;
+  }
+
+  // Reject URLs containing schemes, protocols or pseudo-protocols
+  if (trimmed.includes('://') || /^(?:javascript|data|vbscript):/i.test(trimmed)) {
+    return defaultUrl;
+  }
+
+  // Reject CR/LF characters
+  if (/[\r\n]/.test(trimmed)) {
+    return defaultUrl;
+  }
+
+  // Validate internal path characters
+  const safeInternalPathRegex = /^\/[a-zA-Z0-9_\-\/\?=&%#\.]*$/;
+  if (!safeInternalPathRegex.test(trimmed)) {
+    return defaultUrl;
+  }
+
+  return trimmed;
+}
+
+/**
+ * Computes default role-based redirect URL
+ */
+export function getDefaultRedirectForRole(role: string): string {
+  switch (role) {
+    case ROLES.CEO:
+    case ROLES.MD:
+    case ROLES.ADMIN:
+      return '/admin/dashboard';
+    case ROLES.SUPPORT:
+      return '/admin/support';
+    case ROLES.DEVELOPER:
+    case ROLES.CLIENT:
+      return '/dashboard';
+    default:
+      return '/';
+  }
+}
 
 export class AuthController {
   /**
    * Registers a new developer with PENDING_VERIFICATION status
+   * Role is strictly server controlled (always DEVELOPER).
    */
   static async registerDeveloper(req: Request, res: Response): Promise<void> {
     const {
@@ -24,33 +78,72 @@ export class AuthController {
       email,
       phone,
       password,
+      profilePhoto,
+      avatarUrl,
       location,
       roleTitle,
+      developerRole,
       experience,
       skills,
+      programmingLanguages,
+      frameworks,
+      databases,
+      cloud,
+      aiml,
+      uiux,
       githubUrl,
       linkedinUrl,
       portfolioUrl,
+      leetcodeUrl,
+      kaggleUrl,
+      otherLinks,
       bio,
     } = req.body;
 
-    if (!email || !password || !username || !fullName || !roleTitle) {
+    const effectiveRoleTitle = roleTitle || developerRole;
+
+    if (!email || !password || !username || !fullName || !effectiveRoleTitle) {
       res.status(400).json({ error: 'Full name, username, email, password, and role title are required.' });
       return;
     }
 
+    if (password.length < 8) {
+      res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+      return;
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
     const cleanFullName = sanitizeInput(fullName);
     const cleanUsername = sanitizeInput(username);
-    const cleanRoleTitle = sanitizeInput(roleTitle);
+    const cleanRoleTitle = sanitizeInput(effectiveRoleTitle);
     const cleanBio = sanitizeRichText(bio);
     const cleanLocation = sanitizeInput(location);
+    const cleanPhoto = profilePhoto || avatarUrl || null;
+
+    const parseArray = (input: any): string[] => {
+      if (Array.isArray(input)) {
+        return input.map((s) => String(s).trim()).filter(Boolean);
+      }
+      if (typeof input === 'string') {
+        return input.split(',').map((s) => s.trim()).filter(Boolean);
+      }
+      return [];
+    };
+
+    const progLangsArray = parseArray(programmingLanguages);
+    const frameworksArray = parseArray(frameworks);
+    const databasesArray = parseArray(databases);
+    const cloudArray = parseArray(cloud);
+    const aimlArray = parseArray(aiml);
+    const uiuxArray = parseArray(uiux);
+    const generalSkillsArray = parseArray(skills);
 
     try {
       const passwordHash = await bcrypt.hash(password, 10);
 
       const result = await withTransaction(async (client) => {
         // Check existing email
-        const existingEmail = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+        const existingEmail = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
         if (existingEmail.rows.length > 0) {
           throw new Error('A user with this email address already exists.');
         }
@@ -61,24 +154,26 @@ export class AuthController {
           throw new Error('Username is already taken. Please choose another.');
         }
 
-        // Create user with PENDING_VERIFICATION
+        // Create user with server-controlled role = DEVELOPER and status = PENDING_VERIFICATION
         const userRes = await client.query(
-          `INSERT INTO users (email, phone, password_hash, role, status)
-           VALUES ($1, $2, $3, $4, 'PENDING_VERIFICATION')
-           RETURNING id, email, role, status`,
-          [email, phone || null, passwordHash, ROLES.DEVELOPER]
+          `INSERT INTO users (email, phone, password_hash, role, status, email_verified)
+           VALUES ($1, $2, $3, $4, 'PENDING_VERIFICATION', FALSE)
+           RETURNING id, public_uid, email, role, status, email_verified, created_at`,
+          [normalizedEmail, phone || null, passwordHash, ROLES.DEVELOPER]
         );
         const user = userRes.rows[0];
 
-        // Create developer profile with PENDING status
+        // Create developer profile with PENDING verification status
         const devRes = await client.query(
           `INSERT INTO developers (
               user_id, username, display_name, bio, location,
               role_title, experience, availability, verification_status,
-              github_url, linkedin_url, portfolio_url
+              github_url, linkedin_url, portfolio_url, leetcode_url, kaggle_url,
+              profile_photo, other_links, programming_languages, frameworks,
+              databases, cloud_tools, aiml_tools, uiux_tools
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'AVAILABLE', 'PENDING', $8, $9, $10)
-           RETURNING id, username, display_name, verification_status`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'AVAILABLE', 'PENDING', $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+           RETURNING id, username, display_name, verification_status, role_title, experience`,
           [
             user.id,
             cleanUsername,
@@ -90,56 +185,101 @@ export class AuthController {
             githubUrl || null,
             linkedinUrl || null,
             portfolioUrl || null,
+            leetcodeUrl || null,
+            kaggleUrl || null,
+            cleanPhoto,
+            otherLinks || null,
+            progLangsArray,
+            frameworksArray,
+            databasesArray,
+            cloudArray,
+            aimlArray,
+            uiuxArray,
           ]
         );
         const dev = devRes.rows[0];
 
         // Create initial credit account (0 credits until verified)
         await client.query(
-          `INSERT INTO credit_accounts (developer_id, balance) VALUES ($1, 0)`,
+          `INSERT INTO credit_accounts (developer_id, balance) VALUES ($1, 0)
+           ON CONFLICT (developer_id) DO NOTHING`,
           [dev.id]
         );
 
-        // Associate skills if provided
-        if (Array.isArray(skills) && skills.length > 0) {
-          for (const s of skills) {
-            const skillName = typeof s === 'string' ? s.trim() : '';
-            if (skillName) {
-              const sRes = await client.query(
-                `INSERT INTO skills (name, category) VALUES ($1, 'GENERAL') 
-                 ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name 
-                 RETURNING id`,
-                [skillName]
+        // Associate categorized skills
+        const categorizedSkills: { name: string; category: string }[] = [
+          ...progLangsArray.map((name) => ({ name, category: 'PROGRAMMING_LANGUAGE' })),
+          ...frameworksArray.map((name) => ({ name, category: 'FRAMEWORK' })),
+          ...databasesArray.map((name) => ({ name, category: 'DATABASE' })),
+          ...cloudArray.map((name) => ({ name, category: 'CLOUD' })),
+          ...aimlArray.map((name) => ({ name, category: 'AI_ML' })),
+          ...uiuxArray.map((name) => ({ name, category: 'UI_UX' })),
+          ...generalSkillsArray.map((name) => ({ name, category: 'GENERAL' })),
+        ];
+
+        for (const item of categorizedSkills) {
+          const skillName = item.name.trim();
+          if (skillName) {
+            const sRes = await client.query(
+              `INSERT INTO skills (name, category) VALUES ($1, $2) 
+               ON CONFLICT (name) DO UPDATE SET category = EXCLUDED.category 
+               RETURNING id`,
+              [skillName, item.category]
+            );
+            if (sRes.rows[0]) {
+              await client.query(
+                `INSERT INTO developer_skills (developer_id, skill_id, experience_level) 
+                 VALUES ($1, $2, 'ADVANCED') 
+                 ON CONFLICT DO NOTHING`,
+                [dev.id, sRes.rows[0].id]
               );
-              if (sRes.rows[0]) {
-                await client.query(
-                  `INSERT INTO developer_skills (developer_id, skill_id, experience_level) 
-                   VALUES ($1, $2, 'ADVANCED') 
-                   ON CONFLICT DO NOTHING`,
-                  [dev.id, sRes.rows[0].id]
-                );
-              }
             }
           }
         }
 
+        // Create default notification preferences
+        await client.query(
+          `INSERT INTO notification_preferences (user_id, email_notifications, project_updates, proposal_alerts, support_ticket_updates)
+           VALUES ($1, TRUE, TRUE, TRUE, TRUE)
+           ON CONFLICT (user_id) DO NOTHING`,
+          [user.id]
+        );
+
         // Audit log
-        await AuditLogger.log({
-          actorUserId: user.id,
-          action: 'DEVELOPER_REGISTERED',
-          entityType: 'DEVELOPER',
-          entityId: dev.id,
-          metadata: { username, roleTitle },
-        });
+        await AuditLogger.log(
+          {
+            actorUserId: user.id,
+            action: 'DEVELOPER_REGISTERED',
+            entityType: 'DEVELOPER',
+            entityId: dev.id,
+            metadata: { username: cleanUsername, roleTitle: cleanRoleTitle },
+          },
+          client
+        );
 
         return { user, developer: dev };
       });
 
       res.status(201).json({
         message:
-          'Application submitted successfully. Your profile is PENDING_VERIFICATION awaiting executive approval.',
-        status: 'PENDING_VERIFICATION',
-        developer: result.developer,
+          'Application submitted successfully. Your profile is PENDING_DEVELOPER_APPROVAL awaiting executive approval.',
+        status: 'PENDING_DEVELOPER_APPROVAL',
+        verificationStatus: 'PENDING',
+        developer: {
+          id: result.developer.id,
+          username: result.developer.username,
+          displayName: result.developer.display_name,
+          verificationStatus: result.developer.verification_status,
+          roleTitle: result.developer.role_title,
+          experience: result.developer.experience,
+        },
+        user: {
+          id: result.user.id,
+          publicUid: result.user.public_uid,
+          email: result.user.email,
+          role: result.user.role,
+          status: result.user.status,
+        },
       });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -148,27 +288,48 @@ export class AuthController {
 
   /**
    * Registers a client and generates a sequential Client tag (e.g. Client #001)
+   * Role is strictly server controlled (always CLIENT).
    */
   static async registerClient(req: Request, res: Response): Promise<void> {
-    const { email, password, companyName, privateName, phone } = req.body;
+    const { email, password, confirmPassword, companyName, privateName, fullName, name, phone } = req.body;
 
-    if (!email || !password || !companyName || !privateName) {
-      res.status(400).json({ error: 'Email, password, company name, and contact name are required.' });
+    const contactName = fullName || privateName || name;
+    if (!email || !password || !contactName) {
+      res.status(400).json({ error: 'Full name, email, and password are required.' });
       return;
     }
 
-    const cleanCompanyName = sanitizeInput(companyName);
-    const cleanPrivateName = sanitizeInput(privateName);
+    if (confirmPassword && password !== confirmPassword) {
+      res.status(400).json({ error: 'Passwords do not match.' });
+      return;
+    }
+
+    if (password.length < 8) {
+      res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+      return;
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const cleanPrivateName = sanitizeInput(contactName);
+    const cleanCompanyName = companyName
+      ? sanitizeInput(companyName)
+      : `${cleanPrivateName} Enterprise`;
 
     try {
       const passwordHash = await bcrypt.hash(password, 10);
 
       const result = await withTransaction(async (client) => {
+        // Check existing email
+        const existingEmail = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+        if (existingEmail.rows.length > 0) {
+          throw new Error('A user with this email address already exists.');
+        }
+
         const userRes = await client.query(
-          `INSERT INTO users (email, phone, password_hash, role, status)
-           VALUES ($1, $2, $3, $4, 'ACTIVE')
-           RETURNING id, email, role, status`,
-          [email, phone || null, passwordHash, ROLES.CLIENT]
+          `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at)
+           VALUES ($1, $2, $3, $4, 'ACTIVE', TRUE, NOW())
+           RETURNING id, public_uid, email, role, status, email_verified, created_at`,
+          [normalizedEmail, phone || null, passwordHash, ROLES.CLIENT]
         );
         const user = userRes.rows[0];
 
@@ -191,8 +352,16 @@ export class AuthController {
         const clientRecord = await client.query(
           `INSERT INTO clients (user_id, client_number, company_name, private_name, phone)
            VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, client_number, company_name`,
+           RETURNING id, client_number, company_name, private_name`,
           [user.id, clientTag, cleanCompanyName, cleanPrivateName, phone || null]
+        );
+
+        // Create default notification preferences
+        await client.query(
+          `INSERT INTO notification_preferences (user_id, email_notifications, project_updates, proposal_alerts, support_ticket_updates)
+           VALUES ($1, TRUE, TRUE, TRUE, TRUE)
+           ON CONFLICT (user_id) DO NOTHING`,
+          [user.id]
         );
 
         await AuditLogger.log(
@@ -201,7 +370,7 @@ export class AuthController {
             action: 'CLIENT_REGISTERED',
             entityType: 'CLIENT',
             entityId: clientRecord.rows[0].id,
-            metadata: { clientNumber: clientTag },
+            metadata: { clientNumber: clientTag, companyName: cleanCompanyName },
           },
           client
         );
@@ -210,15 +379,33 @@ export class AuthController {
       });
 
       const token = jwt.sign(
-        { userId: result.user.id, email: result.user.email, role: ROLES.CLIENT, clientId: result.client.id },
+        {
+          userId: result.user.id,
+          publicUid: result.user.public_uid,
+          email: result.user.email,
+          role: ROLES.CLIENT,
+          clientId: result.client.id,
+          clientNumber: result.client.client_number,
+        },
         env.JWT_SECRET,
         { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
       );
 
       res.status(201).json({
         token,
-        user: result.user,
+        user: {
+          id: result.user.id,
+          publicUid: result.user.public_uid,
+          email: result.user.email,
+          role: ROLES.CLIENT,
+          status: result.user.status,
+          emailVerified: result.user.email_verified,
+          clientId: result.client.id,
+          clientNumber: result.client.client_number,
+          name: result.client.private_name || result.client.company_name,
+        },
         client: result.client,
+        redirectUrl: '/dashboard',
       });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -226,7 +413,7 @@ export class AuthController {
   }
 
   /**
-   * User login with server-verified credentials and role extraction
+   * User login with server-verified credentials and strictly server-controlled role
    */
   static async login(req: Request, res: Response): Promise<void> {
     const { email, password } = req.body;
@@ -256,25 +443,38 @@ export class AuthController {
       };
       const effectiveEmail = aliasMap[normalizedEmail] || normalizedEmail;
 
-      const userRes = await query('SELECT * FROM users WHERE email = $1 OR email = $2', [normalizedEmail, effectiveEmail]);
+      const userRes = await query(
+        `SELECT id, public_uid, email, phone, password_hash, role, status, email_verified, is_suspended, suspension_reason, last_login_at 
+         FROM users WHERE email = $1 OR email = $2`,
+        [normalizedEmail, effectiveEmail]
+      );
+
       if (userRes.rows.length === 0) {
         // Fallback demo users if database not yet migrated
-        if (email === 'ritesh@nexus.dev') {
+        if (normalizedEmail === 'ritesh@nexus.dev') {
           const token = jwt.sign(
-            { userId: 'ceo-01', email, role: ROLES.CEO },
+            { userId: 'ceo-01', email: normalizedEmail, role: ROLES.CEO },
             env.JWT_SECRET,
             { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
           );
-          res.json({ token, user: { email, role: ROLES.CEO, name: 'Ritesh Lingamallu' } });
+          res.json({
+            token,
+            user: { email: normalizedEmail, role: ROLES.CEO, name: 'Ritesh Lingamallu' },
+            redirectUrl: '/admin/dashboard',
+          });
           return;
         }
-        if (email === 'shiva@nexus.dev') {
+        if (normalizedEmail === 'shiva@nexus.dev') {
           const token = jwt.sign(
-            { userId: 'md-01', email, role: ROLES.MD },
+            { userId: 'md-01', email: normalizedEmail, role: ROLES.MD },
             env.JWT_SECRET,
             { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
           );
-          res.json({ token, user: { email, role: ROLES.MD, name: 'M. Shiva Gopi' } });
+          res.json({
+            token,
+            user: { email: normalizedEmail, role: ROLES.MD, name: 'M. Shiva Gopi' },
+            redirectUrl: '/admin/dashboard',
+          });
           return;
         }
 
@@ -294,13 +494,29 @@ export class AuthController {
 
       const user = userRes.rows[0];
 
-      if (user.status === 'SUSPENDED') {
-        res.status(403).json({ error: 'Your account has been suspended by administration.' });
+      // Check suspension state
+      if (user.status === 'SUSPENDED' || user.is_suspended === true) {
+        res.status(403).json({
+          error: 'Your account has been suspended by administration. Please contact platform support.',
+          code: 'ACCOUNT_SUSPENDED',
+          reason: user.suspension_reason || null,
+        });
         return;
       }
 
-      const isDevPassword = env.NODE_ENV !== 'production' && (password === 'password123' || password === 'DevPlatform2026!Secure');
+      // Check disabled state
+      if (user.status === 'DISABLED') {
+        res.status(403).json({
+          error: 'Your account has been disabled. Please contact platform support.',
+          code: 'ACCOUNT_DISABLED',
+        });
+        return;
+      }
+
+      const isDevPassword =
+        env.NODE_ENV !== 'production' && (password === 'password123' || password === 'DevPlatform2026!Secure');
       const valid = isDevPassword || (await bcrypt.compare(password, user.password_hash));
+
       if (!valid) {
         const attempt = BruteForceProtection.recordFailedAttempt(normalizedEmail);
         if (attempt.locked) {
@@ -319,46 +535,109 @@ export class AuthController {
       // Successful login clears brute force record
       BruteForceProtection.clear(normalizedEmail);
 
-      // Check developer profile if developer
+      // Record last login timestamp
+      await query('UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1', [user.id]);
+
+      // Check role-specific profiles
       let developerId: string | undefined;
       let verificationStatus: string | undefined;
+      let developerName: string | undefined;
       if (user.role === ROLES.DEVELOPER) {
-        const devRes = await query('SELECT id, verification_status FROM developers WHERE user_id = $1', [user.id]);
+        const devRes = await query(
+          'SELECT id, username, display_name, verification_status FROM developers WHERE user_id = $1',
+          [user.id]
+        );
         if (devRes.rows.length > 0) {
           developerId = devRes.rows[0].id;
           verificationStatus = devRes.rows[0].verification_status;
+          developerName = devRes.rows[0].display_name;
         }
       }
 
-      // Check client profile if client
       let clientId: string | undefined;
       let clientNumber: string | undefined;
+      let clientName: string | undefined;
       if (user.role === ROLES.CLIENT) {
-        const clientRes = await query('SELECT id, client_number FROM clients WHERE user_id = $1', [user.id]);
+        const clientRes = await query(
+          'SELECT id, client_number, company_name, private_name FROM clients WHERE user_id = $1',
+          [user.id]
+        );
         if (clientRes.rows.length > 0) {
           clientId = clientRes.rows[0].id;
           clientNumber = clientRes.rows[0].client_number;
+          clientName = clientRes.rows[0].private_name || clientRes.rows[0].company_name;
         }
       }
 
+      let supportStaffId: string | undefined;
+      let supportTitle: string | undefined;
+      if (user.role === ROLES.SUPPORT) {
+        const staffRes = await query(
+          'SELECT id, title, department FROM support_staff WHERE user_id = $1',
+          [user.id]
+        );
+        if (staffRes.rows.length > 0) {
+          supportStaffId = staffRes.rows[0].id;
+          supportTitle = staffRes.rows[0].title;
+        }
+      }
+
+      // Compute safe redirect URL with open redirect protection
+      const defaultRoleRedirect = getDefaultRedirectForRole(user.role);
+      const requestedRedirect =
+        req.body.redirect || req.body.next || req.query.redirect || req.query.next;
+      const safeRedirectUrl = validateRedirectUrl(requestedRedirect, defaultRoleRedirect);
+
       const token = jwt.sign(
-        { userId: user.id, email: user.email, role: user.role, developerId, clientId },
+        {
+          userId: user.id,
+          publicUid: user.public_uid,
+          email: user.email,
+          role: user.role,
+          developerId,
+          clientId,
+          supportStaffId,
+        },
         env.JWT_SECRET,
         { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
       );
+
+      // Audit log login
+      await AuditLogger.log({
+        actorUserId: user.id,
+        action: 'USER_LOGGED_IN',
+        entityType: 'USER',
+        entityId: user.id,
+        metadata: { role: user.role, email: user.email },
+      });
+
+      const displayName =
+        developerName ||
+        clientName ||
+        (user.role === ROLES.CEO
+          ? LEADERSHIP.CEO.NAME
+          : user.role === ROLES.MD
+          ? LEADERSHIP.MD.NAME
+          : supportTitle || user.email.split('@')[0]);
 
       res.json({
         token,
         user: {
           id: user.id,
+          publicUid: user.public_uid,
           email: user.email,
           role: user.role,
           status: user.status,
+          emailVerified: user.email_verified,
+          lastLoginAt: new Date().toISOString(),
           developerId,
           clientId,
           clientNumber,
+          supportStaffId,
           verificationStatus,
+          name: displayName,
         },
+        redirectUrl: safeRedirectUrl,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -376,23 +655,77 @@ export class AuthController {
 
     try {
       const userRes = await query(
-        `SELECT id, email, role, status, created_at FROM users WHERE id = $1`,
+        `SELECT id, public_uid, email, phone, role, status, email_verified, is_suspended, last_login_at, created_at, updated_at 
+         FROM users WHERE id = $1`,
         [req.user.userId]
       );
       if (userRes.rows.length === 0) {
-        res.json({ user: req.user });
+        res.status(404).json({ error: 'User account not found' });
         return;
       }
 
       const user = userRes.rows[0];
-      res.json({ user });
+
+      let developer: any = null;
+      if (user.role === ROLES.DEVELOPER) {
+        const devRes = await query(
+          `SELECT id, username, display_name, verification_status, experience, role_title, availability 
+           FROM developers WHERE user_id = $1`,
+          [user.id]
+        );
+        if (devRes.rows.length > 0) {
+          developer = devRes.rows[0];
+        }
+      }
+
+      let client: any = null;
+      if (user.role === ROLES.CLIENT) {
+        const clientRes = await query(
+          `SELECT id, client_number, company_name, private_name, phone 
+           FROM clients WHERE user_id = $1`,
+          [user.id]
+        );
+        if (clientRes.rows.length > 0) {
+          client = clientRes.rows[0];
+        }
+      }
+
+      let supportStaff: any = null;
+      if (user.role === ROLES.SUPPORT) {
+        const staffRes = await query(
+          `SELECT id, department, title, support_level, permissions, status 
+           FROM support_staff WHERE user_id = $1`,
+          [user.id]
+        );
+        if (staffRes.rows.length > 0) {
+          supportStaff = staffRes.rows[0];
+        }
+      }
+
+      res.json({
+        user: {
+          id: user.id,
+          publicUid: user.public_uid,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          status: user.status,
+          emailVerified: user.email_verified,
+          isSuspended: user.is_suspended,
+          lastLoginAt: user.last_login_at,
+          createdAt: user.created_at,
+          developer,
+          client,
+          supportStaff,
+        },
+      });
     } catch (_error: any) {
       res.json({ user: req.user });
     }
   }
 
   /**
-   * Generates a secure password reset token
+   * Generates a secure password reset token with 1-hour expiration
    */
   static async forgotPassword(req: Request, res: Response): Promise<void> {
     const { email } = req.body;
@@ -401,19 +734,32 @@ export class AuthController {
       return;
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     try {
-      const userRes = await query('SELECT id, email FROM users WHERE email = $1', [email]);
+      const userRes = await query('SELECT id, email FROM users WHERE email = $1', [normalizedEmail]);
       if (userRes.rows.length === 0) {
         res.json({ message: 'If an account exists with that email, a password reset token has been issued.' });
         return;
       }
 
       const user = userRes.rows[0];
+      const cryptoToken = crypto.randomBytes(32).toString('hex');
       const tokenId = crypto.randomUUID();
-      const resetToken = jwt.sign(
+
+      // Sign JWT token for clients that rely on JWT structure
+      const resetTokenJwt = jwt.sign(
         { userId: user.id, tokenId, purpose: 'PASSWORD_RESET' },
         env.JWT_SECRET,
         { expiresIn: '1h' }
+      );
+
+      // Store in users table with 1 hour expiry
+      await query(
+        `UPDATE users 
+         SET password_reset_token = $1, password_reset_expires_at = NOW() + INTERVAL '1 hour', updated_at = NOW() 
+         WHERE id = $2`,
+        [cryptoToken, user.id]
       );
 
       await AuditLogger.log({
@@ -426,7 +772,8 @@ export class AuthController {
 
       res.json({
         message: 'Password reset token generated successfully.',
-        resetToken,
+        resetToken: cryptoToken,
+        jwtResetToken: resetTokenJwt,
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -449,25 +796,38 @@ export class AuthController {
       let tokenIdentifier: string | null = null;
 
       if (resetToken) {
-        try {
-          const payload = jwt.verify(resetToken, env.JWT_SECRET) as any;
-          if (payload.purpose !== 'PASSWORD_RESET') {
-            res.status(400).json({ error: 'Invalid reset token purpose.' });
+        // 1. Check database token column
+        const dbTokenRes = await query(
+          `SELECT id, email, password_reset_expires_at FROM users 
+           WHERE password_reset_token = $1 AND password_reset_expires_at > NOW()`,
+          [resetToken]
+        );
+
+        if (dbTokenRes.rows.length > 0) {
+          targetUserId = dbTokenRes.rows[0].id;
+        } else {
+          // 2. Check JWT reset token format
+          try {
+            const payload = jwt.verify(resetToken, env.JWT_SECRET) as any;
+            if (payload.purpose !== 'PASSWORD_RESET') {
+              res.status(400).json({ error: 'Invalid reset token purpose.' });
+              return;
+            }
+            const id = (payload.tokenId || resetToken) as string;
+            tokenIdentifier = id;
+            if (consumedResetTokens.has(id)) {
+              res.status(400).json({ error: 'Password reset token has already been used. Please request a new one.' });
+              return;
+            }
+            targetUserId = payload.userId;
+          } catch {
+            res.status(401).json({ error: 'Invalid or expired password reset token.' });
             return;
           }
-          const id = (payload.tokenId || resetToken) as string;
-          tokenIdentifier = id;
-          if (consumedResetTokens.has(id)) {
-            res.status(400).json({ error: 'Password reset token has already been used. Please request a new one.' });
-            return;
-          }
-          targetUserId = payload.userId;
-        } catch {
-          res.status(401).json({ error: 'Invalid or expired password reset token.' });
-          return;
         }
       } else if (email && currentPassword) {
-        const userRes = await query('SELECT id, password_hash FROM users WHERE email = $1', [email]);
+        const normalizedEmail = email.toLowerCase().trim();
+        const userRes = await query('SELECT id, password_hash FROM users WHERE email = $1', [normalizedEmail]);
         if (userRes.rows.length === 0) {
           res.status(401).json({ error: 'Invalid credentials.' });
           return;
@@ -491,11 +851,13 @@ export class AuthController {
 
       const newHash = await bcrypt.hash(newPassword, 10);
       await query(
-        `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+        `UPDATE users 
+         SET password_hash = $1, password_reset_token = NULL, password_reset_expires_at = NULL, updated_at = NOW() 
+         WHERE id = $2`,
         [newHash, targetUserId]
       );
 
-      // Invalidate the reset token to prevent token reuse
+      // Invalidate the reset token to prevent reuse
       if (tokenIdentifier) {
         consumedResetTokens.add(tokenIdentifier);
       }
@@ -515,6 +877,22 @@ export class AuthController {
   }
 
   /**
+   * Log out authenticated user session
+   */
+  static async logout(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (req.user) {
+      await AuditLogger.log({
+        actorUserId: req.user.userId,
+        action: 'USER_LOGGED_OUT',
+        entityType: 'USER',
+        entityId: req.user.userId,
+        metadata: { email: req.user.email },
+      });
+    }
+    res.json({ message: 'Logged out successfully.' });
+  }
+
+  /**
    * Dispatches an email verification token for the user
    */
   static async sendVerificationEmail(req: Request, res: Response): Promise<void> {
@@ -524,8 +902,10 @@ export class AuthController {
       return;
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     try {
-      const userRes = await query('SELECT id, email FROM users WHERE email = $1', [email]);
+      const userRes = await query('SELECT id, email FROM users WHERE email = $1', [normalizedEmail]);
       if (userRes.rows.length === 0) {
         res.json({ message: 'If an account exists, a verification link has been sent.' });
         return;
@@ -580,7 +960,7 @@ export class AuthController {
 
       const user = userRes.rows[0];
       await query(
-        `UPDATE users SET updated_at = NOW() WHERE id = $1`,
+        `UPDATE users SET email_verified = TRUE, email_verified_at = NOW(), updated_at = NOW() WHERE id = $1`,
         [user.id]
       );
 

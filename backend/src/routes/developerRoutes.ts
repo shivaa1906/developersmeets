@@ -6,6 +6,7 @@ import { requireVerifiedDeveloper } from '../middlewares/rbacMiddleware.js';
 const router = Router();
 
 // Public routes
+router.get('/', DeveloperController.listPublic);
 router.get('/public', DeveloperController.listPublic);
 router.get('/directory', DeveloperController.listPublic);
 router.get('/skills', DeveloperController.listSkills);

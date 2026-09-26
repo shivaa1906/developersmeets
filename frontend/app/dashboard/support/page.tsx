@@ -147,7 +147,7 @@ export default function DashboardSupportPage() {
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedProjectId) {
+    if (isClient && !selectedProjectId) {
       addToast('error', 'Validation Error', 'Please select an associated project.');
       return;
     }
@@ -481,13 +481,18 @@ export default function DashboardSupportPage() {
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
               className="text-xs"
-              required
+              required={isClient}
             >
+              {!isClient && (
+                <option value="">General Platform / Account Support (No Project)</option>
+              )}
               {projects.length === 0 ? (
-                <option value="">No projects found on this account</option>
+                isClient ? (
+                  <option value="">No projects found on this account</option>
+                ) : null
               ) : (
                 <>
-                  <option value="">Select project...</option>
+                  {isClient && <option value="">Select project...</option>}
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title} ({p.status})
@@ -496,9 +501,14 @@ export default function DashboardSupportPage() {
                 </>
               )}
             </Select>
-            {projects.length === 0 && (
+            {projects.length === 0 && isClient && (
               <p className="text-[11px] text-muted">
-                Tickets are linked to projects. If you haven&apos;t created or claimed a project yet, please submit or join a project first.
+                Client tickets are linked to projects. Please submit a project first or contact sales.
+              </p>
+            )}
+            {!isClient && (
+              <p className="text-[11px] text-muted">
+                Select an assigned project for tripartite project support, or leave unselected for platform/credit assistance.
               </p>
             )}
           </div>

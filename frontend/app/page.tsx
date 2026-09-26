@@ -63,9 +63,9 @@ export default function HomePage() {
                 Explore Projects
               </Button>
             </Link>
-            <Link href="/register">
+            <Link href="/register/developer">
               <Button variant="secondary" size="lg">
-                Join Developer Community
+                Join Developer Network
               </Button>
             </Link>
             <Link href="/contact">

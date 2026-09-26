@@ -39,6 +39,9 @@ router.get('/claims', AdminController.listAllClaims);
 
 // Users & financial ledger
 router.get('/users', AdminController.listAllUsers);
+router.post('/users/:userId/suspend', AdminController.suspendUser);
+router.post('/users/:userId/unsuspend', AdminController.unsuspendUser);
+router.post('/users/:userId/disable', AdminController.disableUser);
 router.get('/ledger', AdminController.listFinancialLedger);
 
 // Payments (strictly non-secret exposing)

@@ -8,32 +8,46 @@ import { SupportStaffService } from './supportStaffService.js';
 
 export class SupportService {
   /**
-   * Client creates a support ticket for a completed or active project
+   * Creates a support ticket for a completed/active project or platform/account/credit support
    */
   static async createTicket(
-    clientId: string,
+    clientId: string | null,
     userId: string,
-    projectId: string,
+    projectId: string | null,
     subject: string,
     description: string,
-    priority = 'NORMAL',
+    priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' = 'NORMAL',
     preferredTicketNumber?: string,
     preferredBridgeNumber?: string,
     category = 'TECHNICAL',
-    attachments: any[] = []
+    attachments: any[] = [],
+    developerId: string | null = null
   ) {
     return withTransaction(async (client) => {
-      // 1. Verify project exists & belongs to client
-      const projRes = await client.query(
-        `SELECT id, lead_developer_id, title FROM projects WHERE id = $1 AND client_id = $2`,
-        [projectId, clientId]
-      );
+      let project: any = null;
+      let effectiveDevId = developerId || null;
+      let effectiveClientId = clientId || null;
 
-      if (projRes.rows.length === 0) {
-        throw new Error('Project not found or not owned by your client account');
+      // 1. If project specified, verify existence & ownership
+      if (projectId) {
+        let projQuery = `SELECT id, lead_developer_id, title, client_id FROM projects WHERE id = $1`;
+        const projParams: any[] = [projectId];
+        if (clientId) {
+          projQuery += ` AND client_id = $2`;
+          projParams.push(clientId);
+        }
+        const projRes = await client.query(projQuery, projParams);
+
+        if (projRes.rows.length === 0) {
+          throw new Error('Project not found or not owned by your client account');
+        }
+
+        project = projRes.rows[0];
+        effectiveClientId = clientId || project.client_id;
+        effectiveDevId = developerId || project.lead_developer_id;
       }
 
-      const project = projRes.rows[0];
+      const projectTitle = project ? project.title : 'Platform Operations Support';
 
       // 2. Generate ticket number
       let ticketNumber = preferredTicketNumber;
@@ -94,9 +108,9 @@ export class SupportService {
          RETURNING *`,
         [
           ticketNumber,
-          projectId,
-          clientId,
-          project.lead_developer_id,
+          projectId || null,
+          effectiveClientId || null,
+          effectiveDevId || null,
           cleanSubject,
           cleanDescription,
           priority,
@@ -115,7 +129,7 @@ export class SupportService {
         `INSERT INTO conversations (project_id, type, status)
          VALUES ($1, 'SUPPORT_BRIDGE', 'ACTIVE')
          RETURNING id`,
-        [projectId]
+        [projectId || null]
       );
       const conversationId = convRes.rows[0].id;
 
@@ -136,54 +150,46 @@ export class SupportService {
       );
       const bridgeId = bridgeRes.rows[0].id;
 
-      // Resolve client user_id from client record
-      const clientUserRes = await client.query('SELECT user_id FROM clients WHERE id = $1', [clientId]);
-      const clientUserId = clientUserRes.rows[0]?.user_id || userId;
+      // 8. Enroll creator into bridge & conversation
+      const uRes = await client.query('SELECT role FROM users WHERE id = $1', [userId]);
+      const creatorRole = uRes.rows[0]?.role || (effectiveClientId ? 'CLIENT' : 'DEVELOPER');
+      await client.query(
+        `INSERT INTO support_bridge_members (bridge_id, user_id, role) VALUES ($1, $2, $3)`,
+        [bridgeId, userId, creatorRole]
+      );
+      await client.query(
+        `INSERT INTO conversation_members (conversation_id, user_id, client_id, developer_id, role) 
+         VALUES ($1, $2, $3, $4, $5)`,
+        [conversationId, userId, effectiveClientId || null, effectiveDevId || null, creatorRole]
+      );
 
-      // Add client to bridge and conversation
-      const cMemCheck = await client.query('SELECT 1 FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2', [bridgeId, clientUserId]);
-      if (cMemCheck.rows.length === 0) {
-        await client.query(
-          `INSERT INTO support_bridge_members (bridge_id, user_id, role) VALUES ($1, $2, 'CLIENT')`,
-          [bridgeId, clientUserId]
-        );
-      }
-      const cConvCheck = await client.query('SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2', [conversationId, clientUserId]);
-      if (cConvCheck.rows.length === 0) {
-        await client.query(
-          `INSERT INTO conversation_members (conversation_id, user_id, client_id, role) VALUES ($1, $2, $3, 'CLIENT')`,
-          [conversationId, clientUserId, clientId]
-        );
-      }
-
-      // If user creating the ticket is a developer or staff, also enroll them
-      if (userId !== clientUserId) {
-        const uRes = await client.query('SELECT role FROM users WHERE id = $1', [userId]);
-        const creatorRole = uRes.rows[0]?.role || 'DEVELOPER';
-        const crMemCheck = await client.query('SELECT 1 FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2', [bridgeId, userId]);
-        if (crMemCheck.rows.length === 0) {
-          await client.query(
-            `INSERT INTO support_bridge_members (bridge_id, user_id, role) VALUES ($1, $2, $3)`,
-            [bridgeId, userId, creatorRole]
-          );
-        }
-        const crConvCheck = await client.query('SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2', [conversationId, userId]);
-        if (crConvCheck.rows.length === 0) {
-          await client.query(
-            `INSERT INTO conversation_members (conversation_id, user_id, role) VALUES ($1, $2, $3)`,
-            [conversationId, userId, creatorRole]
-          );
+      // If client exists and is distinct from creator, enroll client
+      if (effectiveClientId) {
+        const clUserRes = await client.query('SELECT user_id FROM clients WHERE id = $1', [effectiveClientId]);
+        const clientUserId = clUserRes.rows[0]?.user_id;
+        if (clientUserId && clientUserId !== userId) {
+          const cMemCheck = await client.query('SELECT 1 FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2', [bridgeId, clientUserId]);
+          if (cMemCheck.rows.length === 0) {
+            await client.query(
+              `INSERT INTO support_bridge_members (bridge_id, user_id, role) VALUES ($1, $2, 'CLIENT')`,
+              [bridgeId, clientUserId]
+            );
+          }
+          const cConvCheck = await client.query('SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2', [conversationId, clientUserId]);
+          if (cConvCheck.rows.length === 0) {
+            await client.query(
+              `INSERT INTO conversation_members (conversation_id, user_id, client_id, role) VALUES ($1, $2, $3, 'CLIENT')`,
+              [conversationId, clientUserId, effectiveClientId]
+            );
+          }
         }
       }
 
-      // Add developer to bridge and conversation if assigned
-      if (project.lead_developer_id) {
-        const devUserRes = await client.query(
-          `SELECT user_id FROM developers WHERE id = $1`,
-          [project.lead_developer_id]
-        );
-        if (devUserRes.rows.length > 0) {
-          const devUserId = devUserRes.rows[0].user_id;
+      // If developer exists and is distinct from creator, enroll developer
+      if (effectiveDevId) {
+        const devUserRes = await client.query('SELECT user_id FROM developers WHERE id = $1', [effectiveDevId]);
+        const devUserId = devUserRes.rows[0]?.user_id;
+        if (devUserId && devUserId !== userId) {
           const dMemCheck = await client.query('SELECT 1 FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2', [bridgeId, devUserId]);
           if (dMemCheck.rows.length === 0) {
             await client.query(
@@ -195,18 +201,18 @@ export class SupportService {
           if (dConvCheck.rows.length === 0) {
             await client.query(
               `INSERT INTO conversation_members (conversation_id, user_id, developer_id, role) VALUES ($1, $2, $3, 'DEVELOPER')`,
-              [conversationId, devUserId, project.lead_developer_id]
+              [conversationId, devUserId, effectiveDevId]
             );
           }
 
-          // Notification to developer
+          // Notification to counterpart developer
           await NotificationService.createNotification({
             userId: devUserId,
             type: 'SUPPORT_TICKET_OPENED',
             title: 'Support Ticket Opened',
-            message: `A support ticket (${ticketNumber}) has been opened for "${project.title}".`,
+            message: `A support ticket (${ticketNumber}) has been opened for "${projectTitle}".`,
             link: `/dashboard/support/${ticket.id}`,
-            metadata: { ticketId: ticket.id, ticketNumber, projectId },
+            metadata: { ticketId: ticket.id, ticketNumber, projectId: projectId || null },
             client,
           });
         }
@@ -228,19 +234,19 @@ export class SupportService {
           title: 'Ticket Assigned to You via Smart Routing',
           message: `Ticket ${ticketNumber} (${cleanSubject}) has been auto-routed and assigned to you.`,
           link: `/dashboard/support/${ticket.id}`,
-          metadata: { ticketId: ticket.id, ticketNumber, projectId },
+          metadata: { ticketId: ticket.id, ticketNumber, projectId: projectId || null },
           client,
         });
       }
 
-      // Notification to client confirming ticket creation
+      // Notification to creator confirming ticket creation
       await NotificationService.createNotification({
         userId,
         type: 'SUPPORT_TICKET_CREATED',
         title: 'Support Ticket Created',
-        message: `Your support ticket (${ticketNumber}) has been submitted for "${project.title}".`,
+        message: `Your support ticket (${ticketNumber}) has been submitted for "${projectTitle}".`,
         link: `/dashboard/support/${ticket.id}`,
-        metadata: { ticketId: ticket.id, ticketNumber, projectId },
+        metadata: { ticketId: ticket.id, ticketNumber, projectId: projectId || null },
         client,
       });
 
@@ -249,7 +255,7 @@ export class SupportService {
         action: 'SUPPORT_TICKET_CREATED',
         entityType: 'SUPPORT_TICKET',
         entityId: ticket.id,
-        metadata: { ticketNumber, projectId, bridgeId, bridgeNumber },
+        metadata: { ticketNumber, projectId: projectId || null, bridgeId, bridgeNumber },
       });
 
       return {
@@ -397,13 +403,13 @@ export class SupportService {
              st.category, st.attachments, st.assigned_to_user_id,
              st.created_at, st.updated_at, st.closed_at, st.project_id,
              st.response_due_at, st.resolution_due_at, st.escalated_at, st.escalation_reason,
-             p.title as project_title,
+             COALESCE(p.title, 'Platform Support') as project_title,
              sb.id as bridge_id, sb.bridge_number, sb.conversation_id,
              u_assigned.email as assigned_agent_email,
              ss.title as assigned_agent_title,
              ss.department as assigned_agent_department
       FROM support_tickets st
-      JOIN projects p ON st.project_id = p.id
+      LEFT JOIN projects p ON st.project_id = p.id
       LEFT JOIN support_bridges sb ON sb.ticket_id = st.id
       LEFT JOIN users u_assigned ON st.assigned_to_user_id = u_assigned.id
       LEFT JOIN support_staff ss ON ss.user_id = st.assigned_to_user_id
@@ -440,7 +446,17 @@ export class SupportService {
         conditions.push(`st.client_id = $${params.length}`);
       } else if (devId) {
         params.push(devId);
-        conditions.push(`st.developer_id = $${params.length}`);
+        const devIdx = params.length;
+        params.push(user.userId);
+        const userIdx = params.length;
+        conditions.push(`(
+          st.developer_id = $${devIdx}
+          OR EXISTS (
+            SELECT 1 FROM support_bridge_members sbm
+            JOIN support_bridges sbb ON sbm.bridge_id = sbb.id
+            WHERE sbb.ticket_id = st.id AND sbm.user_id = $${userIdx}
+          )
+        )`);
       } else {
         return [];
       }
@@ -493,11 +509,11 @@ export class SupportService {
     user: { userId: string; role: string; clientId?: string; developerId?: string }
   ) {
     const tRes = await query(
-      `SELECT st.*, p.title as project_title, p.project_number,
+      `SELECT st.*, COALESCE(p.title, 'Platform Support') as project_title, p.project_number,
               sb.id as bridge_id, sb.bridge_number, sb.conversation_id,
               u_assigned.email as assigned_agent_email
        FROM support_tickets st
-       JOIN projects p ON st.project_id = p.id
+       LEFT JOIN projects p ON st.project_id = p.id
        LEFT JOIN support_bridges sb ON sb.ticket_id = st.id
        LEFT JOIN users u_assigned ON st.assigned_to_user_id = u_assigned.id
        WHERE st.id::text = $1 OR st.ticket_number = $1`,
@@ -515,7 +531,13 @@ export class SupportService {
     const isClientOwner = Boolean(user.clientId && user.clientId === ticket.client_id);
     const isAssignedDev = Boolean(user.developerId && user.developerId === ticket.developer_id);
 
-    if (!isLeadershipOrSupport && !isClientOwner && !isAssignedDev) {
+    let isBridgeMember = false;
+    if (ticket.bridge_id && user.userId) {
+      const bRes = await query('SELECT 1 FROM support_bridge_members WHERE bridge_id = $1 AND user_id = $2', [ticket.bridge_id, user.userId]);
+      isBridgeMember = bRes.rows.length > 0;
+    }
+
+    if (!isLeadershipOrSupport && !isClientOwner && !isAssignedDev && !isBridgeMember) {
       throw new Error('Forbidden: Access denied to support ticket');
     }
 
@@ -541,11 +563,11 @@ export class SupportService {
     const bridgeRes = await query(
       `SELECT sb.*, st.ticket_number, st.subject, st.status as ticket_status,
               st.priority, st.category, st.attachments, st.assigned_to_user_id,
-              st.project_id, p.title as project_title, st.client_id, st.developer_id,
+              st.project_id, COALESCE(p.title, 'Platform Support') as project_title, st.client_id, st.developer_id,
               st.internal_notes
        FROM support_bridges sb
        JOIN support_tickets st ON sb.ticket_id = st.id
-       JOIN projects p ON st.project_id = p.id
+       LEFT JOIN projects p ON st.project_id = p.id
        WHERE sb.id::text = $1 OR sb.ticket_id::text = $1`,
       [bridgeIdOrTicketId]
     );

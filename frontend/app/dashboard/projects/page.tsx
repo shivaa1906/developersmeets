@@ -19,10 +19,17 @@ export default function DashboardProjectsPage() {
   const { user } = useAuth();
   const { addToast } = useToast();
 
-  const [activeTab, setActiveTab] = React.useState('marketplace');
+  const isClient = user?.role === 'CLIENT';
+  const [activeTab, setActiveTab] = React.useState(isClient ? 'my-projects' : 'marketplace');
   const [marketplaceProjects, setMarketplaceProjects] = React.useState<any[]>([]);
   const [myProjects, setMyProjects] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (isClient && activeTab === 'marketplace') {
+      setActiveTab('my-projects');
+    }
+  }, [isClient, activeTab]);
 
   // Claim modal state
   const [selectedProjectToClaim, setSelectedProjectToClaim] = React.useState<any | null>(null);
@@ -139,8 +146,6 @@ export default function DashboardProjectsPage() {
     }
   };
 
-  const isClient = user?.role === 'CLIENT';
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -155,7 +160,13 @@ export default function DashboardProjectsPage() {
           </p>
         </div>
 
-        {!isClient && (
+        {isClient ? (
+          <Link href="/contact">
+            <Button size="sm" leftIcon={<Briefcase className="h-3.5 w-3.5" />}>
+              Start a Project
+            </Button>
+          </Link>
+        ) : (
           <div className="flex items-center space-x-2 text-xs font-mono text-accent bg-accent/10 border border-accent/30 px-3 py-1.5 rounded-lg">
             <Coins className="h-3.5 w-3.5" />
             <span>Claim Cost: 1 Credit (100% Refundable)</span>
@@ -241,9 +252,15 @@ export default function DashboardProjectsPage() {
 
                   <CardFooter className="flex items-center justify-between border-t border-border pt-4">
                     <span className="text-xs text-muted">Claim Cost: 1 Credit</span>
-                    <Button size="sm" onClick={() => setSelectedProjectToClaim(project)}>
-                      Claim Project Slot
-                    </Button>
+                    {user?.verificationStatus === 'VERIFIED' || user?.role === 'CEO' || user?.role === 'MD' ? (
+                      <Button size="sm" onClick={() => setSelectedProjectToClaim(project)}>
+                        Claim Project Slot
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="secondary" disabled title="Executive verification required to claim project slots">
+                        Verification Required
+                      </Button>
+                    )}
                   </CardFooter>
                 </Card>
               ))}
@@ -351,6 +368,11 @@ export default function DashboardProjectsPage() {
                     <Link href="/dashboard/messages">
                       <Button size="sm" variant="outline" leftIcon={<MessageSquare className="h-3.5 w-3.5" />}>
                         Chat
+                      </Button>
+                    </Link>
+                    <Link href={`/dashboard/support?action=create&projectId=${proj.id}`}>
+                      <Button size="sm" variant="ghost" className="text-muted hover:text-foreground">
+                        Support
                       </Button>
                     </Link>
                   </div>

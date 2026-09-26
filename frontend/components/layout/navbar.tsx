@@ -6,18 +6,36 @@ import { usePathname } from 'next/navigation';
 import { siteConfig } from '@/config/site';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Terminal, Menu, X, ArrowRight } from 'lucide-react';
+import { Terminal, Menu, X, ArrowRight, LayoutDashboard, LogOut, User } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
-  const isAuthPage = pathname === '/login' || pathname === '/register';
+  const isAuthPage =
+    pathname === '/login' ||
+    pathname.startsWith('/register') ||
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password';
   const isDashboardPage = pathname.startsWith('/dashboard') || pathname.startsWith('/admin');
 
   if (isAuthPage || isDashboardPage) {
     return null;
   }
+
+  const dashboardHref =
+    user?.role === 'CEO' || user?.role === 'MD' || user?.role === 'ADMIN'
+      ? '/admin/dashboard'
+      : user?.role === 'SUPPORT'
+      ? '/admin/support'
+      : '/dashboard';
+
+  const userDisplayName =
+    user?.role === 'CLIENT'
+      ? user.clientNumber || 'Client'
+      : user?.name || user?.email?.split('@')[0] || 'Member';
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
@@ -35,7 +53,7 @@ export const Navbar: React.FC = () => {
           </div>
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation - Strictly public, no internal dashboard exposure */}
         <nav className="hidden md:flex items-center space-x-6 text-xs font-medium">
           {siteConfig.navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
@@ -56,21 +74,53 @@ export const Navbar: React.FC = () => {
 
         {/* Actions */}
         <div className="hidden md:flex items-center space-x-3">
-          <Link href="/login">
-            <Button variant="ghost" size="sm">
-              Login
-            </Button>
-          </Link>
-          <Link href="/register">
-            <Button variant="outline" size="sm">
-              Join as Developer
-            </Button>
-          </Link>
-          <Link href="/contact">
-            <Button size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
-              Start a Project
-            </Button>
-          </Link>
+          {user ? (
+            <div className="flex items-center space-x-3">
+              <Link href={dashboardHref}>
+                <Button size="sm" variant="default" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
+                  Dashboard
+                </Button>
+              </Link>
+              <div className="flex items-center space-x-2 pl-2 border-l border-border">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 border border-accent/30 text-accent text-xs font-bold">
+                  {userDisplayName.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="text-xs font-medium text-foreground truncate max-w-[120px]">
+                  {userDisplayName}
+                </span>
+                <button
+                  onClick={logout}
+                  title="Sign Out"
+                  className="text-muted hover:text-status-danger p-1 rounded transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Link href="/login">
+                <Button variant="ghost" size="sm">
+                  Login
+                </Button>
+              </Link>
+              <Link href="/register/developer">
+                <Button variant="ghost" size="sm" className="hidden lg:inline-flex text-muted hover:text-accent">
+                  Join Developer Network
+                </Button>
+              </Link>
+              <Link href="/register/client">
+                <Button variant="outline" size="sm">
+                  Get Started
+                </Button>
+              </Link>
+              <Link href="/contact">
+                <Button size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
+                  Start a Project
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile menu toggle */}
@@ -101,21 +151,45 @@ export const Navbar: React.FC = () => {
             ))}
           </nav>
           <div className="pt-3 border-t border-border flex flex-col space-y-2">
-            <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
-              <Button variant="outline" size="sm" className="w-full">
-                Login
-              </Button>
-            </Link>
-            <Link href="/register" onClick={() => setMobileMenuOpen(false)}>
-              <Button variant="secondary" size="sm" className="w-full">
-                Join as Developer
-              </Button>
-            </Link>
-            <Link href="/contact" onClick={() => setMobileMenuOpen(false)}>
-              <Button size="sm" className="w-full">
-                Start a Project
-              </Button>
-            </Link>
+            {user ? (
+              <>
+                <div className="px-3 py-1 flex items-center justify-between text-xs text-muted">
+                  <span>Signed in as <strong className="text-foreground">{userDisplayName}</strong></span>
+                  <button onClick={logout} className="text-status-danger hover:underline flex items-center space-x-1">
+                    <LogOut className="h-3.5 w-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+                <Link href={dashboardHref} onClick={() => setMobileMenuOpen(false)}>
+                  <Button size="sm" className="w-full" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
+                    Open Dashboard
+                  </Button>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="outline" size="sm" className="w-full">
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/register/developer" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" size="sm" className="w-full text-accent hover:bg-accent/10">
+                    Join Developer Network
+                  </Button>
+                </Link>
+                <Link href="/register/client" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="secondary" size="sm" className="w-full">
+                    Get Started (Client)
+                  </Button>
+                </Link>
+                <Link href="/contact" onClick={() => setMobileMenuOpen(false)}>
+                  <Button size="sm" className="w-full">
+                    Start a Project
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

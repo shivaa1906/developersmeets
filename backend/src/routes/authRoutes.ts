@@ -12,6 +12,7 @@ router.post('/register/developer', AuthController.registerDeveloper);
 router.post('/register/client', AuthController.registerClient);
 router.post('/register-client', AuthController.registerClient);
 router.post('/login', AuthController.login);
+router.post('/logout', authenticateJwt, AuthController.logout);
 router.post('/forgot-password', AuthController.forgotPassword);
 router.post('/reset-password', AuthController.resetPassword);
 router.post('/send-verification-email', AuthController.sendVerificationEmail);
