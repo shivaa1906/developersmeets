@@ -84,23 +84,186 @@ export class CreditController {
   }
 
   static async adminAdjust(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { developerId, amount, reason } = req.body;
+    const { developerId, userId, target, amount, reason, type } = req.body;
+    const targetId = target || userId || developerId;
 
-    if (!developerId || amount === undefined || !reason) {
-      res.status(400).json({ error: 'developerId, amount, and reason are required' });
+    if (!targetId || amount === undefined || !reason) {
+      res.status(400).json({ error: 'developerId (or target/userId), amount, and reason are required' });
+      return;
+    }
+
+    const numAmount = parseInt(amount, 10);
+    if (isNaN(numAmount) || numAmount === 0) {
+      res.status(400).json({ error: 'amount must be a non-zero integer' });
       return;
     }
 
     try {
       const result = await CreditLedgerService.adminAdjustment(
-        developerId,
-        parseInt(amount, 10),
+        targetId,
+        numAmount,
         reason,
-        req.user!.userId
+        req.user!.userId,
+        type
       );
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async grantCredits(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { target, userId, developerId, amount, reason, referenceId, metadata } = req.body;
+    const targetId = target || userId || developerId;
+
+    if (!targetId || amount === undefined || !reason) {
+      res.status(400).json({ error: 'target (userId, developerId, or public UID), amount, and reason are required' });
+      return;
+    }
+
+    const numAmount = parseInt(amount, 10);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      res.status(400).json({ error: 'Credit grant amount must be a positive integer greater than zero' });
+      return;
+    }
+
+    try {
+      const result = await CreditLedgerService.grantCredits({
+        target: targetId,
+        amount: numAmount,
+        reason,
+        adminUserId: req.user!.userId,
+        referenceId,
+        metadata,
+      });
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async removeCredits(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { target, userId, developerId, amount, reason, referenceId, metadata } = req.body;
+    const targetId = target || userId || developerId;
+
+    if (!targetId || amount === undefined || !reason) {
+      res.status(400).json({ error: 'target (userId, developerId, or public UID), amount, and reason are required' });
+      return;
+    }
+
+    const numAmount = parseInt(amount, 10);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      res.status(400).json({ error: 'Credit removal amount must be a positive integer greater than zero' });
+      return;
+    }
+
+    try {
+      const result = await CreditLedgerService.removeCredits({
+        target: targetId,
+        amount: numAmount,
+        reason,
+        adminUserId: req.user!.userId,
+        referenceId,
+        metadata,
+      });
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async bulkGrant(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { targetScope = 'ALL_DEVELOPERS', userIds, amount, reason, metadata } = req.body;
+
+    if (!amount || !reason) {
+      res.status(400).json({ error: 'amount and reason are required for bulk grant' });
+      return;
+    }
+
+    const numAmount = parseInt(amount, 10);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      res.status(400).json({ error: 'amount must be a positive integer greater than zero' });
+      return;
+    }
+
+    try {
+      const result = await CreditLedgerService.bulkGrantCredits({
+        targetScope,
+        userIds,
+        amount: numAmount,
+        reason,
+        adminUserId: req.user!.userId,
+        metadata,
+      });
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async bulkRemove(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { targetScope = 'ALL_DEVELOPERS', userIds, amount, reason, allowPartial = true, metadata } = req.body;
+
+    if (!amount || !reason) {
+      res.status(400).json({ error: 'amount and reason are required for bulk removal' });
+      return;
+    }
+
+    const numAmount = parseInt(amount, 10);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      res.status(400).json({ error: 'amount must be a positive integer greater than zero' });
+      return;
+    }
+
+    try {
+      const result = await CreditLedgerService.bulkRemoveCredits({
+        targetScope,
+        userIds,
+        amount: numAmount,
+        reason,
+        adminUserId: req.user!.userId,
+        allowPartial,
+        metadata,
+      });
+      res.status(200).json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async getCreditHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { userId, type, performedBy, startDate, endDate, search, limit, offset } = req.query;
+
+    try {
+      const result = await CreditLedgerService.getCreditHistory({
+        userId: typeof userId === 'string' ? userId : undefined,
+        type: typeof type === 'string' ? type : undefined,
+        performedBy: typeof performedBy === 'string' ? performedBy : undefined,
+        startDate: typeof startDate === 'string' ? startDate : undefined,
+        endDate: typeof endDate === 'string' ? endDate : undefined,
+        search: typeof search === 'string' ? search : undefined,
+        limit: limit ? parseInt(limit as string, 10) : undefined,
+        offset: offset ? parseInt(offset as string, 10) : undefined,
+      });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async listAccounts(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { search, role, limit, offset } = req.query;
+
+    try {
+      const result = await CreditLedgerService.listCreditAccounts({
+        search: typeof search === 'string' ? search : undefined,
+        role: typeof role === 'string' ? role : undefined,
+        limit: limit ? parseInt(limit as string, 10) : undefined,
+        offset: offset ? parseInt(offset as string, 10) : undefined,
+      });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   }
 

@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../types/index.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { ProjectService } from '../services/projectService.js';
 import { NotificationService } from '../services/notificationService.js';
+import { CreditLedgerService } from '../services/creditLedgerService.js';
 import { ROLES } from '../config/constants.js';
 
 export class AdminController {
@@ -378,11 +379,18 @@ export class AdminController {
   static async listFinancialLedger(_req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const result = await query(
-        `SELECT ct.*, d.username as developer_username, d.display_name as developer_name,
-                p.title as project_title, p.project_number
+        `SELECT ct.*,
+                u.id as user_id, u.uid as user_uid, u.public_uid as user_public_uid, u.email as user_email, u.role as user_role,
+                COALESCE(d.username, u.email) as developer_username,
+                COALESCE(d.display_name, u.email) as developer_name,
+                p.title as project_title, p.project_number,
+                u_perf.uid as performed_by_uid, u_perf.public_uid as performed_by_public_uid,
+                u_perf.email as performed_by_email, u_perf.role as performed_by_role
          FROM credit_transactions ct
-         JOIN developers d ON ct.developer_id = d.id
+         LEFT JOIN users u ON ct.user_id = u.id
+         LEFT JOIN developers d ON ct.developer_id = d.id
          LEFT JOIN projects p ON ct.project_id = p.id
+         LEFT JOIN users u_perf ON ct.performed_by = u_perf.id
          ORDER BY ct.created_at DESC LIMIT 100`
       );
       res.json({ ledger: result.rows });
@@ -735,39 +743,21 @@ export class AdminController {
     }
 
     try {
-      const result = await withTransaction(async (client) => {
-        // Update credit account
-        const accRes = await client.query(
-          `INSERT INTO credit_accounts (developer_id, balance)
-           VALUES ($1, $2)
-           ON CONFLICT (developer_id)
-           DO UPDATE SET balance = credit_accounts.balance + $2, updated_at = NOW()
-           RETURNING balance`,
-          [developerId, numAmount]
-        );
-        const newBalance = Number(accRes.rows[0].balance);
+      const result = await CreditLedgerService.adminAdjustment(
+        developerId,
+        numAmount,
+        reason,
+        req.user!.userId
+      );
 
-        // Record credit transaction
-        const txRes = await client.query(
-          `INSERT INTO credit_transactions (developer_id, type, amount, balance_after, description)
-           VALUES ($1, 'ADMIN_ADJUSTMENT', $2, $3, $4)
-           RETURNING *`,
-          [developerId, numAmount, newBalance, reason]
-        );
-
-        // Log audit record
-        await AuditLogger.log({
-          actorUserId: req.user!.userId,
-          action: 'CREDIT_MANUAL_ADJUSTMENT',
-          entityType: 'CREDIT_ACCOUNT',
-          entityId: developerId,
-          metadata: { amount: numAmount, newBalance, reason, actorRole: req.user!.role },
-        });
-
-        return { balance: newBalance, transaction: txRes.rows[0] };
+      res.json({
+        success: true,
+        message: 'Credit balance adjusted successfully',
+        balance: result.newBalance,
+        newBalance: result.newBalance,
+        transaction: result.transaction,
+        referenceId: result.referenceId,
       });
-
-      res.json({ success: true, message: 'Credit balance adjusted successfully', ...result });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }

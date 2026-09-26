@@ -32,6 +32,43 @@ export function requireRole(...allowedRoles: UserRole[]) {
 }
 
 /**
+ * Enforces that only authorized administrative roles can manage credits.
+ * ADMIN and CEO are authorized.
+ * MD and SUPPORT must not automatically receive credit-management authority.
+ */
+export function requireCreditManagement(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required. No session found.' });
+    return;
+  }
+
+  // CEO and ADMIN are authorized by default
+  if (req.user.role === ROLES.CEO || req.user.role === ROLES.ADMIN) {
+    next();
+    return;
+  }
+
+  // MD and SUPPORT must not automatically receive credit-management authority
+  // unless explicit credit management permission is provided
+  const userPermissions = (req.user as any).permissions || [];
+  if (
+    Array.isArray(userPermissions) &&
+    (userPermissions.includes('MANAGE_CREDITS') || userPermissions.includes('CREDIT_MANAGEMENT'))
+  ) {
+    next();
+    return;
+  }
+
+  res.status(403).json({
+    error: `Forbidden: role '${req.user.role}' is not authorized for credit management. Only ADMIN or CEO have credit-management authority.`,
+  });
+}
+
+/**
  * Enforces that only verified active developers can access marketplace claims and community channels
  */
 export async function requireVerifiedDeveloper(

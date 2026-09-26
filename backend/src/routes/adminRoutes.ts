@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { AdminController } from '../controllers/adminController.js';
 import { SupportController } from '../controllers/supportController.js';
+import { CreditController } from '../controllers/creditController.js';
 import { authenticateJwt } from '../middlewares/authMiddleware.js';
-import { requireRole } from '../middlewares/rbacMiddleware.js';
+import { requireRole, requireCreditManagement } from '../middlewares/rbacMiddleware.js';
 import { ROLES } from '../config/constants.js';
 
 const router = Router();
@@ -71,6 +72,14 @@ router.get('/audit-logs', AdminController.listAuditLogs);
 // System Settings & Financial Manual Adjustments (CEO ONLY - Prohibited to MD)
 router.get('/settings', AdminController.getSettings);
 router.patch('/settings', requireRole(ROLES.CEO), AdminController.updateSettings);
-router.post('/credits/adjust', requireRole(ROLES.CEO), AdminController.adjustCredits);
+
+// Credit Management (CEO & ADMIN ONLY - Prohibited to MD and SUPPORT)
+router.post('/credits/adjust', requireCreditManagement, AdminController.adjustCredits);
+router.post('/credits/grant', requireCreditManagement, CreditController.grantCredits);
+router.post('/credits/remove', requireCreditManagement, CreditController.removeCredits);
+router.post('/credits/bulk-grant', requireCreditManagement, CreditController.bulkGrant);
+router.post('/credits/bulk-remove', requireCreditManagement, CreditController.bulkRemove);
+router.get('/credits/history', requireCreditManagement, CreditController.getCreditHistory);
+router.get('/credits/accounts', requireCreditManagement, CreditController.listAccounts);
 
 export default router;
