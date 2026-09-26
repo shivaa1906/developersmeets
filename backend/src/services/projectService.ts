@@ -360,7 +360,8 @@ export class ProjectService {
         developerId,
         projectId,
         project.claim_cost,
-        client
+        client,
+        devUserId
       );
 
       // 7. Assign anonymous developer tag (e.g. Developer #01, #02)

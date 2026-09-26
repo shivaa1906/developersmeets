@@ -69,10 +69,27 @@ export class ChatService {
     );
 
     if (memberCheck.rows.length === 0) {
-      throw new Error('Forbidden: You are not a member of this conversation');
+      // Check if user is staff (CEO, MD, ADMIN, SUPPORT)
+      const uRes = await query(`SELECT role FROM users WHERE id = $1`, [userId]);
+      const role = uRes.rows[0]?.role;
+      if (['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(role)) {
+        // Staff viewing support bridge conversation
+        const convRes = await query(`SELECT type, project_id, status FROM conversations WHERE id = $1`, [conversationId]);
+        if (convRes.rows.length === 0) {
+          throw new Error('Conversation not found');
+        }
+        await query(
+          `INSERT INTO conversation_members (conversation_id, user_id, role)
+           VALUES ($1, $2, $3)
+           ON CONFLICT DO NOTHING`,
+          [conversationId, userId, role]
+        );
+      } else {
+        throw new Error('Forbidden: You are not a member of this conversation');
+      }
     }
 
-    const { project_id, conversation_status, last_read_at } = memberCheck.rows[0];
+    const { project_id, conversation_status, last_read_at } = memberCheck.rows[0] || { project_id: null, conversation_status: 'ACTIVE', last_read_at: null };
 
     // 2. Fetch messages
     const messagesRes = await query(

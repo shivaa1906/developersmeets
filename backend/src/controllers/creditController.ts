@@ -15,35 +15,59 @@ export class CreditController {
   }
 
   static async getBalance(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (req.user?.role === 'CLIENT') {
+      res.status(403).json({ error: 'Forbidden: Client accounts do not have access to developer credit wallet' });
+      return;
+    }
+
     const devId = req.user?.developerId;
-    if (!devId) {
-      res.status(403).json({ error: 'Developer profile required' });
+    const userId = req.user?.userId;
+
+    if (!devId && !userId) {
+      res.status(403).json({ error: 'Developer profile or authenticated user required' });
       return;
     }
 
     try {
-      const acc = await query('SELECT balance FROM credit_accounts WHERE developer_id = $1', [devId]);
+      // Identity strictly derived from authenticated session, never request query parameters
+      const acc = await query(
+        `SELECT balance FROM credit_accounts 
+         WHERE (user_id = $1 AND user_id IS NOT NULL)
+            OR (developer_id = $2 AND developer_id IS NOT NULL)
+         ORDER BY (user_id = $1) DESC
+         LIMIT 1`,
+        [userId || null, devId || null]
+      );
       const balance = acc.rows.length > 0 ? acc.rows[0].balance : 0;
-      res.json({ balance, developerId: devId });
+      res.json({ balance, developerId: devId, userId });
     } catch (_error: any) {
-      res.json({ balance: 0, developerId: devId });
+      res.json({ balance: 0, developerId: devId, userId });
     }
   }
 
   static async getLedger(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (req.user?.role === 'CLIENT') {
+      res.status(403).json({ error: 'Forbidden: Client accounts do not have access to developer credit wallet' });
+      return;
+    }
+
     const devId = req.user?.developerId;
-    if (!devId) {
-      res.status(403).json({ error: 'Developer profile required' });
+    const userId = req.user?.userId;
+
+    if (!devId && !userId) {
+      res.status(403).json({ error: 'Developer profile or authenticated user required' });
       return;
     }
 
     try {
+      // Identity strictly derived from authenticated session, never request query parameters
       const txs = await query(
-        `SELECT id, type, amount, balance_after, reference_id, description, created_at
+        `SELECT id, type, amount, balance_before, balance_after, reference_id, description, reason, created_at
          FROM credit_transactions
-         WHERE developer_id = $1
+         WHERE (user_id = $1 AND user_id IS NOT NULL)
+            OR (developer_id = $2 AND developer_id IS NOT NULL)
          ORDER BY created_at DESC`,
-        [devId]
+        [userId || null, devId || null]
       );
       res.json({ ledger: txs.rows });
     } catch (_error: any) {
@@ -52,6 +76,11 @@ export class CreditController {
   }
 
   static async purchase(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (req.user?.role === 'CLIENT') {
+      res.status(403).json({ error: 'Forbidden: Clients cannot purchase developer project claim credits' });
+      return;
+    }
+
     const devId = req.user?.developerId;
     if (!devId) {
       res.status(403).json({ error: 'Developer profile required' });

@@ -40,8 +40,20 @@ const adminIconMap: Record<string, React.ReactNode> = {
 
 export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+
+  const isSupport = user?.role === 'SUPPORT';
+  const navItems = React.useMemo(() => {
+    if (isSupport) {
+      // Support sees: Support Queue, Tickets, Bridges
+      // Support must not automatically receive credit-management permissions or admin controls
+      return siteConfig.adminNav.filter((item) =>
+        ['Support Bridges', 'Inquiries'].includes(item.label)
+      );
+    }
+    return siteConfig.adminNav;
+  }, [isSupport]);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -49,15 +61,17 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
       <aside className="hidden w-64 flex-col border-r border-border bg-[#070707] md:flex">
         {/* Brand */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-border">
-          <Link href="/admin/dashboard" className="flex items-center space-x-2.5">
+          <Link href={isSupport ? "/admin/support" : "/admin/dashboard"} className="flex items-center space-x-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-status-warning/40 bg-status-warning/10 text-status-warning">
               <Terminal className="h-4 w-4" />
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-bold tracking-wider">
-                EXECUTIVE<span className="text-status-warning">.HQ</span>
+                {isSupport ? 'SUPPORT' : 'EXECUTIVE'}<span className="text-status-warning">.HQ</span>
               </span>
-              <span className="text-[9px] uppercase tracking-widest text-muted">Control Suite</span>
+              <span className="text-[9px] uppercase tracking-widest text-muted">
+                {isSupport ? 'Operations Suite' : 'Control Suite'}
+              </span>
             </div>
           </Link>
         </div>
@@ -65,9 +79,9 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
         {/* Navigation */}
         <nav className="flex-1 space-y-0.5 px-3 py-4 overflow-y-auto">
           <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-            Administration
+            {isSupport ? 'Support Operations' : 'Administration'}
           </div>
-          {siteConfig.adminNav.map((item) => {
+          {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
@@ -87,20 +101,41 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
           })}
         </nav>
 
-        {/* Executive Footprint */}
+        {/* User Identity Footprint */}
         <div className="border-t border-border p-4 bg-[#050505]">
           <div className="rounded-lg bg-surface p-3 border border-border space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-semibold text-muted tracking-wider">Executive Sign-in</span>
+              <span className="text-[10px] uppercase font-semibold text-muted tracking-wider">
+                {isSupport ? 'Staff Session' : 'Executive Sign-in'}
+              </span>
               <span className="h-2 w-2 rounded-full bg-status-success animate-pulse" />
             </div>
             <div>
-              <p className="text-xs font-bold text-foreground">{siteConfig.company.leadership.ceo.name}</p>
-              <p className="text-[10px] text-accent">Chief Executive Officer</p>
+              <p className="text-xs font-bold text-foreground">
+                {user?.name || (isSupport ? 'Support Specialist' : siteConfig.company.leadership.ceo.name)}
+              </p>
+              <div className="flex items-center space-x-1.5 mt-0.5">
+                <p className="text-[10px] text-accent">
+                  {user?.role === 'CEO'
+                    ? 'Chief Executive Officer'
+                    : user?.role === 'MD'
+                    ? 'Managing Director'
+                    : user?.role === 'ADMIN'
+                    ? 'Administrator'
+                    : 'Support Staff'}
+                </p>
+                {(user?.uid || user?.publicUid) && (
+                  <span className="text-[9px] font-mono text-accent/80 bg-accent/10 px-1 py-0.5 rounded" title={`UID: ${user.uid || user.publicUid}`}>
+                    {user.uid || user.publicUid}
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="pt-1 border-t border-border/50 text-[10px] text-muted">
-              MD: <span className="text-foreground font-medium">{siteConfig.company.leadership.md.name}</span>
-            </div>
+            {!isSupport && (
+              <div className="pt-1 border-t border-border/50 text-[10px] text-muted">
+                MD: <span className="text-foreground font-medium">{siteConfig.company.leadership.md.name}</span>
+              </div>
+            )}
           </div>
         </div>
       </aside>
@@ -119,11 +154,11 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
               <Terminal className="h-5 w-5 text-status-warning" />
             </button>
             <span className="rounded bg-status-warning/10 px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-bold text-status-warning border border-status-warning/30 uppercase tracking-widest truncate">
-              SUPERADMIN
+              {isSupport ? 'SUPPORT' : 'SUPERADMIN'}
             </span>
             <span className="hidden sm:inline text-xs text-muted">/</span>
             <span className="hidden sm:inline text-xs font-medium text-foreground truncate max-w-[140px] sm:max-w-none">
-              {siteConfig.adminNav.find((n) => n.href === pathname)?.label || 'Administration'}
+              {navItems.find((n) => n.href === pathname)?.label || (isSupport ? 'Support Operations' : 'Administration')}
             </span>
           </div>
 
@@ -147,7 +182,7 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
               Executive Modules
             </div>
             <div className="grid grid-cols-2 gap-1">
-              {siteConfig.adminNav.map((item) => {
+              {navItems.map((item) => {
                 const isActive = pathname === item.href;
                 return (
                   <Link

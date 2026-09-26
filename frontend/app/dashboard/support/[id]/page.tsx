@@ -65,6 +65,12 @@ interface BridgeData {
   createdAt: string;
   closedAt?: string;
   internalNotes?: string;
+  createdByUid?: string;
+  created_by_uid?: string;
+  createdByRole?: string;
+  created_by_role?: string;
+  createdByName?: string;
+  created_by_name?: string;
 }
 
 export default function SupportBridgePage() {
@@ -448,6 +454,44 @@ export default function SupportBridgePage() {
               </Button>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Support Ticket Identity Governance */}
+      <div className="rounded-lg border border-border bg-surface/50 p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="h-8 w-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center text-accent shrink-0">
+            <FileText className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">Ticket Identity</div>
+            <div className="font-mono text-xs font-bold text-accent">{bridge.ticketNumber}</div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+          <div>
+            <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">Created by</div>
+            <div className="flex items-center space-x-1.5 mt-0.5">
+              <span className="font-mono text-xs text-foreground bg-surface px-2 py-0.5 rounded border border-border">
+                UID: {bridge.createdByUid || bridge.created_by_uid || 'Platform User'}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">Role</div>
+            <Badge variant="outline" className="mt-0.5 text-[10px] font-mono border-accent/40 text-accent">
+              {bridge.createdByRole || bridge.created_by_role || (isClient ? 'CLIENT' : 'DEVELOPER')}
+            </Badge>
+          </div>
+
+          <div>
+            <div className="text-[10px] text-muted uppercase tracking-wider font-semibold">Mediated Identity</div>
+            <div className="text-xs text-foreground mt-0.5 font-medium">
+              {bridge.createdByName || bridge.created_by_name || (isClient ? 'Client #001' : 'Technical Developer')}
+            </div>
+          </div>
         </div>
       </div>
 

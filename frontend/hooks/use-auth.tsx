@@ -9,6 +9,7 @@ import { UserRole } from '@/types';
 export interface AuthSessionUser {
   id?: string;
   userId?: string;
+  uid?: string;
   publicUid?: string;
   email: string;
   role: UserRole;

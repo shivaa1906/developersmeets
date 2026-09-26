@@ -164,7 +164,14 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
               </div>
               <div className="truncate">
                 <p className="text-xs font-medium text-foreground truncate">{displayName}</p>
-                <p className="text-[10px] text-muted">{roleDisplay}</p>
+                <div className="flex items-center space-x-1.5">
+                  <p className="text-[10px] text-muted">{roleDisplay}</p>
+                  {(user?.uid || user?.publicUid) && (
+                    <span className="text-[9px] font-mono text-accent/80 bg-accent/10 px-1 py-0.5 rounded" title={`UID: ${user.uid || user.publicUid}`}>
+                      {user.uid || user.publicUid}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <button onClick={logout} title="Sign Out" className="text-muted hover:text-status-danger p-1">

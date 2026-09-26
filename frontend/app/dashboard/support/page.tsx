@@ -46,6 +46,10 @@ interface SupportTicket {
   updated_at: string;
   bridge_id?: string;
   bridge_number?: string;
+  created_by_uid?: string;
+  createdByUid?: string;
+  created_by_role?: string;
+  createdByRole?: string;
 }
 
 interface ProjectOption {
@@ -435,6 +439,17 @@ export default function DashboardSupportPage() {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
                       <span>Project: <strong className="text-foreground">{ticket.project_title}</strong></span>
                       <span>•</span>
+                      {(ticket.createdByUid || ticket.created_by_uid) && (
+                        <>
+                          <span>
+                            Creator:{' '}
+                            <span className="font-mono text-[11px] text-accent bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">
+                              UID: {ticket.createdByUid || ticket.created_by_uid}
+                            </span>
+                          </span>
+                          <span>•</span>
+                        </>
+                      )}
                       <span>Assigned: <strong className="text-foreground">{ticket.supportAgent || 'Support Agent'}</strong></span>
                       <span>•</span>
                       <span>Opened: {new Date(ticket.created_at).toLocaleDateString()}</span>

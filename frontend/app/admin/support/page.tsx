@@ -40,6 +40,12 @@ interface TicketRow {
   assigned_agent_email?: string;
   supportAgent?: string;
   created_at: string;
+  created_by_uid?: string;
+  createdByUid?: string;
+  created_by_role?: string;
+  createdByRole?: string;
+  created_by_name?: string;
+  createdByName?: string;
 }
 
 export default function AdminSupportPage() {
@@ -274,6 +280,7 @@ export default function AdminSupportPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Ticket</TableHead>
+                  <TableHead>Created By</TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Subject</TableHead>
                   <TableHead>Priority</TableHead>
@@ -289,6 +296,16 @@ export default function AdminSupportPage() {
                       <Link href={`/dashboard/support/${t.id}`} className="hover:text-accent underline">
                         {t.ticket_number}
                       </Link>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex flex-col space-y-0.5">
+                        <span className="font-mono text-[11px] text-accent font-semibold">
+                          UID: {t.createdByUid || t.created_by_uid || 'N/A'}
+                        </span>
+                        <span className="text-[10px] text-muted">
+                          {t.createdByRole || t.created_by_role || 'CLIENT'}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted truncate max-w-[140px]">{t.project_title}</TableCell>
                     <TableCell className="text-xs text-muted max-w-xs truncate">{t.subject}</TableCell>

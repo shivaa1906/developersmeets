@@ -149,12 +149,13 @@ export class CreditLedgerService {
     developerId: string,
     projectId: string,
     claimCost: number = env.CLAIM_COST_CREDITS,
-    dbClient?: PoolClient
+    dbClient?: PoolClient,
+    userId?: string
   ): Promise<CreditLedgerResult> {
     const handler = async (client: PoolClient) => {
       // 1. Lock credit account row FOR UPDATE
       const accountRes = await client.query(
-        `SELECT balance FROM credit_accounts WHERE developer_id = $1 FOR UPDATE`,
+        `SELECT balance, user_id FROM credit_accounts WHERE developer_id = $1 FOR UPDATE`,
         [developerId]
       );
 
@@ -163,6 +164,7 @@ export class CreditLedgerService {
       }
 
       const currentBalance = accountRes.rows[0].balance;
+      const effectiveUserId = userId || accountRes.rows[0].user_id || null;
 
       // 2. Strict balance validation (never allow negative balance)
       if (currentBalance < claimCost) {
@@ -178,17 +180,22 @@ export class CreditLedgerService {
       );
 
       // 4. Create immutable ledger record
+      const claimRef = `CLM-${projectId.slice(0, 8)}-${Date.now().toString().slice(-4)}`;
+      const claimReason = `Slot claim fee for project ${projectId}`;
       const txRes = await client.query(
-        `INSERT INTO credit_transactions (developer_id, project_id, type, amount, balance_after, reference_id, description)
-         VALUES ($1, $2, 'PROJECT_CLAIM', $3, $4, $5, $6)
+        `INSERT INTO credit_transactions (developer_id, user_id, project_id, type, amount, balance_before, balance_after, reference_id, description, reason, performed_by)
+         VALUES ($1, $2, $3, 'PROJECT_CLAIM', $4, $5, $6, $7, $8, $8, $9)
          RETURNING id`,
         [
           developerId,
+          effectiveUserId,
           projectId,
           -claimCost,
+          currentBalance,
           balanceAfter,
-          `CLM-${projectId.slice(0, 8)}-${Date.now().toString().slice(-4)}`,
-          `Slot claim fee for project ${projectId}`,
+          claimRef,
+          claimReason,
+          effectiveUserId,
         ]
       );
 
@@ -237,12 +244,13 @@ export class CreditLedgerService {
         if (existingTx.rows.length === 0) {
           // Lock account row
           const acc = await client.query(
-            `SELECT balance FROM credit_accounts WHERE developer_id = $1 FOR UPDATE`,
+            `SELECT balance, user_id FROM credit_accounts WHERE developer_id = $1 FOR UPDATE`,
             [devId]
           );
 
           if (acc.rows.length > 0) {
             const currentBal = acc.rows[0].balance;
+            const devUserId = acc.rows[0].user_id || null;
             const balanceAfter = currentBal + refundAmt;
 
             // Update balance
@@ -253,16 +261,19 @@ export class CreditLedgerService {
 
             // Create refund ledger transaction
             const refundTx = await client.query(
-              `INSERT INTO credit_transactions (developer_id, project_id, type, amount, balance_after, reference_id, description)
-               VALUES ($1, $2, 'PROJECT_NOT_SELECTED_REFUND', $3, $4, $5, $6)
+              `INSERT INTO credit_transactions (developer_id, user_id, project_id, type, amount, balance_before, balance_after, reference_id, description, reason, performed_by)
+               VALUES ($1, $2, $3, 'PROJECT_NOT_SELECTED_REFUND', $4, $5, $6, $7, $8, $8, $9)
                RETURNING id`,
               [
                 devId,
+                devUserId,
                 projectId,
                 refundAmt,
+                currentBal,
                 balanceAfter,
                 refundReference,
                 `100% automated credit refund for project ${projectId}`,
+                devUserId,
               ]
             );
 
@@ -277,14 +288,14 @@ export class CreditLedgerService {
             // Fetch developer and project details for notifications
             const devInfo = await client.query(`SELECT user_id FROM developers WHERE id = $1`, [devId]);
             const projInfo = await client.query(`SELECT title, project_number FROM projects WHERE id = $1`, [projectId]);
-            const devUserId = devInfo.rows[0]?.user_id;
+            const targetUserId = devUserId || devInfo.rows[0]?.user_id;
             const projectTitle = projInfo.rows[0]?.title || 'Project';
             const projectCode = projInfo.rows[0]?.project_number || projectId;
 
-            if (devUserId) {
+            if (targetUserId) {
               // 1. DEVELOPER_NOT_SELECTED Notification
               await NotificationService.createNotification({
-                userId: devUserId,
+                userId: targetUserId,
                 type: 'DEVELOPER_NOT_SELECTED',
                 title: 'Project Selection Update',
                 message: `A candidate has been selected for project "${projectTitle}". Thank you for your proposal.`,
@@ -2259,7 +2270,7 @@ export class CreditLedgerService {
 
       // 2. Lock credit account
       const accRes = await client.query(
-        `SELECT balance FROM credit_accounts WHERE developer_id = $1 FOR UPDATE`,
+        `SELECT balance, user_id FROM credit_accounts WHERE developer_id = $1 FOR UPDATE`,
         [developerId]
       );
 
@@ -2268,6 +2279,7 @@ export class CreditLedgerService {
       }
 
       const current = accRes.rows[0].balance;
+      const effectiveUserId = userId || accRes.rows[0].user_id || null;
       const balanceAfter = current + credits;
 
       // 3. Update balance
@@ -2277,16 +2289,20 @@ export class CreditLedgerService {
       );
 
       // 4. Insert credit transaction
+      const purchaseDesc = `Credit purchase of ${credits} credits for ₹${amount}`;
       const txRes = await client.query(
-        `INSERT INTO credit_transactions (developer_id, type, amount, balance_after, reference_id, description)
-         VALUES ($1, 'PURCHASE', $2, $3, $4, $5)
+        `INSERT INTO credit_transactions (developer_id, user_id, type, amount, balance_before, balance_after, reference_id, description, reason, performed_by)
+         VALUES ($1, $2, 'PURCHASE', $3, $4, $5, $6, $7, $7, $8)
          RETURNING id`,
         [
           developerId,
+          effectiveUserId,
           credits,
+          current,
           balanceAfter,
           paymentRef,
-          `Credit purchase of ${credits} credits for ₹${amount}`,
+          purchaseDesc,
+          effectiveUserId,
         ]
       );
 

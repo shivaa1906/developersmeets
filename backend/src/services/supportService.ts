@@ -259,10 +259,27 @@ export class SupportService {
         metadata: { ticketNumber, projectId: projectId || null, bridgeId, bridgeNumber },
       });
 
+      const creatorRes = await client.query(
+        `SELECT u.uid, u.public_uid, u.role,
+                COALESCE(d.display_name, c.company_name, c.private_name, split_part(u.email, '@', 1), 'User') as name
+         FROM users u
+         LEFT JOIN developers d ON d.user_id = u.id
+         LEFT JOIN clients c ON c.user_id = u.id
+         WHERE u.id = $1`,
+        [userId]
+      );
+      const creator = creatorRes.rows[0] || {};
+
       return {
         ...ticket,
         created_by_user_id: ticket.created_by_user_id,
         createdByUserId: ticket.created_by_user_id,
+        created_by_uid: creator.uid || creator.public_uid,
+        createdByUid: creator.uid || creator.public_uid,
+        created_by_role: creator.role,
+        createdByRole: creator.role,
+        created_by_name: creator.name,
+        createdByName: creator.name,
         assigned_support_user_id: ticket.assigned_to_user_id,
         assignedSupportUserId: ticket.assigned_to_user_id,
         bridgeId,
@@ -419,12 +436,19 @@ export class SupportService {
              u_assigned.public_uid as assigned_agent_public_uid,
              u_assigned.email as assigned_agent_email,
              ss.title as assigned_agent_title,
-             ss.department as assigned_agent_department
+             ss.department as assigned_agent_department,
+             u_creator.uid as created_by_uid,
+             COALESCE(u_creator.public_uid, u_creator.uid) as created_by_public_uid,
+             u_creator.role as created_by_role,
+             COALESCE(d_creator.display_name, c_creator.company_name, c_creator.private_name, split_part(u_creator.email, '@', 1), 'User') as created_by_name
       FROM support_tickets st
       LEFT JOIN projects p ON st.project_id = p.id
       LEFT JOIN support_bridges sb ON sb.ticket_id = st.id
       LEFT JOIN users u_assigned ON st.assigned_to_user_id = u_assigned.id
       LEFT JOIN support_staff ss ON ss.user_id = st.assigned_to_user_id
+      LEFT JOIN users u_creator ON st.created_by_user_id = u_creator.id
+      LEFT JOIN developers d_creator ON d_creator.user_id = u_creator.id
+      LEFT JOIN clients c_creator ON c_creator.user_id = u_creator.id
     `;
     const conditions: string[] = [];
     const params: any[] = [];
@@ -575,6 +599,12 @@ export class SupportService {
       ...row,
       created_by_user_id: row.created_by_user_id,
       createdByUserId: row.created_by_user_id,
+      created_by_uid: row.created_by_uid || row.created_by_public_uid,
+      createdByUid: row.created_by_uid || row.created_by_public_uid,
+      created_by_role: row.created_by_role,
+      createdByRole: row.created_by_role,
+      created_by_name: row.created_by_name,
+      createdByName: row.created_by_name,
       assigned_support_user_id: row.assigned_to_user_id,
       assignedSupportUserId: row.assigned_to_user_id,
       clientIdentity: 'Client #001',
@@ -598,11 +628,18 @@ export class SupportService {
               sb.id as bridge_id, sb.bridge_number, sb.conversation_id,
               u_assigned.uid as assigned_agent_uid,
               u_assigned.public_uid as assigned_agent_public_uid,
-              u_assigned.email as assigned_agent_email
+              u_assigned.email as assigned_agent_email,
+              u_creator.uid as created_by_uid,
+              COALESCE(u_creator.public_uid, u_creator.uid) as created_by_public_uid,
+              u_creator.role as created_by_role,
+              COALESCE(d_creator.display_name, c_creator.company_name, c_creator.private_name, split_part(u_creator.email, '@', 1), 'User') as created_by_name
        FROM support_tickets st
        LEFT JOIN projects p ON st.project_id = p.id
        LEFT JOIN support_bridges sb ON sb.ticket_id = st.id
        LEFT JOIN users u_assigned ON st.assigned_to_user_id = u_assigned.id
+       LEFT JOIN users u_creator ON st.created_by_user_id = u_creator.id
+       LEFT JOIN developers d_creator ON d_creator.user_id = u_creator.id
+       LEFT JOIN clients c_creator ON c_creator.user_id = u_creator.id
        WHERE st.id::text = $1 OR st.ticket_number = $1`,
       [ticketId]
     );
@@ -703,6 +740,12 @@ export class SupportService {
       ...ticket,
       created_by_user_id: ticket.created_by_user_id,
       createdByUserId: ticket.created_by_user_id,
+      created_by_uid: ticket.created_by_uid || ticket.created_by_public_uid,
+      createdByUid: ticket.created_by_uid || ticket.created_by_public_uid,
+      created_by_role: ticket.created_by_role,
+      createdByRole: ticket.created_by_role,
+      created_by_name: ticket.created_by_name,
+      createdByName: ticket.created_by_name,
       assigned_support_user_id: ticket.assigned_to_user_id,
       assignedSupportUserId: ticket.assigned_to_user_id,
       internal_notes: internalNotes,
@@ -738,7 +781,7 @@ export class SupportService {
     const bridge = bridgeRes.rows[0];
 
     // Authorization check via canonical getTicketById
-    await this.getTicketById(bridge.ticket_id, user);
+    const ticketDetail = await this.getTicketById(bridge.ticket_id, user);
 
     // Fetch members with privacy sanitization
     const membersRes = await query(
@@ -779,6 +822,12 @@ export class SupportService {
         closedAt: bridge.closed_at,
         created_by_user_id: bridge.created_by_user_id,
         createdByUserId: bridge.created_by_user_id,
+        created_by_uid: ticketDetail.created_by_uid,
+        createdByUid: ticketDetail.created_by_uid,
+        created_by_role: ticketDetail.created_by_role,
+        createdByRole: ticketDetail.created_by_role,
+        created_by_name: ticketDetail.created_by_name,
+        createdByName: ticketDetail.created_by_name,
         assigned_support_user_id: bridge.assigned_to_user_id,
         assignedSupportUserId: bridge.assigned_to_user_id,
         internalNotes: ['CEO', 'MD', 'ADMIN', 'SUPPORT'].includes(user.role) ? bridge.internal_notes : undefined,
