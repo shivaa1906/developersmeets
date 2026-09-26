@@ -23,6 +23,24 @@ export function MeshBackground() {
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
 
+    // Respect reduced motion accessibility preferences
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      const gradient = ctx.createRadialGradient(
+        width / 2,
+        height / 3,
+        10,
+        width / 2,
+        height / 3,
+        450
+      );
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.06)');
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      return;
+    }
+
     const handleResize = () => {
       if (!canvas) return;
       width = canvas.width = window.innerWidth;

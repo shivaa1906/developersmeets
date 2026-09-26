@@ -35,5 +35,6 @@ yarn-error.log*
 *.pem
 .idea/
 .vscode/
-*.swp
-*.swo
+# Backups & dumps
+backups/
+*.sql.gz

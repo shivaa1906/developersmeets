@@ -10,6 +10,11 @@ export function MouseGlow() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // Check reduced motion preference
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
     const handleMouseMove = (e: MouseEvent) => {
       setPosition({ x: e.clientX, y: e.clientY });
       if (!visible) setVisible(true);
