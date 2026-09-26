@@ -1,5 +1,6 @@
-import { withTransaction } from '../database/db.js';
+import { withTransaction, query } from '../database/db.js';
 import { env } from '../config/environment.js';
+import crypto from 'crypto';
 import type { PoolClient } from 'pg';
 
 export interface CreditLedgerResult {
@@ -164,7 +165,15 @@ export class CreditLedgerService {
     amount: number,
     reason: string,
     adminId: string
-  ): Promise<CreditLedgerResult> {
+  ): Promise<
+    CreditLedgerResult & {
+      referenceId?: string;
+      amount?: number;
+      adminId?: string;
+      reason?: string;
+      timestamp?: string;
+    }
+  > {
     if (!reason || reason.trim().length < 5) {
       throw new Error('Mandatory justification reason required for admin credit adjustments.');
     }
@@ -191,15 +200,18 @@ export class CreditLedgerService {
         [balanceAfter, developerId]
       );
 
+      const referenceId = `ADJ-${Date.now().toString().slice(-6)}`;
+      const timestamp = new Date().toISOString();
+
       const tx = await client.query(
         `INSERT INTO credit_transactions (developer_id, type, amount, balance_after, reference_id, description)
          VALUES ($1, 'ADMIN_ADJUSTMENT', $2, $3, $4, $5)
-         RETURNING id`,
+         RETURNING id, created_at`,
         [
           developerId,
           amount,
           balanceAfter,
-          `ADJ-${Date.now().toString().slice(-6)}`,
+          referenceId,
           `Admin Adjustment by ${adminId}: ${reason}`,
         ]
       );
@@ -208,14 +220,228 @@ export class CreditLedgerService {
       await client.query(
         `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
          VALUES ($1, 'CREDIT_ADMIN_ADJUSTMENT', 'CREDIT_ACCOUNT', $2, $3)`,
-        [adminId, developerId, JSON.stringify({ amount, balanceAfter, reason })]
+        [adminId, developerId, JSON.stringify({ amount, balanceAfter, reason, referenceId })]
       );
 
       return {
         success: true,
         newBalance: balanceAfter,
         transactionId: tx.rows[0].id,
+        referenceId,
+        amount,
+        adminId,
+        reason,
+        timestamp: tx.rows[0].created_at || timestamp,
       };
+    });
+  }
+
+  /**
+   * Creates a pending payment order before invoking payment gateway
+   */
+  static async createPaymentOrder(
+    developerId: string,
+    userId: string,
+    credits: number,
+    amount: number,
+    gateway = 'STRIPE_TEST'
+  ): Promise<{
+    paymentId: string;
+    gatewayPaymentId: string;
+    amount: number;
+    currency: string;
+    credits: number;
+    status: string;
+  }> {
+    if (credits <= 0 || amount <= 0) {
+      throw new Error('Credits and amount must be greater than zero');
+    }
+
+    const gatewayPaymentId = `pay_${crypto.randomBytes(8).toString('hex')}`;
+
+    const res = await query(
+      `INSERT INTO payments (user_id, amount, currency, gateway, gateway_payment_id, status, metadata)
+       VALUES ($1, $2, 'INR', $3, $4, 'PENDING', $5)
+       RETURNING id, gateway_payment_id, amount, currency, status`,
+      [
+        userId,
+        amount,
+        gateway,
+        gatewayPaymentId,
+        JSON.stringify({ developerId, credits, userId }),
+      ]
+    );
+
+    const row = res.rows[0];
+    return {
+      paymentId: row.id,
+      gatewayPaymentId: row.gateway_payment_id,
+      amount: Number(row.amount),
+      currency: row.currency,
+      credits,
+      status: row.status,
+    };
+  }
+
+  /**
+   * Processes gateway webhooks with HMAC-SHA256 signature verification and idempotency
+   */
+  static async processWebhook(
+    rawPayload: string | Buffer,
+    signature: string,
+    secret: string = env.PAYMENT_WEBHOOK_SECRET
+  ): Promise<{
+    success: boolean;
+    status: string;
+    duplicate: boolean;
+    creditsAdded: number;
+    newBalance?: number;
+    paymentId?: string;
+    transactionId?: string;
+    message?: string;
+  }> {
+    const payloadString = typeof rawPayload === 'string' ? rawPayload : rawPayload.toString('utf8');
+
+    // 1. Verify HMAC-SHA256 signature
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(payloadString)
+      .digest('hex');
+
+    const sigBuffer = Buffer.from(signature, 'utf8');
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+
+    if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+      throw new Error('Invalid webhook signature verification failed');
+    }
+
+    const event = JSON.parse(payloadString);
+    const eventType = event.event || event.type;
+    const eventData = event.data || event;
+    const gatewayPaymentId = eventData.gatewayPaymentId || eventData.gateway_payment_id || eventData.id;
+
+    if (!gatewayPaymentId) {
+      throw new Error('Missing gateway payment identifier in webhook event');
+    }
+
+    return withTransaction(async (client) => {
+      // 2. Fetch payment record with row lock FOR UPDATE
+      const paymentRes = await client.query(
+        `SELECT id, user_id, amount, currency, gateway, gateway_payment_id, status, metadata
+         FROM payments
+         WHERE gateway_payment_id = $1
+         FOR UPDATE`,
+        [gatewayPaymentId]
+      );
+
+      if (paymentRes.rows.length === 0) {
+        throw new Error(`Payment record not found for gatewayPaymentId: ${gatewayPaymentId}`);
+      }
+
+      const payment = paymentRes.rows[0];
+      const metadata = typeof payment.metadata === 'string' ? JSON.parse(payment.metadata) : (payment.metadata || {});
+      const credits = Number(metadata.credits || eventData.credits || 0);
+      const developerId = metadata.developerId || eventData.developerId;
+
+      // 3. Handle Idempotency / Duplicate Webhook
+      if (payment.status === 'SUCCESS') {
+        const acc = await client.query(
+          `SELECT balance FROM credit_accounts WHERE developer_id = $1`,
+          [developerId]
+        );
+        const currentBalance = acc.rows.length > 0 ? acc.rows[0].balance : 0;
+        return {
+          success: true,
+          status: 'SUCCESS',
+          duplicate: true,
+          creditsAdded: 0,
+          newBalance: currentBalance,
+          paymentId: payment.id,
+          message: 'Duplicate webhook: Payment already processed',
+        };
+      }
+
+      // 4. Handle failed payment event
+      if (eventType === 'payment.failed' || eventType === 'payment_intent.payment_failed') {
+        await client.query(
+          `UPDATE payments SET status = 'FAILED' WHERE id = $1`,
+          [payment.id]
+        );
+        return {
+          success: false,
+          status: 'FAILED',
+          duplicate: false,
+          creditsAdded: 0,
+          paymentId: payment.id,
+          message: 'Payment marked as failed. No credits added.',
+        };
+      }
+
+      // 5. Handle successful payment event
+      if (
+        eventType === 'payment.succeeded' ||
+        eventType === 'payment.success' ||
+        eventType === 'payment_intent.succeeded'
+      ) {
+        if (!developerId) {
+          throw new Error('Developer ID missing from payment metadata');
+        }
+        if (credits <= 0) {
+          throw new Error('Credits count must be greater than zero');
+        }
+
+        // Lock developer credit account row FOR UPDATE
+        const accRes = await client.query(
+          `SELECT balance FROM credit_accounts WHERE developer_id = $1 FOR UPDATE`,
+          [developerId]
+        );
+
+        if (accRes.rows.length === 0) {
+          throw new Error(`Credit account not found for developer: ${developerId}`);
+        }
+
+        const currentBalance = accRes.rows[0].balance;
+        const balanceAfter = currentBalance + credits;
+
+        // Update credit account
+        await client.query(
+          `UPDATE credit_accounts SET balance = $1, updated_at = NOW() WHERE developer_id = $2`,
+          [balanceAfter, developerId]
+        );
+
+        // Update payment status to SUCCESS
+        await client.query(
+          `UPDATE payments SET status = 'SUCCESS' WHERE id = $1`,
+          [payment.id]
+        );
+
+        // Insert immutable ledger transaction
+        const txRes = await client.query(
+          `INSERT INTO credit_transactions (developer_id, type, amount, balance_after, reference_id, description)
+           VALUES ($1, 'PURCHASE', $2, $3, $4, $5)
+           RETURNING id`,
+          [
+            developerId,
+            credits,
+            balanceAfter,
+            gatewayPaymentId,
+            `Credit purchase of ${credits} credits via ${payment.gateway || 'GATEWAY'}`,
+          ]
+        );
+
+        return {
+          success: true,
+          status: 'SUCCESS',
+          duplicate: false,
+          creditsAdded: credits,
+          newBalance: balanceAfter,
+          paymentId: payment.id,
+          transactionId: txRes.rows[0].id,
+          message: `Successfully credited ${credits} credits.`,
+        };
+      }
+
+      throw new Error(`Unhandled webhook event type: ${eventType}`);
     });
   }
 

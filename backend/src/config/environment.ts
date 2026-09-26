@@ -20,4 +20,7 @@ export const env = {
   CREDIT_PRICE_INR: parseInt(process.env.CREDIT_PRICE_INR || '50', 10),
   CLAIM_COST_CREDITS: parseInt(process.env.CLAIM_COST_CREDITS || '1', 10),
   DEFAULT_REFUND_PERCENTAGE: parseInt(process.env.DEFAULT_REFUND_PERCENTAGE || '100', 10),
+  PAYMENT_KEY_ID: process.env.PAYMENT_KEY_ID || 'test_pk_nexus_mock',
+  PAYMENT_SECRET: process.env.PAYMENT_SECRET || 'test_sk_nexus_mock',
+  PAYMENT_WEBHOOK_SECRET: process.env.PAYMENT_WEBHOOK_SECRET || 'test_wh_nexus_mock',
 };

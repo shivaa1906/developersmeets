@@ -21,7 +21,13 @@ const app = express();
 // Security & utility middlewares
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf.toString('utf8');
+    },
+  })
+);
 
 // System Health & Platform Status
 app.get('/api/health', (req, res) => {

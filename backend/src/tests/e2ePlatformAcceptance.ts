@@ -9,6 +9,7 @@ import { ProjectService } from '../services/projectService.js';
 import { ChatService } from '../services/chatService.js';
 import { WorkspaceService } from '../services/workspaceService.js';
 import { SupportService } from '../services/supportService.js';
+import { DeveloperService } from '../services/developerService.js';
 import { scrubPrivateContactInfo } from '../utils/privacyScrubber.js';
 import bcrypt from 'bcryptjs';
 
@@ -85,6 +86,10 @@ async function runAcceptanceTest() {
          VALUES ($1, 'ADMIN_ADJUSTMENT', 10, 10, $2, 'Verified developer welcome bonus')`,
         [devId, `INIT-GRANT-${devId.slice(0, 8)}`]
       );
+    });
+
+    await DeveloperService.updateProfile(devId, {
+      skills: ['MQTT Gateway', 'Time-series Storage', 'Live Geo-tracking', 'Next.js', 'Go', 'PostgreSQL', 'TimescaleDB', 'Docker'],
     });
 
     const approvedBalRes = await query(`SELECT balance FROM credit_accounts WHERE developer_id = $1`, [devId]);
@@ -232,6 +237,9 @@ async function runAcceptanceTest() {
     );
     const dev2Id = dev2ProfileRes.rows[0].id;
     await query(`INSERT INTO credit_accounts (developer_id, balance) VALUES ($1, 10)`, [dev2Id]);
+    await DeveloperService.updateProfile(dev2Id, {
+      skills: ['MQTT Gateway', 'Time-series Storage', 'Live Geo-tracking', 'Next.js', 'Go', 'PostgreSQL', 'TimescaleDB', 'Docker'],
+    });
 
     // Dev 2 claims slot (-1 credit)
     const claim2 = await ProjectService.claimProject(submissionResult.projectId, dev2Id, dev2UserRes.rows[0].id);

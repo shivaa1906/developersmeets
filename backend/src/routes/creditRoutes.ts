@@ -13,6 +13,11 @@ router.get('/packages', CreditController.getPackages);
 router.get('/balance', authenticateJwt, CreditController.getBalance);
 router.get('/ledger', authenticateJwt, CreditController.getLedger);
 router.post('/purchase', authenticateJwt, CreditController.purchase);
+router.post('/payment/create', authenticateJwt, CreditController.createOrder);
+router.post('/payment/verify-client', authenticateJwt, CreditController.verifyClientPayment);
+
+// Webhook endpoint (cryptographic verification)
+router.post('/webhook', CreditController.handleWebhook);
 
 // Executive / Admin adjustment
 router.post(

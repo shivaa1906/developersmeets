@@ -103,4 +103,62 @@ export class CreditController {
       res.status(400).json({ error: error.message });
     }
   }
+
+  static async createOrder(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const devId = req.user?.developerId;
+    if (!devId) {
+      res.status(403).json({ error: 'Developer profile required' });
+      return;
+    }
+
+    const { credits, amount, gateway } = req.body;
+    if (!credits || !amount) {
+      res.status(400).json({ error: 'credits and amount are required' });
+      return;
+    }
+
+    try {
+      const order = await CreditLedgerService.createPaymentOrder(
+        devId,
+        req.user!.userId,
+        parseInt(credits, 10),
+        parseFloat(amount),
+        gateway || 'STRIPE_TEST'
+      );
+      res.json(order);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async handleWebhook(req: Request, res: Response): Promise<void> {
+    const signature = (req.headers['x-nexus-signature'] ||
+      req.headers['x-webhook-signature'] ||
+      req.headers['x-signature']) as string;
+
+    if (!signature) {
+      res.status(400).json({ error: 'Missing webhook signature header' });
+      return;
+    }
+
+    const rawPayload = (req as any).rawBody || JSON.stringify(req.body);
+    try {
+      const result = await CreditLedgerService.processWebhook(rawPayload, signature);
+      res.json(result);
+    } catch (error: any) {
+      if (error.message?.includes('signature')) {
+        res.status(401).json({ error: error.message });
+        return;
+      }
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  static async verifyClientPayment(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    res.status(403).json({
+      error: 'Client-side payment modification rejected: Direct balance modification is strictly prohibited. Cryptographic gateway webhook required.',
+      securityCode: 'SEC_UNAUTHORIZED_PAYMENT_MUTATION',
+    });
+  }
 }
+
