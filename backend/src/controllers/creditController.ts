@@ -347,11 +347,13 @@ export class CreditController {
   }
 
   static async getCreditHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { userId, type, performedBy, startDate, endDate, search, limit, offset } = req.query;
+    const { userId, uid, role, type, performedBy, startDate, endDate, search, limit, offset } = req.query;
 
     try {
       const result = await CreditLedgerService.getCreditHistory({
         userId: typeof userId === 'string' ? userId : undefined,
+        uid: typeof uid === 'string' ? uid : undefined,
+        role: typeof role === 'string' ? role : undefined,
         type: typeof type === 'string' ? type : undefined,
         performedBy: typeof performedBy === 'string' ? performedBy : undefined,
         startDate: typeof startDate === 'string' ? startDate : undefined,
@@ -366,17 +368,69 @@ export class CreditController {
     }
   }
 
+  static async getCreditStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const stats = await CreditLedgerService.getCreditStats();
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   static async listAccounts(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { search, role, limit, offset } = req.query;
+    const { search, role, balanceFilter, minBalance, maxBalance, uid, limit, offset } = req.query;
 
     try {
       const result = await CreditLedgerService.listCreditAccounts({
         search: typeof search === 'string' ? search : undefined,
         role: typeof role === 'string' ? role : undefined,
+        balanceFilter: typeof balanceFilter === 'string' ? (balanceFilter as any) : undefined,
+        minBalance: minBalance !== undefined ? Number(minBalance) : undefined,
+        maxBalance: maxBalance !== undefined ? Number(maxBalance) : undefined,
+        uid: typeof uid === 'string' ? uid : undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
         offset: offset ? parseInt(offset as string, 10) : undefined,
       });
       res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async getUserCreditDetail(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const target = req.params.target || req.params.userId;
+    if (!target) {
+      res.status(400).json({ error: 'target user ID or UID is required' });
+      return;
+    }
+
+    try {
+      const detail = await CreditLedgerService.getUserCreditDetail(target);
+      res.json(detail);
+    } catch (error: any) {
+      res.status(404).json({ error: error.message });
+    }
+  }
+
+  static async exportCreditTransactions(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { userId, uid, role, type, performedBy, startDate, endDate, search } = req.query;
+
+    try {
+      const result = await CreditLedgerService.exportCreditTransactions({
+        userId: typeof userId === 'string' ? userId : undefined,
+        uid: typeof uid === 'string' ? uid : undefined,
+        role: typeof role === 'string' ? role : undefined,
+        type: typeof type === 'string' ? type : undefined,
+        performedBy: typeof performedBy === 'string' ? performedBy : undefined,
+        startDate: typeof startDate === 'string' ? startDate : undefined,
+        endDate: typeof endDate === 'string' ? endDate : undefined,
+        search: typeof search === 'string' ? search : undefined,
+        adminUserId: req.user!.userId,
+      });
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      res.status(200).send(result.csvContent);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

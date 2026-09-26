@@ -31,5 +31,8 @@ router.get('/admin/bulk-operations/:operationId', authenticateJwt, requireCredit
 router.get('/admin/history', authenticateJwt, requireCreditManagement, CreditController.getCreditHistory);
 router.get('/admin/accounts', authenticateJwt, requireCreditManagement, CreditController.listAccounts);
 router.get('/admin/search-users', authenticateJwt, requireCreditManagement, CreditController.searchUsers);
+router.get('/admin/stats', authenticateJwt, requireCreditManagement, CreditController.getCreditStats);
+router.get('/admin/export', authenticateJwt, requireCreditManagement, CreditController.exportCreditTransactions);
+router.get('/admin/users/:target', authenticateJwt, requireCreditManagement, CreditController.getUserCreditDetail);
 
 export default router;

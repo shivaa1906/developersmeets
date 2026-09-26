@@ -86,5 +86,8 @@ router.get('/credits/bulk-operations/:operationId', requireCreditManagement, Cre
 router.get('/credits/history', requireCreditManagement, CreditController.getCreditHistory);
 router.get('/credits/accounts', requireCreditManagement, CreditController.listAccounts);
 router.get('/credits/search-users', requireCreditManagement, CreditController.searchUsers);
+router.get('/credits/stats', requireCreditManagement, CreditController.getCreditStats);
+router.get('/credits/export', requireCreditManagement, CreditController.exportCreditTransactions);
+router.get('/credits/users/:target', requireCreditManagement, CreditController.getUserCreditDetail);
 
 export default router;

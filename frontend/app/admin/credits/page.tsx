@@ -25,7 +25,68 @@ import {
   CheckSquare,
   Clock,
   Layers,
+  Download,
+  Eye,
+  Copy,
+  Check,
+  FileText,
+  Filter,
+  Calendar,
+  X,
 } from 'lucide-react';
+
+interface CreditStats {
+  totalCreditsHeld: number;
+  creditsPurchased: number;
+  creditsGranted: number;
+  creditsRemoved: number;
+  creditsConsumed: number;
+  creditsRefunded: number;
+  totalAccounts: number;
+  generatedAt: string;
+}
+
+interface UserCreditDetail {
+  user: {
+    id: string;
+    uid: string;
+    public_uid?: string;
+    name: string;
+    email: string;
+    role: string;
+    status: string;
+    developer_id?: string;
+    developer_username?: string;
+  };
+  account: {
+    balance: number;
+    currency: string;
+    updated_at: string | null;
+    created_at: string | null;
+  };
+  summary: {
+    purchased: number;
+    granted: number;
+    removed: number;
+    consumed: number;
+    refunded: number;
+    last_transaction: string | null;
+  };
+  transactions: Array<{
+    id: string;
+    type: string;
+    amount: number;
+    balance_before: number;
+    balance_after: number;
+    reference_id?: string;
+    reason?: string;
+    description: string;
+    created_at: string;
+    performed_by_uid?: string;
+    performed_by_email?: string;
+    performed_by_role?: string;
+  }>;
+}
 
 interface LedgerRow {
   id: string;
@@ -63,9 +124,16 @@ interface AccountRow {
   developer_username?: string;
   developer_name?: string;
   company_name?: string;
+  name?: string;
   balance: number;
   currency: string;
   transaction_count: number;
+  purchased: number;
+  granted: number;
+  removed: number;
+  consumed: number;
+  refunded: number;
+  last_transaction: string | null;
   updated_at: string;
 }
 
@@ -215,29 +283,80 @@ export default function AdminCreditsPage() {
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
 
+  // Phase 10: Live Dashboard Stats State
+  const [stats, setStats] = React.useState<CreditStats | null>(null);
+  const [isStatsLoading, setIsStatsLoading] = React.useState(true);
+
+  // Phase 10: Global Filters State
+  const [globalFilterRole, setGlobalFilterRole] = React.useState<string>('ALL');
+  const [globalFilterBalance, setGlobalFilterBalance] = React.useState<'ALL' | 'POSITIVE' | 'ZERO'>('ALL');
+  const [globalFilterTxType, setGlobalFilterTxType] = React.useState<string>('ALL');
+  const [globalFilterStartDate, setGlobalFilterStartDate] = React.useState<string>('');
+  const [globalFilterEndDate, setGlobalFilterEndDate] = React.useState<string>('');
+  const [globalFilterUser, setGlobalFilterUser] = React.useState<string>('');
+  const [globalFilterUid, setGlobalFilterUid] = React.useState<string>('');
+
+  // Phase 10: User Detail Drawer / Modal State
+  const [selectedUserDetail, setSelectedUserDetail] = React.useState<UserCreditDetail | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
+  const [isDetailLoading, setIsDetailLoading] = React.useState(false);
+  const [copiedUid, setCopiedUid] = React.useState(false);
+
+  // Phase 10: Export CSV Modal State
+  const [isExportModalOpen, setIsExportModalOpen] = React.useState(false);
+  const [isExporting, setIsExporting] = React.useState(false);
+
+  const fetchStats = React.useCallback(async () => {
+    setIsStatsLoading(true);
+    try {
+      const res = await apiClient.get<CreditStats>('/admin/credits/stats');
+      setStats(res);
+    } catch (_err) {
+      setStats(null);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, []);
+
   const fetchLedger = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get<{ ledger: LedgerRow[] }>('/admin/ledger');
+      const params = new URLSearchParams();
+      if (globalFilterRole !== 'ALL') params.append('role', globalFilterRole);
+      if (globalFilterTxType !== 'ALL') params.append('type', globalFilterTxType);
+      if (globalFilterStartDate) params.append('startDate', globalFilterStartDate);
+      if (globalFilterEndDate) params.append('endDate', globalFilterEndDate);
+      if (globalFilterUser.trim()) params.append('search', globalFilterUser.trim());
+      if (globalFilterUid.trim()) params.append('uid', globalFilterUid.trim());
+      params.append('limit', '100');
+
+      const res = await apiClient.get<{ ledger: LedgerRow[] }>(`/admin/ledger?${params.toString()}`);
       setTransactions(res.ledger || []);
     } catch (_err) {
       setTransactions([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [globalFilterRole, globalFilterTxType, globalFilterStartDate, globalFilterEndDate, globalFilterUser, globalFilterUid]);
 
   const fetchAccounts = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get<{ accounts: AccountRow[] }>('/admin/credits/accounts');
+      const params = new URLSearchParams();
+      if (globalFilterRole !== 'ALL') params.append('role', globalFilterRole);
+      if (globalFilterBalance !== 'ALL') params.append('balanceFilter', globalFilterBalance);
+      if (globalFilterUser.trim()) params.append('search', globalFilterUser.trim());
+      if (globalFilterUid.trim()) params.append('uid', globalFilterUid.trim());
+      params.append('limit', '100');
+
+      const res = await apiClient.get<{ accounts: AccountRow[] }>(`/admin/credits/accounts?${params.toString()}`);
       setAccounts(res.accounts || []);
     } catch (_err) {
       setAccounts([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [globalFilterRole, globalFilterBalance, globalFilterUser, globalFilterUid]);
 
   const fetchBulkOperations = React.useCallback(async () => {
     setLoading(true);
@@ -250,6 +369,125 @@ export default function AdminCreditsPage() {
       setLoading(false);
     }
   }, []);
+
+  const resetFilters = () => {
+    setGlobalFilterRole('ALL');
+    setGlobalFilterBalance('ALL');
+    setGlobalFilterTxType('ALL');
+    setGlobalFilterStartDate('');
+    setGlobalFilterEndDate('');
+    setGlobalFilterUser('');
+    setGlobalFilterUid('');
+    setSearchQuery('');
+  };
+
+  const hasActiveFilters =
+    globalFilterRole !== 'ALL' ||
+    globalFilterBalance !== 'ALL' ||
+    globalFilterTxType !== 'ALL' ||
+    Boolean(globalFilterStartDate) ||
+    Boolean(globalFilterEndDate) ||
+    Boolean(globalFilterUser.trim()) ||
+    Boolean(globalFilterUid.trim()) ||
+    Boolean(searchQuery.trim());
+
+  const copyUidToClipboard = (uidText: string) => {
+    if (!uidText) return;
+    navigator.clipboard.writeText(uidText);
+    setCopiedUid(true);
+    setTimeout(() => setCopiedUid(false), 2000);
+    addToast('success', 'Copied to Clipboard', `UID ${uidText} copied to clipboard.`);
+  };
+
+  const formatTransactionType = (type: string): string => {
+    switch (type) {
+      case 'PURCHASE':
+        return 'Purchase';
+      case 'PROJECT_CLAIM':
+        return 'Project Claim';
+      case 'PROJECT_CLAIM_REFUND':
+      case 'PROJECT_NOT_SELECTED_REFUND':
+      case 'PROJECT_CANCEL_REFUND':
+      case 'WITHDRAWAL_REFUND':
+      case 'EXPIRATION_REFUND':
+      case 'REFUND':
+      case 'PAYMENT_REFUND':
+        return 'Claim Refund';
+      case 'ADMIN_CREDIT_GRANT':
+        return 'Admin Grant';
+      case 'ADMIN_CREDIT_REMOVAL':
+        return 'Admin Removal';
+      case 'ADMIN_ADJUSTMENT':
+        return 'Admin Adjustment';
+      case 'USAGE':
+      case 'CONSUMPTION':
+        return 'Project Claim';
+      default:
+        return type
+          .toLowerCase()
+          .split('_')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+    }
+  };
+
+  const openUserDetail = async (target: string) => {
+    setIsDetailLoading(true);
+    setIsDetailModalOpen(true);
+    try {
+      const res = await apiClient.get<UserCreditDetail>(`/admin/credits/users/${encodeURIComponent(target)}`);
+      setSelectedUserDetail(res);
+    } catch (err: any) {
+      addToast('error', 'Profile Not Found', err.message || 'User credit profile could not be loaded.');
+      setIsDetailModalOpen(false);
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (globalFilterRole !== 'ALL') params.append('role', globalFilterRole);
+      if (globalFilterTxType !== 'ALL') params.append('type', globalFilterTxType);
+      if (globalFilterStartDate) params.append('startDate', globalFilterStartDate);
+      if (globalFilterEndDate) params.append('endDate', globalFilterEndDate);
+      if (globalFilterUser.trim()) params.append('search', globalFilterUser.trim());
+      if (globalFilterUid.trim()) params.append('uid', globalFilterUid.trim());
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('nexus_auth_token') : null;
+      const res = await fetch(`/api/admin/credits/export?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Export failed with HTTP ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `credit_transactions_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      link.remove();
+
+      addToast('success', 'Export Complete', 'Ledger transactions CSV downloaded successfully.');
+      setIsExportModalOpen(false);
+    } catch (err: any) {
+      addToast('error', 'Export Failed', err.message || 'Could not export transaction ledger.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
   React.useEffect(() => {
     if (activeTab === 'ledger') {
@@ -728,6 +966,7 @@ export default function AdminCreditsPage() {
             size="sm"
             variant="secondary"
             onClick={() => {
+              fetchStats();
               if (activeTab === 'ledger') fetchLedger();
               else if (activeTab === 'accounts') fetchAccounts();
               else fetchBulkOperations();
@@ -735,6 +974,15 @@ export default function AdminCreditsPage() {
             leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
           >
             Refresh
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<Download className="h-3.5 w-3.5" />}
+            onClick={() => setIsExportModalOpen(true)}
+            className="text-foreground font-semibold"
+          >
+            Export CSV
           </Button>
           <Button
             size="sm"
@@ -761,6 +1009,238 @@ export default function AdminCreditsPage() {
           >
             Remove Credits
           </Button>
+        </div>
+      </div>
+
+      {/* PHASE 10: DASHBOARD METRICS (Live Real-Time Calculations, Zero Fabricated Data) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* 1. Total Credits Held */}
+        <Card className="bg-surface border-border shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between text-muted text-xs mb-1">
+              <span className="font-medium truncate">Total Credits Held</span>
+              <Wallet className="h-4 w-4 text-accent-primary flex-shrink-0" />
+            </div>
+            {isStatsLoading ? (
+              <div className="h-6 w-20 bg-surface-elevated animate-pulse rounded" />
+            ) : (
+              <div className="text-xl font-bold font-mono text-foreground">
+                {stats?.totalCreditsHeld?.toLocaleString() ?? 0}
+              </div>
+            )}
+            <div className="text-[10px] text-muted mt-1 truncate">In user wallets</div>
+          </CardContent>
+        </Card>
+
+        {/* 2. Credits Purchased */}
+        <Card className="bg-surface border-border shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between text-muted text-xs mb-1">
+              <span className="font-medium truncate">Credits Purchased</span>
+              <ArrowUpRight className="h-4 w-4 text-status-success flex-shrink-0" />
+            </div>
+            {isStatsLoading ? (
+              <div className="h-6 w-20 bg-surface-elevated animate-pulse rounded" />
+            ) : (
+              <div className="text-xl font-bold font-mono text-status-success">
+                +{stats?.creditsPurchased?.toLocaleString() ?? 0}
+              </div>
+            )}
+            <div className="text-[10px] text-muted mt-1 truncate">Payment gateway</div>
+          </CardContent>
+        </Card>
+
+        {/* 3. Credits Granted */}
+        <Card className="bg-surface border-border shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between text-muted text-xs mb-1">
+              <span className="font-medium truncate">Credits Granted</span>
+              <Plus className="h-4 w-4 text-accent-primary flex-shrink-0" />
+            </div>
+            {isStatsLoading ? (
+              <div className="h-6 w-20 bg-surface-elevated animate-pulse rounded" />
+            ) : (
+              <div className="text-xl font-bold font-mono text-accent-primary">
+                +{stats?.creditsGranted?.toLocaleString() ?? 0}
+              </div>
+            )}
+            <div className="text-[10px] text-muted mt-1 truncate">Admin grants</div>
+          </CardContent>
+        </Card>
+
+        {/* 4. Credits Removed */}
+        <Card className="bg-surface border-border shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between text-muted text-xs mb-1">
+              <span className="font-medium truncate">Credits Removed</span>
+              <ArrowDownLeft className="h-4 w-4 text-status-danger flex-shrink-0" />
+            </div>
+            {isStatsLoading ? (
+              <div className="h-6 w-20 bg-surface-elevated animate-pulse rounded" />
+            ) : (
+              <div className="text-xl font-bold font-mono text-status-danger">
+                -{stats?.creditsRemoved?.toLocaleString() ?? 0}
+              </div>
+            )}
+            <div className="text-[10px] text-muted mt-1 truncate">Admin deductions</div>
+          </CardContent>
+        </Card>
+
+        {/* 5. Credits Consumed */}
+        <Card className="bg-surface border-border shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between text-muted text-xs mb-1">
+              <span className="font-medium truncate">Credits Consumed</span>
+              <Clock className="h-4 w-4 text-status-warning flex-shrink-0" />
+            </div>
+            {isStatsLoading ? (
+              <div className="h-6 w-20 bg-surface-elevated animate-pulse rounded" />
+            ) : (
+              <div className="text-xl font-bold font-mono text-status-warning">
+                -{stats?.creditsConsumed?.toLocaleString() ?? 0}
+              </div>
+            )}
+            <div className="text-[10px] text-muted mt-1 truncate">Claims &amp; usage</div>
+          </CardContent>
+        </Card>
+
+        {/* 6. Credits Refunded */}
+        <Card className="bg-surface border-border shadow-sm">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between text-muted text-xs mb-1">
+              <span className="font-medium truncate">Credits Refunded</span>
+              <RefreshCw className="h-4 w-4 text-cyan-400 flex-shrink-0" />
+            </div>
+            {isStatsLoading ? (
+              <div className="h-6 w-20 bg-surface-elevated animate-pulse rounded" />
+            ) : (
+              <div className="text-xl font-bold font-mono text-cyan-400">
+                +{stats?.creditsRefunded?.toLocaleString() ?? 0}
+              </div>
+            )}
+            <div className="text-[10px] text-muted mt-1 truncate">Unselected claims</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* PHASE 10: UNIFIED FILTER BAR */}
+      <div className="bg-surface border border-border rounded-lg p-3 space-y-3 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="flex items-center space-x-2 font-semibold text-foreground">
+            <Filter className="h-3.5 w-3.5 text-accent-primary" />
+            <span>Search &amp; Filter Controls</span>
+            {hasActiveFilters && (
+              <span className="bg-accent-primary/20 text-accent-primary px-2 py-0.5 rounded text-[10px] font-mono">
+                Active Filter Applied
+              </span>
+            )}
+          </div>
+          <div className="flex items-center space-x-2">
+            {hasActiveFilters && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-muted hover:text-foreground"
+                onClick={resetFilters}
+              >
+                <X className="h-3 w-3 mr-1" /> Reset Filters
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs font-medium"
+              onClick={() => setIsExportModalOpen(true)}
+              leftIcon={<Download className="h-3.5 w-3.5" />}
+            >
+              Export Filtered CSV
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+          {/* Role Filter */}
+          <div>
+            <label className="text-[10px] font-medium text-muted block mb-1">Role</label>
+            <select
+              value={globalFilterRole}
+              onChange={(e) => setGlobalFilterRole(e.target.value)}
+              className="w-full h-8 bg-surface-elevated border border-border text-foreground text-xs rounded px-2 outline-none focus:border-accent-primary"
+            >
+              <option value="ALL">All Roles</option>
+              <option value="DEVELOPER">Developer</option>
+              <option value="CLIENT">Client</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </div>
+
+          {/* Balance Filter */}
+          <div>
+            <label className="text-[10px] font-medium text-muted block mb-1">Balance</label>
+            <select
+              value={globalFilterBalance}
+              onChange={(e) => setGlobalFilterBalance(e.target.value as any)}
+              className="w-full h-8 bg-surface-elevated border border-border text-foreground text-xs rounded px-2 outline-none focus:border-accent-primary"
+            >
+              <option value="ALL">All Balances</option>
+              <option value="POSITIVE">Positive (&gt; 0)</option>
+              <option value="ZERO">Zero (= 0)</option>
+            </select>
+          </div>
+
+          {/* Transaction Type Filter */}
+          <div>
+            <label className="text-[10px] font-medium text-muted block mb-1">Tx Type</label>
+            <select
+              value={globalFilterTxType}
+              onChange={(e) => setGlobalFilterTxType(e.target.value)}
+              className="w-full h-8 bg-surface-elevated border border-border text-foreground text-xs rounded px-2 outline-none focus:border-accent-primary"
+            >
+              <option value="ALL">All Tx Types</option>
+              <option value="PURCHASE">Purchase</option>
+              <option value="ADMIN_CREDIT_GRANT">Admin Grant</option>
+              <option value="ADMIN_CREDIT_REMOVAL">Admin Removal</option>
+              <option value="PROJECT_CLAIM">Project Claim</option>
+              <option value="PROJECT_CLAIM_REFUND">Claim Refund</option>
+            </select>
+          </div>
+
+          {/* Date Range: From */}
+          <div>
+            <label className="text-[10px] font-medium text-muted block mb-1">Date From</label>
+            <input
+              type="date"
+              value={globalFilterStartDate}
+              onChange={(e) => setGlobalFilterStartDate(e.target.value)}
+              className="w-full h-8 bg-surface-elevated border border-border text-foreground text-xs rounded px-2 outline-none focus:border-accent-primary"
+            />
+          </div>
+
+          {/* Date Range: To */}
+          <div>
+            <label className="text-[10px] font-medium text-muted block mb-1">Date To</label>
+            <input
+              type="date"
+              value={globalFilterEndDate}
+              onChange={(e) => setGlobalFilterEndDate(e.target.value)}
+              className="w-full h-8 bg-surface-elevated border border-border text-foreground text-xs rounded px-2 outline-none focus:border-accent-primary"
+            />
+          </div>
+
+          {/* User / UID Search */}
+          <div>
+            <label className="text-[10px] font-medium text-muted block mb-1">User or UID</label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="UID, email, name..."
+                value={globalFilterUser}
+                onChange={(e) => setGlobalFilterUser(e.target.value)}
+                className="w-full h-8 bg-surface-elevated border border-border text-foreground text-xs rounded pl-7 pr-2 outline-none focus:border-accent-primary"
+              />
+              <Search className="h-3.5 w-3.5 text-muted absolute left-2 top-2.5" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -958,35 +1438,87 @@ export default function AdminCreditsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>User / Identity</TableHead>
-                      <TableHead>Public 16-Char UID</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>UID</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead className="text-right">Current Credits</TableHead>
+                      <TableHead className="text-right">Purchased</TableHead>
+                      <TableHead className="text-right">Granted</TableHead>
+                      <TableHead className="text-right">Consumed</TableHead>
+                      <TableHead className="text-right">Refunded</TableHead>
+                      <TableHead className="text-right">Last Transaction</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                      <TableHead className="text-right">Tx Count</TableHead>
-                      <TableHead className="text-right">Last Updated</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredAccounts.map((acc) => (
                       <TableRow key={acc.account_id || acc.user_id}>
+                        {/* 1. User */}
                         <TableCell>
                           <span className="text-xs font-semibold text-foreground block">
-                            {acc.developer_name || acc.company_name || acc.email}
+                            {acc.developer_name || acc.name || acc.company_name || acc.email}
                           </span>
                           <span className="text-[10px] text-muted block font-mono">
                             {acc.developer_username ? `@${acc.developer_username}` : acc.email}
                           </span>
                         </TableCell>
-                        <TableCell className="font-mono text-xs font-bold text-accent-primary">
-                          {acc.user_uid}
+
+                        {/* 2. UID */}
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <span className="font-mono text-xs font-bold text-accent-primary">
+                              {acc.user_uid || acc.user_public_uid}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyUidToClipboard(acc.user_uid || acc.user_public_uid || '')}
+                              className="text-muted hover:text-foreground p-0.5"
+                              title="Copy UID"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
                         </TableCell>
+
+                        {/* 3. Role */}
                         <TableCell>
                           <span className="text-[10px] font-mono uppercase bg-surface-elevated px-2 py-0.5 rounded border border-border text-foreground">
                             {acc.role}
                           </span>
                         </TableCell>
+
+                        {/* 4. Current Credits */}
+                        <TableCell className="text-right font-mono text-xs font-bold text-status-success whitespace-nowrap">
+                          {acc.balance} Credits
+                        </TableCell>
+
+                        {/* 5. Purchased */}
+                        <TableCell className="text-right font-mono text-xs text-status-success">
+                          +{acc.purchased ?? 0}
+                        </TableCell>
+
+                        {/* 6. Granted */}
+                        <TableCell className="text-right font-mono text-xs text-accent-primary">
+                          +{acc.granted ?? 0}
+                        </TableCell>
+
+                        {/* 7. Consumed */}
+                        <TableCell className="text-right font-mono text-xs text-status-danger">
+                          -{acc.consumed ?? 0}
+                        </TableCell>
+
+                        {/* 8. Refunded */}
+                        <TableCell className="text-right font-mono text-xs text-cyan-400">
+                          +{acc.refunded ?? 0}
+                        </TableCell>
+
+                        {/* 9. Last Transaction */}
+                        <TableCell className="text-right text-xs text-muted font-mono whitespace-nowrap">
+                          {acc.last_transaction ? new Date(acc.last_transaction).toLocaleDateString() : 'Never'}
+                        </TableCell>
+
+                        {/* 10. Status */}
                         <TableCell>
                           <span
                             className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${
@@ -998,16 +1530,19 @@ export default function AdminCreditsPage() {
                             {acc.user_status}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right font-mono text-xs font-bold text-status-success">
-                          {acc.balance} Credits
-                        </TableCell>
-                        <TableCell className="text-xs font-mono text-right text-muted">
-                          {acc.transaction_count}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted text-right font-mono whitespace-nowrap">
-                          {acc.updated_at ? new Date(acc.updated_at).toLocaleDateString() : '—'}
-                        </TableCell>
+
+                        {/* Actions */}
                         <TableCell className="text-right space-x-1 whitespace-nowrap">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openUserDetail(acc.user_uid || acc.user_id)}
+                            className="text-xs h-7 px-2 font-medium"
+                            title="View User Detail"
+                            leftIcon={<Eye className="h-3 w-3 text-muted" />}
+                          >
+                            View
+                          </Button>
                           <Button
                             size="sm"
                             variant="secondary"
@@ -1025,6 +1560,16 @@ export default function AdminCreditsPage() {
                             leftIcon={<ArrowDownLeft className="h-3 w-3 text-status-danger" />}
                           >
                             Remove Credits
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openUserDetail(acc.user_uid || acc.user_id)}
+                            className="text-xs h-7 px-2 font-medium text-accent-primary hover:bg-accent-primary/10"
+                            title="Transaction History"
+                            leftIcon={<History className="h-3 w-3" />}
+                          >
+                            Transaction History
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -1939,6 +2484,345 @@ export default function AdminCreditsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* PHASE 10: USER CREDIT DETAIL DRAWER / MODAL */}
+      <Modal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedUserDetail(null);
+        }}
+        title="User Credit Profile & History"
+        description="Comprehensive wallet balance, user identity verification, and chronological ledger timeline"
+        maxWidth="2xl"
+      >
+        {isDetailLoading ? (
+          <div className="p-8 text-center text-xs text-muted space-y-2">
+            <RefreshCw className="h-5 w-5 animate-spin mx-auto text-accent-primary" />
+            <div>Loading user credit profile...</div>
+          </div>
+        ) : selectedUserDetail ? (
+          <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+            {/* User Identity Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-surface-elevated rounded-lg border border-border">
+              <div className="flex items-center space-x-3">
+                <div className="h-10 w-10 rounded-full bg-accent-primary/20 text-accent-primary flex items-center justify-center font-bold text-sm">
+                  {selectedUserDetail.user.name?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-bold text-foreground">
+                      {selectedUserDetail.user.name || selectedUserDetail.user.email}
+                    </span>
+                    <span className="text-[10px] font-mono uppercase bg-surface px-1.5 py-0.5 rounded border border-border text-foreground">
+                      {selectedUserDetail.user.role}
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border ${
+                        selectedUserDetail.user.status === 'ACTIVE'
+                          ? 'bg-status-success/10 text-status-success border-status-success/30'
+                          : 'bg-status-warning/10 text-status-warning border-status-warning/30'
+                      }`}
+                    >
+                      {selectedUserDetail.user.status}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted mt-0.5">
+                    {selectedUserDetail.user.email}
+                    {selectedUserDetail.user.developer_username && ` • @${selectedUserDetail.user.developer_username}`}
+                  </div>
+                </div>
+              </div>
+
+              {/* 16-Character Public UID */}
+              <div className="flex flex-col items-start sm:items-end">
+                <span className="text-[10px] uppercase font-mono text-muted">Public UID</span>
+                <div className="flex items-center space-x-1.5 mt-0.5">
+                  <span className="font-mono text-xs font-bold text-accent-primary bg-surface px-2 py-1 rounded border border-border">
+                    {selectedUserDetail.user.public_uid || selectedUserDetail.user.uid}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyUidToClipboard(selectedUserDetail.user.public_uid || selectedUserDetail.user.uid)}
+                    className="p-1 text-muted hover:text-foreground hover:bg-surface rounded transition-colors"
+                    title="Copy UID"
+                  >
+                    {copiedUid ? <Check className="h-3.5 w-3.5 text-status-success" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Balance & Quick Actions */}
+            <div className="p-4 bg-surface rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-mono uppercase text-muted">Current Balance</span>
+                <div className="text-2xl font-bold font-mono text-status-success mt-0.5">
+                  {selectedUserDetail.account.balance} Credits
+                </div>
+                <div className="text-[10px] text-muted mt-1">
+                  Last updated:{' '}
+                  {selectedUserDetail.account.updated_at
+                    ? new Date(selectedUserDetail.account.updated_at).toLocaleString()
+                    : 'N/A'}
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<ArrowUpRight className="h-3.5 w-3.5 text-status-success" />}
+                  onClick={() => {
+                    setIsDetailModalOpen(false);
+                    openGiveCreditsModal({
+                      account_id: selectedUserDetail.user.id,
+                      user_id: selectedUserDetail.user.id,
+                      user_uid: selectedUserDetail.user.uid,
+                      user_public_uid: selectedUserDetail.user.public_uid,
+                      email: selectedUserDetail.user.email,
+                      role: selectedUserDetail.user.role,
+                      user_status: selectedUserDetail.user.status,
+                      developer_name: selectedUserDetail.user.name,
+                      balance: selectedUserDetail.account.balance,
+                      currency: selectedUserDetail.account.currency,
+                      transaction_count: selectedUserDetail.transactions.length,
+                      purchased: selectedUserDetail.summary.purchased,
+                      granted: selectedUserDetail.summary.granted,
+                      removed: selectedUserDetail.summary.removed,
+                      consumed: selectedUserDetail.summary.consumed,
+                      refunded: selectedUserDetail.summary.refunded,
+                      last_transaction: selectedUserDetail.summary.last_transaction,
+                      updated_at: selectedUserDetail.account.updated_at || '',
+                    });
+                  }}
+                  className="text-xs font-semibold"
+                >
+                  Give Credits
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  leftIcon={<ArrowDownLeft className="h-3.5 w-3.5 text-status-danger" />}
+                  onClick={() => {
+                    setIsDetailModalOpen(false);
+                    openRemoveCreditsModal({
+                      account_id: selectedUserDetail.user.id,
+                      user_id: selectedUserDetail.user.id,
+                      user_uid: selectedUserDetail.user.uid,
+                      user_public_uid: selectedUserDetail.user.public_uid,
+                      email: selectedUserDetail.user.email,
+                      role: selectedUserDetail.user.role,
+                      user_status: selectedUserDetail.user.status,
+                      developer_name: selectedUserDetail.user.name,
+                      balance: selectedUserDetail.account.balance,
+                      currency: selectedUserDetail.account.currency,
+                      transaction_count: selectedUserDetail.transactions.length,
+                      purchased: selectedUserDetail.summary.purchased,
+                      granted: selectedUserDetail.summary.granted,
+                      removed: selectedUserDetail.summary.removed,
+                      consumed: selectedUserDetail.summary.consumed,
+                      refunded: selectedUserDetail.summary.refunded,
+                      last_transaction: selectedUserDetail.summary.last_transaction,
+                      updated_at: selectedUserDetail.account.updated_at || '',
+                    });
+                  }}
+                  className="text-xs font-semibold border-status-danger/30 text-status-danger hover:bg-status-danger/10"
+                >
+                  Remove Credits
+                </Button>
+              </div>
+            </div>
+
+            {/* Lifetime Summary Chips */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+              <div className="p-2 bg-surface-elevated rounded border border-border">
+                <span className="text-[10px] text-muted block">Purchased</span>
+                <span className="font-mono font-bold text-status-success mt-0.5 block">
+                  +{selectedUserDetail.summary.purchased}
+                </span>
+              </div>
+              <div className="p-2 bg-surface-elevated rounded border border-border">
+                <span className="text-[10px] text-muted block">Granted</span>
+                <span className="font-mono font-bold text-accent-primary mt-0.5 block">
+                  +{selectedUserDetail.summary.granted}
+                </span>
+              </div>
+              <div className="p-2 bg-surface-elevated rounded border border-border">
+                <span className="text-[10px] text-muted block">Removed</span>
+                <span className="font-mono font-bold text-status-danger mt-0.5 block">
+                  -{selectedUserDetail.summary.removed}
+                </span>
+              </div>
+              <div className="p-2 bg-surface-elevated rounded border border-border">
+                <span className="text-[10px] text-muted block">Consumed</span>
+                <span className="font-mono font-bold text-status-warning mt-0.5 block">
+                  -{selectedUserDetail.summary.consumed}
+                </span>
+              </div>
+              <div className="p-2 bg-surface-elevated rounded border border-border col-span-2 sm:col-span-1">
+                <span className="text-[10px] text-muted block">Refunded</span>
+                <span className="font-mono font-bold text-cyan-400 mt-0.5 block">
+                  +{selectedUserDetail.summary.refunded}
+                </span>
+              </div>
+            </div>
+
+            {/* Chronological Transactions Timeline (Requirement 3 Spec) */}
+            <div className="space-y-2 pt-2 border-t border-border">
+              <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                <span>Transactions</span>
+                <span className="text-[10px] text-muted font-mono">
+                  {selectedUserDetail.transactions.length} Recorded Events
+                </span>
+              </div>
+              <div className="border-b border-border/60 pb-1 font-mono text-[11px] text-muted">
+                ────────────────────────────────────────────────────────
+              </div>
+
+              {selectedUserDetail.transactions.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted">No transactions recorded for this user.</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {selectedUserDetail.transactions.map((tx) => {
+                    const isPositive = tx.amount > 0;
+                    return (
+                      <div
+                        key={tx.id}
+                        className="p-2.5 bg-surface-elevated/70 hover:bg-surface-elevated rounded border border-border/80 flex items-start justify-between gap-3 text-xs transition-colors"
+                      >
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span
+                              className={`font-mono font-bold text-xs ${
+                                isPositive ? 'text-status-success' : 'text-status-danger'
+                              }`}
+                            >
+                              {isPositive ? `+${tx.amount}` : tx.amount}
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {formatTransactionType(tx.type)}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] text-muted flex flex-wrap items-center gap-x-2">
+                            {tx.reason && (
+                              <span>
+                                <span className="text-foreground/70 font-medium">Reason: </span>
+                                {tx.reason}
+                              </span>
+                            )}
+                            {tx.reference_id && (
+                              <span className="font-mono text-[10px] text-muted">
+                                Ref: {tx.reference_id}
+                              </span>
+                            )}
+                          </div>
+
+                          {tx.performed_by_email && (
+                            <div className="text-[10px] text-muted font-mono">
+                              By: {tx.performed_by_email} ({tx.performed_by_role || 'ADMIN'})
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-[10px] font-mono text-muted">
+                            Balance: {tx.balance_after}
+                          </div>
+                          <div className="text-[10px] text-muted/80 mt-0.5">
+                            {new Date(tx.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-3 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsDetailModalOpen(false);
+                  setSelectedUserDetail(null);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* PHASE 10: EXPORT CSV CONFIRMATION MODAL */}
+      <Modal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        title="Export Credit Transactions Ledger"
+        description="Generate an RFC-compliant, injection-safe CSV export of immutable credit transactions"
+        maxWidth="md"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-3 bg-surface-elevated rounded-lg border border-border space-y-2">
+            <span className="font-semibold text-foreground block">Active Export Scope</span>
+            <div className="grid grid-cols-2 gap-2 text-muted">
+              <div>
+                <span className="block text-[10px]">Role:</span>
+                <span className="font-medium text-foreground">{globalFilterRole}</span>
+              </div>
+              <div>
+                <span className="block text-[10px]">Transaction Type:</span>
+                <span className="font-medium text-foreground">{globalFilterTxType}</span>
+              </div>
+              <div>
+                <span className="block text-[10px]">Date Range:</span>
+                <span className="font-medium text-foreground">
+                  {globalFilterStartDate || globalFilterEndDate
+                    ? `${globalFilterStartDate || 'Beginning'} → ${globalFilterEndDate || 'Now'}`
+                    : 'All Time'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px]">Search Filter:</span>
+                <span className="font-medium text-foreground">
+                  {globalFilterUser || globalFilterUid || 'All Accounts'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 bg-accent-primary/5 border border-accent-primary/20 rounded-lg flex items-start space-x-2 text-muted">
+            <ShieldCheck className="h-4 w-4 text-accent-primary flex-shrink-0 mt-0.5" />
+            <div className="text-[11px] leading-relaxed">
+              <span className="font-semibold text-foreground block mb-0.5">Audit &amp; Security Compliance</span>
+              This export is watermarked and recorded in the audit log under your administrator identity. CSV formula injection protection is automatically applied to all fields.
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-2 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsExportModalOpen(false)}
+              disabled={isExporting}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleExportCsv}
+              isLoading={isExporting}
+              leftIcon={<Download className="h-3.5 w-3.5" />}
+              className="bg-accent-primary hover:bg-accent-primary/90 text-white font-semibold"
+            >
+              Download CSV
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -130,6 +130,8 @@ export interface BulkCreditResult {
 
 export interface CreditHistoryFilter {
   userId?: string;
+  uid?: string;
+  role?: string;
   type?: string;
   performedBy?: string;
   startDate?: string;
@@ -1413,9 +1415,19 @@ export class CreditLedgerService {
       )`);
     }
 
+    if (filters?.role && filters.role !== 'ALL') {
+      params.push(filters.role);
+      conditions.push(`u.role = $${params.length}`);
+    }
+
+    if (filters?.uid && filters.uid.trim().length > 0) {
+      params.push(filters.uid.trim());
+      conditions.push(`(u.uid = $${params.length} OR u.public_uid = $${params.length})`);
+    }
+
     if (filters?.type && filters.type !== 'ALL') {
       params.push(filters.type);
-      conditions.push(`ct.type = $${params.length}::credit_tx_type`);
+      conditions.push(`ct.type::text = $${params.length}`);
     }
 
     if (filters?.performedBy) {
@@ -1648,7 +1660,7 @@ export class CreditLedgerService {
     const sql = `
       SELECT ca.id as account_id, ca.balance, ca.currency, ca.created_at, ca.updated_at,
              u.id as user_id, u.uid as user_uid, u.public_uid as user_public_uid,
-             u.email as user_email, u.role as user_role, u.status as user_status,
+             u.email as email, u.email as user_email, u.role as role, u.role as user_role, u.status as status, u.status as user_status,
              COALESCE(d.display_name, c.company_name, split_part(u.email, '@', 1)) as name,
              d.id as developer_id, d.username as developer_username, d.display_name as developer_name,
              c.id as client_id, c.company_name,
@@ -1656,8 +1668,8 @@ export class CreditLedgerService {
              COALESCE((SELECT SUM(amount) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type = 'PURCHASE'), 0)::int as purchased,
              COALESCE((SELECT SUM(amount) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type = 'ADMIN_CREDIT_GRANT'), 0)::int as granted,
              COALESCE((SELECT ABS(SUM(amount)) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type = 'ADMIN_CREDIT_REMOVAL'), 0)::int as removed,
-             COALESCE((SELECT ABS(SUM(amount)) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type IN ('PROJECT_CLAIM', 'USAGE', 'CONSUMPTION') AND ct.amount < 0), 0)::int as consumed,
-             COALESCE((SELECT SUM(amount) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type IN ('PROJECT_NOT_SELECTED_REFUND', 'PROJECT_CANCEL_REFUND', 'WITHDRAWAL_REFUND', 'EXPIRATION_REFUND', 'REFUND') AND ct.amount > 0), 0)::int as refunded,
+             COALESCE((SELECT ABS(SUM(amount)) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND (ct.type::text IN ('PROJECT_CLAIM', 'USAGE', 'CONSUMPTION') OR (ct.amount < 0 AND ct.type::text NOT IN ('ADMIN_CREDIT_REMOVAL')))), 0)::int as consumed,
+             COALESCE((SELECT SUM(amount) FROM credit_transactions ct WHERE (ct.user_id = u.id OR ct.developer_id = d.id) AND ct.type::text IN ('PROJECT_NOT_SELECTED_REFUND', 'PROJECT_CANCEL_REFUND', 'PROJECT_CLAIM_REFUND', 'WITHDRAWAL_REFUND', 'EXPIRATION_REFUND', 'PAYMENT_REFUND', 'REFUND') AND ct.amount > 0), 0)::int as refunded,
              (SELECT MAX(created_at) FROM credit_transactions ct WHERE ct.user_id = u.id OR ct.developer_id = d.id) as last_transaction
       FROM credit_accounts ca
       LEFT JOIN users u ON ca.user_id = u.id
@@ -1702,8 +1714,8 @@ export class CreditLedgerService {
          COALESCE(SUM(CASE WHEN type = 'PURCHASE' THEN amount ELSE 0 END), 0)::int as purchased,
          COALESCE(SUM(CASE WHEN type = 'ADMIN_CREDIT_GRANT' THEN amount ELSE 0 END), 0)::int as granted,
          COALESCE(ABS(SUM(CASE WHEN type = 'ADMIN_CREDIT_REMOVAL' THEN amount ELSE 0 END)), 0)::int as removed,
-         COALESCE(ABS(SUM(CASE WHEN type IN ('PROJECT_CLAIM', 'USAGE', 'CONSUMPTION') AND amount < 0 THEN amount ELSE 0 END)), 0)::int as consumed,
-         COALESCE(SUM(CASE WHEN type IN ('PROJECT_NOT_SELECTED_REFUND', 'PROJECT_CANCEL_REFUND', 'WITHDRAWAL_REFUND', 'EXPIRATION_REFUND', 'REFUND') AND amount > 0 THEN amount ELSE 0 END), 0)::int as refunded,
+         COALESCE(ABS(SUM(CASE WHEN (type::text IN ('PROJECT_CLAIM', 'USAGE', 'CONSUMPTION') OR (amount < 0 AND type::text NOT IN ('ADMIN_CREDIT_REMOVAL'))) AND amount < 0 THEN amount ELSE 0 END)), 0)::int as consumed,
+         COALESCE(SUM(CASE WHEN type::text IN ('PROJECT_NOT_SELECTED_REFUND', 'PROJECT_CANCEL_REFUND', 'PROJECT_CLAIM_REFUND', 'WITHDRAWAL_REFUND', 'EXPIRATION_REFUND', 'PAYMENT_REFUND', 'REFUND') AND amount > 0 THEN amount ELSE 0 END), 0)::int as refunded,
          MAX(created_at) as last_transaction
        FROM credit_transactions
        WHERE user_id = $1 OR (developer_id IS NOT NULL AND developer_id = $2)`,
@@ -1818,6 +1830,7 @@ export class CreditLedgerService {
         actorUserId: filters.adminUserId,
         action: 'ADMIN_EXPORT_CREDIT_LEDGER',
         entityType: 'CREDIT_SYSTEM',
+        entityId: filters.adminUserId,
         metadata: {
           recordCount: rows.length,
           filters: {
