@@ -23,7 +23,7 @@ export class DeveloperService {
   /**
    * Public directory of verified platform developers
    */
-  static async getVerifiedDevelopers(filter?: { search?: string }) {
+  static async getVerifiedDevelopers(filter?: { search?: string; skill?: string; category?: string }) {
     let sql = `
       SELECT d.id, d.username, d.display_name, d.profile_image as avatar_url, d.bio, d.role_title,
              d.experience, d.availability, d.verification_status, d.github_url, d.linkedin_url,
@@ -42,9 +42,37 @@ export class DeveloperService {
     `;
 
     const params: any[] = [];
+    if (filter?.category && filter.category !== 'ALL') {
+      params.push(`%${filter.category}%`);
+      sql += ` AND (d.role_title ILIKE $${params.length} OR EXISTS (
+        SELECT 1 FROM developer_skills ds_cat
+        JOIN skills s_cat ON ds_cat.skill_id = s_cat.id
+        WHERE ds_cat.developer_id = d.id AND s_cat.category ILIKE $${params.length}
+      ))`;
+    }
+
+    if (filter?.skill) {
+      params.push(`%${filter.skill}%`);
+      sql += ` AND EXISTS (
+        SELECT 1 FROM developer_skills ds_sk
+        JOIN skills s_sk ON ds_sk.skill_id = s_sk.id
+        WHERE ds_sk.developer_id = d.id AND s_sk.name ILIKE $${params.length}
+      )`;
+    }
+
     if (filter?.search) {
       params.push(`%${filter.search}%`);
-      sql += ` AND (d.display_name ILIKE $1 OR d.role_title ILIKE $1 OR d.bio ILIKE $1)`;
+      sql += ` AND (
+        d.display_name ILIKE $${params.length} OR 
+        d.username ILIKE $${params.length} OR 
+        d.role_title ILIKE $${params.length} OR 
+        d.bio ILIKE $${params.length} OR
+        EXISTS (
+          SELECT 1 FROM developer_skills ds_srch
+          JOIN skills s_srch ON ds_srch.skill_id = s_srch.id
+          WHERE ds_srch.developer_id = d.id AND (s_srch.name ILIKE $${params.length} OR s_srch.category ILIKE $${params.length})
+        )
+      )`;
     }
 
     sql += ` GROUP BY d.id ORDER BY completed_projects_count DESC, d.experience DESC`;
@@ -55,6 +83,33 @@ export class DeveloperService {
       status: 'APPROVED',
       verified: true,
       completed_projects_count: parseInt(row.completed_projects_count, 10),
+    }));
+  }
+
+  /**
+   * Search available skills and categories
+   */
+  static async searchSkills(filter?: { search?: string; category?: string }) {
+    let sql = `
+      SELECT s.id, s.name, s.category, COUNT(ds.developer_id) as developers_count
+      FROM skills s
+      LEFT JOIN developer_skills ds ON s.id = ds.skill_id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    if (filter?.category && filter.category !== 'ALL') {
+      params.push(`%${filter.category}%`);
+      sql += ` AND s.category ILIKE $${params.length}`;
+    }
+    if (filter?.search) {
+      params.push(`%${filter.search}%`);
+      sql += ` AND (s.name ILIKE $${params.length} OR s.category ILIKE $${params.length})`;
+    }
+    sql += ` GROUP BY s.id, s.name, s.category ORDER BY developers_count DESC, s.name ASC`;
+    const res = await query(sql, params);
+    return res.rows.map((r) => ({
+      ...r,
+      developers_count: parseInt(r.developers_count, 10),
     }));
   }
 

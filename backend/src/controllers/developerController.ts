@@ -6,8 +6,21 @@ export class DeveloperController {
   static async listPublic(req: Request, res: Response): Promise<void> {
     try {
       const search = req.query.search as string;
-      const developers = await DeveloperService.getVerifiedDevelopers({ search });
+      const skill = req.query.skill as string;
+      const category = req.query.category as string;
+      const developers = await DeveloperService.getVerifiedDevelopers({ search, skill, category });
       res.json({ developers });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async listSkills(req: Request, res: Response): Promise<void> {
+    try {
+      const search = req.query.search as string;
+      const category = req.query.category as string;
+      const skills = await DeveloperService.searchSkills({ search, category });
+      res.json({ skills });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

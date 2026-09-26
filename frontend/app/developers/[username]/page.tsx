@@ -1,5 +1,7 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { siteConfig } from '@/config/site';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -202,6 +204,53 @@ async function getDeveloper(username: string) {
   } catch (_err) {
     return null;
   }
+}
+
+export async function generateMetadata({ params }: DeveloperProfileProps): Promise<Metadata> {
+  const dev = await getDeveloper(params.username);
+
+  if (!dev) {
+    return {
+      title: 'Developer Not Found',
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const title = `${dev.name} | ${dev.role}`;
+  const description = dev.bio?.slice(0, 160) || `${dev.name} - Verified Engineer on ${siteConfig.name}`;
+  const canonicalUrl = `${siteConfig.url}/developers/${params.username}`;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonicalUrl,
+      siteName: siteConfig.name,
+      type: 'profile',
+      images: [
+        {
+          url: `${siteConfig.url}/og-developer.png`,
+          width: 1200,
+          height: 630,
+          alt: dev.name,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+    },
+    robots: {
+      index: dev.verification_status === 'VERIFIED',
+      follow: dev.verification_status === 'VERIFIED',
+    },
+  };
 }
 
 export default async function DeveloperDetailPage({ params }: DeveloperProfileProps) {

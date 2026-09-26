@@ -11,6 +11,7 @@ export class ProjectController {
     try {
       const category = req.query.category as string;
       const search = req.query.search as string;
+      const skill = req.query.skill as string;
 
       let sql = `
         SELECT p.id, p.project_number, p.slug, p.title, p.description, p.category, 
@@ -23,12 +24,16 @@ export class ProjectController {
       `;
       const params: any[] = [];
       if (category && category !== 'ALL') {
-        params.push(category);
-        sql += ` AND p.category = $${params.length}`;
+        params.push(`%${category}%`);
+        sql += ` AND p.category ILIKE $${params.length}`;
+      }
+      if (skill) {
+        params.push(`%${skill}%`);
+        sql += ` AND p.required_technologies::text ILIKE $${params.length}`;
       }
       if (search) {
         params.push(`%${search}%`);
-        sql += ` AND (p.title ILIKE $${params.length} OR p.description ILIKE $${params.length})`;
+        sql += ` AND (p.title ILIKE $${params.length} OR p.description ILIKE $${params.length} OR p.category ILIKE $${params.length} OR p.required_technologies::text ILIKE $${params.length})`;
       }
       sql += ` ORDER BY p.created_at DESC`;
 
@@ -42,11 +47,21 @@ export class ProjectController {
   /**
    * Protected route: Developer marketplace listing
    */
-  static async marketplace(req: Request, res: Response): Promise<void> {
+  static async marketplace(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const category = req.query.category as string;
       const search = req.query.search as string;
-      const projects = await ProjectService.getMarketplaceProjects({ category, search });
+      const skill = req.query.skill as string;
+      const developerId = (req.query.developerId as string) || req.user?.developerId;
+      const eligibleOnly = req.query.eligibleOnly === 'true' || req.query.eligible === 'true';
+
+      const projects = await ProjectService.getMarketplaceProjects({
+        category,
+        search,
+        skill,
+        developerId,
+        eligibleOnly,
+      });
       res.json({ projects });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -487,24 +502,35 @@ export class ProjectController {
   static async myProjects(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       if (req.user?.clientId) {
-        const rows = await query(
-          `SELECT * FROM projects WHERE client_id = $1 ORDER BY created_at DESC`,
-          [req.user.clientId]
-        );
+        let sql = `SELECT * FROM projects WHERE client_id = $1`;
+        const params: any[] = [req.user.clientId];
+        const search = req.query.search as string;
+        if (search) {
+          params.push(`%${search}%`);
+          sql += ` AND (title ILIKE $2 OR description ILIKE $2 OR category ILIKE $2)`;
+        }
+        sql += ` ORDER BY created_at DESC`;
+        const rows = await query(sql, params);
         res.json({ projects: rows.rows });
         return;
       }
 
       if (req.user?.developerId) {
-        const rows = await query(
-          `SELECT DISTINCT p.*, COALESCE(pc.status, 'ASSIGNED') as claim_status, pc.anonymous_tag
-           FROM projects p
-           LEFT JOIN project_claims pc ON (p.id = pc.project_id AND pc.developer_id = $1)
-           LEFT JOIN project_members pm ON (p.id = pm.project_id AND pm.developer_id = $1)
-           WHERE pc.developer_id = $1 OR pm.developer_id = $1 OR p.lead_developer_id = $1
-           ORDER BY p.created_at DESC`,
-          [req.user.developerId]
-        );
+        let sql = `
+          SELECT DISTINCT p.*, COALESCE(pc.status, 'ASSIGNED') as claim_status, pc.anonymous_tag
+          FROM projects p
+          LEFT JOIN project_claims pc ON (p.id = pc.project_id AND pc.developer_id = $1)
+          LEFT JOIN project_members pm ON (p.id = pm.project_id AND pm.developer_id = $1)
+          WHERE pc.developer_id = $1 OR pm.developer_id = $1 OR p.lead_developer_id = $1
+        `;
+        const params: any[] = [req.user.developerId];
+        const search = req.query.search as string;
+        if (search) {
+          params.push(`%${search}%`);
+          sql += ` AND (p.title ILIKE $2 OR p.description ILIKE $2 OR p.category ILIKE $2)`;
+        }
+        sql += ` ORDER BY p.created_at DESC`;
+        const rows = await query(sql, params);
         res.json({ projects: rows.rows });
         return;
       }

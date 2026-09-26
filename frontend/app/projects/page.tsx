@@ -1,12 +1,24 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { siteConfig } from '@/config/site';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Code, ExternalLink, Calendar, CheckCircle2 } from 'lucide-react';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Public Projects Showcase',
   description: 'Explore completed and published projects engineered by our verified developer network.',
+  alternates: {
+    canonical: `${siteConfig.url}/projects`,
+  },
+  openGraph: {
+    title: `Public Projects Showcase | ${siteConfig.name}`,
+    description: 'Explore completed and published projects engineered by our verified developer network.',
+    url: `${siteConfig.url}/projects`,
+    siteName: siteConfig.name,
+    type: 'website',
+  },
 };
 
 // Seed showcase data adhering to PRD requirements

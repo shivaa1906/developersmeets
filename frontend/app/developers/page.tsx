@@ -1,13 +1,25 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { siteConfig } from '@/config/site';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { CheckCircle2, ArrowRight, Code2, MapPin, Briefcase } from 'lucide-react';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Verified Developer Network',
   description: 'Browse approved and verified software engineers, architects, and AI specialists.',
+  alternates: {
+    canonical: `${siteConfig.url}/developers`,
+  },
+  openGraph: {
+    title: `Verified Developer Network | ${siteConfig.name}`,
+    description: 'Browse approved and verified software engineers, architects, and AI specialists.',
+    url: `${siteConfig.url}/developers`,
+    siteName: siteConfig.name,
+    type: 'website',
+  },
 };
 
 // Seed verified developer network

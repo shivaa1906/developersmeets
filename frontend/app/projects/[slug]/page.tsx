@@ -1,5 +1,7 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { siteConfig } from '@/config/site';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -86,8 +88,90 @@ const projectCatalog: Record<string, any> = {
   },
 };
 
-export default function ProjectDetailPage({ params }: ProjectDetailProps) {
-  const project = projectCatalog[params.slug];
+async function getProject(slug: string) {
+  if (projectCatalog[slug]) {
+    return projectCatalog[slug];
+  }
+  try {
+    const res = await fetch(`http://127.0.0.1:5000/api/projects/published/${slug}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.project) return null;
+    const p = data.project;
+    return {
+      project_number: p.project_number,
+      title: p.title,
+      category: p.category,
+      description: p.description,
+      technologies: Array.isArray(p.required_technologies) ? p.required_technologies : [],
+      status: p.status,
+      timeline: p.timeline || 'Enterprise',
+      budget_range: 'Enterprise Escrow',
+      lead_developer: {
+        name: p.lead_dev_name || 'Verified Developer',
+        username: p.lead_dev_username || 'developer',
+        role: p.lead_dev_title || 'Lead Architect',
+        skills: [],
+      },
+      contributors: [],
+      deliverables: ['Production milestone delivered', 'Verified completion signoff'],
+    };
+  } catch (_err) {
+    return null;
+  }
+}
+
+export async function generateMetadata({ params }: ProjectDetailProps): Promise<Metadata> {
+  const project = await getProject(params.slug);
+
+  if (!project) {
+    return {
+      title: 'Project Not Found',
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const title = `${project.title} | ${siteConfig.name}`;
+  const description = project.description?.slice(0, 160) || `${project.title} engineered by ${siteConfig.name}`;
+  const canonicalUrl = `${siteConfig.url}/projects/${params.slug}`;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonicalUrl,
+      siteName: siteConfig.name,
+      type: 'article',
+      images: [
+        {
+          url: `${siteConfig.url}/og-project.png`,
+          width: 1200,
+          height: 630,
+          alt: project.title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+    },
+    robots: {
+      index: project.status === 'PUBLISHED',
+      follow: project.status === 'PUBLISHED',
+    },
+  };
+}
+
+export default async function ProjectDetailPage({ params }: ProjectDetailProps) {
+  const project = await getProject(params.slug);
 
   if (!project) {
     notFound();

@@ -742,7 +742,13 @@ export class ProjectService {
   /**
    * Retrieves open marketplace projects
    */
-  static async getMarketplaceProjects(filters?: { category?: string; search?: string }) {
+  static async getMarketplaceProjects(filters?: {
+    category?: string;
+    search?: string;
+    skill?: string;
+    developerId?: string;
+    eligibleOnly?: boolean;
+  }) {
     let sql = `
       SELECT p.id, p.project_number, p.slug, p.title, p.description, p.category,
              p.budget_min, p.budget_max, p.timeline, p.required_technologies,
@@ -755,23 +761,50 @@ export class ProjectService {
 
     const params: any[] = [];
     if (filters?.category && filters.category !== 'ALL') {
-      params.push(filters.category);
-      sql += ` AND p.category = $${params.length}`;
+      params.push(`%${filters.category}%`);
+      sql += ` AND p.category ILIKE $${params.length}`;
+    }
+
+    if (filters?.skill) {
+      params.push(`%${filters.skill}%`);
+      sql += ` AND p.required_technologies::text ILIKE $${params.length}`;
     }
 
     if (filters?.search) {
       params.push(`%${filters.search}%`);
-      sql += ` AND (p.title ILIKE $${params.length} OR p.description ILIKE $${params.length})`;
+      sql += ` AND (p.title ILIKE $${params.length} OR p.description ILIKE $${params.length} OR p.category ILIKE $${params.length} OR p.required_technologies::text ILIKE $${params.length})`;
     }
 
     sql += ` GROUP BY p.id ORDER BY p.created_at DESC`;
 
     const result = await query(sql, params);
-    return result.rows.map((r) => ({
+    let mapped = result.rows.map((r) => ({
       ...r,
       current_claims: parseInt(r.current_claims, 10),
       slots_remaining: Math.max(0, r.max_claims - parseInt(r.current_claims, 10)),
     }));
+
+    if (filters?.developerId) {
+      const devId = filters.developerId;
+      mapped = await Promise.all(
+        mapped.map(async (p) => {
+          const eligibility = await ProjectService.checkEligibility(p.id, devId);
+          return {
+            ...p,
+            is_eligible: eligibility.eligible,
+            missing_skills: eligibility.missingSkills,
+            matched_skills: eligibility.matchedSkills,
+            eligibility_reason: eligibility.reason,
+          };
+        })
+      );
+
+      if (filters?.eligibleOnly) {
+        mapped = mapped.filter((p: any) => (p as any).is_eligible);
+      }
+    }
+
+    return mapped;
   }
 
   /**

@@ -29,6 +29,27 @@ app.use(
   })
 );
 
+// SEO & Indexability Enforcement Middleware
+app.use((req, res, next) => {
+  const p = req.path;
+  const isPublicShowcase =
+    p.startsWith('/api/projects/published') ||
+    p.startsWith('/api/projects/public') ||
+    p.startsWith('/api/developers/public') ||
+    p.startsWith('/api/developers/directory') ||
+    p.startsWith('/api/developers/profile') ||
+    p.startsWith('/api/developers/skills') ||
+    p === '/api/health';
+
+  if (isPublicShowcase) {
+    res.setHeader('X-Robots-Tag', 'index, follow');
+  } else {
+    // Non-indexable: Private client projects, private chats, claims, community, support, admin, credits, internal api
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  }
+  next();
+});
+
 // System Health & Platform Status
 app.get('/api/health', (req, res) => {
   res.json({

@@ -7,6 +7,9 @@ const router = Router();
 
 // Public routes
 router.get('/public', DeveloperController.listPublic);
+router.get('/directory', DeveloperController.listPublic);
+router.get('/skills', DeveloperController.listSkills);
+router.get('/skills/search', DeveloperController.listSkills);
 router.get('/profile/:username', DeveloperController.getByUsername);
 router.get('/:username', DeveloperController.getByUsername);
 
