@@ -473,6 +473,10 @@ export class ProjectController {
       const result = await ProjectService.selectDeveloper(projectId, selectedDeveloperId, clientId);
       res.json(result);
     } catch (error: any) {
+      if (error.message?.includes('Conflict')) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
       res.status(400).json({ error: error.message });
     }
   }

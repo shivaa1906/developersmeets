@@ -582,9 +582,9 @@ export class ProjectService {
     clientId: string
   ): Promise<{ success: boolean; refundedCount: number }> {
     return withTransaction(async (client) => {
-      // 1. Verify project ownership
+      // 1. Verify project ownership and state with row lock FOR UPDATE
       const projectRes = await client.query(
-        `SELECT id, status, client_id, title FROM projects WHERE id = $1 FOR UPDATE`,
+        `SELECT id, status, client_id, title, lead_developer_id FROM projects WHERE id = $1 FOR UPDATE`,
         [projectId]
       );
 
@@ -595,6 +595,26 @@ export class ProjectService {
       const project = projectRes.rows[0];
       if (project.client_id !== clientId) {
         throw new Error('Forbidden: only the project owner can select a developer');
+      }
+
+      // Duplicate / Concurrent selection guard:
+      if (
+        project.lead_developer_id !== null ||
+        project.status === 'DEVELOPER_SELECTED' ||
+        project.status === 'IN_PROGRESS'
+      ) {
+        throw new Error(
+          'Conflict: A lead developer has already been selected for this project. Duplicate selection is not permitted.'
+        );
+      }
+
+      // Verify selected developer has claimed this project
+      const claimCheck = await client.query(
+        `SELECT id, status FROM project_claims WHERE project_id = $1 AND developer_id = $2`,
+        [projectId, selectedDeveloperId]
+      );
+      if (claimCheck.rows.length === 0) {
+        throw new Error('Candidate developer has not claimed this project');
       }
 
       // 2. Update selected claim
@@ -613,10 +633,10 @@ export class ProjectService {
         [projectId, selectedDeveloperId]
       );
 
-      // 4. Update project lead and status to IN_PROGRESS
+      // 4. Update project lead and status to DEVELOPER_SELECTED
       await client.query(
         `UPDATE projects
-         SET lead_developer_id = $1, status = 'IN_PROGRESS', updated_at = NOW()
+         SET lead_developer_id = $1, status = 'DEVELOPER_SELECTED', updated_at = NOW()
          WHERE id = $2`,
         [selectedDeveloperId, projectId]
       );
@@ -651,7 +671,33 @@ export class ProjectService {
         [projectId, selectedDeveloperId]
       );
 
-      // 8. Notify winning developer
+      // 8. Record audit log with client, project, selected developer, timestamp, and refunds
+      const clientUserRes = await client.query(
+        `SELECT user_id FROM clients WHERE id = $1`,
+        [clientId]
+      );
+      const actorUserId = clientUserRes.rows[0]?.user_id || clientId;
+
+      await client.query(
+        `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+         VALUES ($1, 'DEVELOPER_SELECTED', 'PROJECT', $2, $3)`,
+        [
+          actorUserId,
+          projectId,
+          JSON.stringify({
+            client: clientId,
+            clientId,
+            project: projectId,
+            projectId,
+            selectedDeveloperId,
+            selected_developer: selectedDeveloperId,
+            timestamp: new Date().toISOString(),
+            refunds: refundResult.refundedDevelopersCount,
+          }),
+        ]
+      );
+
+      // 9. Notify winning developer
       const winDevUser = await client.query(
         `SELECT user_id FROM developers WHERE id = $1`,
         [selectedDeveloperId]
