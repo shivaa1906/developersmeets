@@ -54,6 +54,8 @@ Frontend and Backend are cleanly organized into decoupled workspaces:
 │   ├── database.md
 │   ├── security.md
 │   └── api.md
+├── DEPLOYMENT.md                 # Full Production Deployment & Operations Guide
+├── SETUP.md                      # Local & Staging Setup & Testing Guide
 ├── .env.example                  # Environment template
 └── package.json                  # Root npm workspace orchestrator
 ```
@@ -148,4 +150,14 @@ npm run test:e2e --workspace=backend
 # Launch PostgreSQL, Backend (Port 5000), and Next.js Frontend (Port 3000)
 docker compose up --build
 ```
+
+---
+
+## 📚 Dedicated Guides
+
+For in-depth guides on configuration, deployments, and testing:
+
+- **[Master Production Deployment Guide (`DEPLOYMENT.md`)](./DEPLOYMENT.md)**: VPS setup (Ubuntu 22.04/24.04), PM2 clustering, Nginx reverse proxy, SSL with Certbot, Docker orchestration, database backups, and zero-downtime rolling updates.
+- **[Local & Staging Setup Guide (`SETUP.md`)](./SETUP.md)**: Native local installation, PostgreSQL configuration, database migrations (001–011), seed accounts, quick demo logins, and verification test suites.
+
 

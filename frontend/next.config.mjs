@@ -16,10 +16,11 @@ const nextConfig = {
     ],
   },
   async rewrites() {
+    const backendTarget = process.env.INTERNAL_API_URL || 'http://127.0.0.1:5000';
     return [
       {
         source: '/api/:path*',
-        destination: 'http://127.0.0.1:5000/api/:path*',
+        destination: `${backendTarget}/api/:path*`,
       },
     ];
   },
