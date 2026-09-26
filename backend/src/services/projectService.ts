@@ -4,6 +4,7 @@ import { PROJECT_STATUSES, ROLES } from '../config/constants.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { NotificationService } from './notificationService.js';
 import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
+import { RealtimeEvents } from '../realtime/events.js';
 
 export interface ProjectSubmissionInput {
   title: string;
@@ -434,12 +435,30 @@ export class ProjectService {
         });
       }
 
-      return {
+      const result = {
         claimId,
         anonymousTag,
         remainingCredits: ledgerResult.newBalance,
         conversationId: convId,
       };
+
+      try {
+        RealtimeEvents.emitMarketplaceUpdate(projectId, {
+          claimsCount: currentClaimsCount + 1,
+          maxClaims: project.max_claims,
+          status: currentClaimsCount + 1 >= project.max_claims ? PROJECT_STATUSES.CLAIMS_CLOSED : PROJECT_STATUSES.CLAIMS_ACTIVE,
+        });
+        RealtimeEvents.emitAdminEvent('project_claimed', {
+          projectId,
+          claimId,
+          anonymousTag,
+          developerId,
+        });
+      } catch (_err) {
+        // Non-blocking
+      }
+
+      return result;
     });
   }
 

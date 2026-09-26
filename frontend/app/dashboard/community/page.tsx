@@ -5,8 +5,9 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
+import { useRealtime } from '@/hooks/use-realtime';
 import { apiClient } from '@/lib/api-client';
-import { Hash, Send, Shield, ThumbsUp, MessageSquare } from 'lucide-react';
+import { Hash, Send, Shield, ThumbsUp, MessageSquare, Radio } from 'lucide-react';
 
 interface ChannelItem {
   id: string;
@@ -27,6 +28,7 @@ interface PostItem {
 
 export default function DashboardCommunityPage() {
   const { addToast } = useToast();
+  const { subscribe, isConnected } = useRealtime();
   const [channels, setChannels] = React.useState<ChannelItem[]>([]);
   const [activeChannelSlug, setActiveChannelSlug] = React.useState('general');
   const [posts, setPosts] = React.useState<PostItem[]>([]);
@@ -65,9 +67,42 @@ export default function DashboardCommunityPage() {
     fetchChannels();
   }, [fetchChannels]);
 
+  // Real-time WebSocket connection to current community channel
   React.useEffect(() => {
     fetchPosts(activeChannelSlug);
-  }, [activeChannelSlug, fetchPosts]);
+
+    const channel = `community:${activeChannelSlug}`;
+    const unsubscribe = subscribe(channel, (event: any) => {
+      if (event.event === 'community:message') {
+        const msg = event.data;
+        setPosts((prev) => {
+          if (prev.some((p) => p.id === msg.id)) return prev;
+          return [
+            {
+              id: msg.id,
+              title: msg.title || (msg.content ? msg.content.slice(0, 40) : 'Discussion'),
+              content: msg.content,
+              upvotes: 0,
+              comments_count: 0,
+              created_at: msg.created_at || new Date().toISOString(),
+              author_name: msg.author_name || 'Community Developer',
+              author_title: msg.author_title || 'Developer',
+            },
+            ...prev,
+          ];
+        });
+      } else if (event.event === 'community:reaction') {
+        const r = event.data;
+        setPosts((prev) =>
+          prev.map((p) => (p.id === r.messageId ? { ...p, upvotes: Math.max(0, p.upvotes + (r.added ? 1 : -1)) } : p))
+        );
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [activeChannelSlug, fetchPosts, subscribe]);
 
   const activeChannel = channels.find((c) => c.slug === activeChannelSlug);
 

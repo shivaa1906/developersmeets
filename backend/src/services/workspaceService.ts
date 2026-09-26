@@ -2,6 +2,7 @@ import { withTransaction, query } from '../database/db.js';
 import { ROLES } from '../config/constants.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { NotificationService } from './notificationService.js';
+import { RealtimeEvents } from '../realtime/events.js';
 
 export interface WorkspaceUserContext {
   userId: string;
@@ -453,6 +454,15 @@ export class WorkspaceService {
       },
     });
 
+    try {
+      RealtimeEvents.emitWorkspaceUpdate(milestone.project_id, {
+        type: 'MILESTONE_UPDATED',
+        payload: updated,
+      });
+    } catch (_err) {
+      // Non-blocking
+    }
+
     return updated;
   }
 
@@ -550,6 +560,15 @@ export class WorkspaceService {
         mimeType: fileData.mimeType,
       },
     });
+
+    try {
+      RealtimeEvents.emitWorkspaceUpdate(projectId, {
+        type: 'FILE_UPLOADED',
+        payload: uploadedFile,
+      });
+    } catch (_err) {
+      // Non-blocking
+    }
 
     return uploadedFile;
   }

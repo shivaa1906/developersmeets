@@ -1,0 +1,92 @@
+import jwt from 'jsonwebtoken';
+import { env } from '../config/environment.js';
+import { query } from '../database/db.js';
+import { RealtimeUser } from './types.js';
+
+interface JwtPayload {
+  userId: string;
+  email?: string;
+  role?: string;
+  developerId?: string;
+  clientId?: string;
+  iat?: number;
+  exp?: number;
+}
+
+/**
+ * Authenticates a WebSocket connection using a JWT token.
+ * Validates against the database to guarantee the user is active,
+ * not suspended, and uses trusted server-side roles rather than trusting client claims.
+ */
+export async function authenticateSocketToken(token: string): Promise<RealtimeUser> {
+  if (!token) {
+    throw new Error('Authentication token required');
+  }
+
+  let decoded: JwtPayload;
+  try {
+    decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+  } catch (err: any) {
+    if (err.name === 'TokenExpiredError') {
+      throw new Error('Authentication token has expired');
+    }
+    throw new Error('Invalid authentication token');
+  }
+
+  const userId = decoded.userId;
+  if (!userId) {
+    throw new Error('Malformed token payload: missing userId');
+  }
+
+  // Load user from database to ensure fresh status and role
+  const userRes = await query(
+    `SELECT id, email, role, status FROM users WHERE id = $1`,
+    [userId]
+  );
+
+  if (userRes.rows.length === 0) {
+    throw new Error('User account not found');
+  }
+
+  const dbUser = userRes.rows[0];
+
+  if (dbUser.status === 'SUSPENDED') {
+    throw new Error('User account is suspended');
+  }
+
+  let developerId: string | undefined = undefined;
+  let clientId: string | undefined = undefined;
+  let displayName = dbUser.email.split('@')[0];
+
+  if (dbUser.role === 'DEVELOPER') {
+    const devRes = await query(
+      `SELECT id, display_name, username, verification_status FROM developers WHERE user_id = $1`,
+      [userId]
+    );
+    if (devRes.rows.length > 0) {
+      developerId = devRes.rows[0].id;
+      displayName = devRes.rows[0].display_name || devRes.rows[0].username || displayName;
+    }
+  } else if (dbUser.role === 'CLIENT') {
+    const clientRes = await query(
+      `SELECT id, client_number, company_name FROM clients WHERE user_id = $1`,
+      [userId]
+    );
+    if (clientRes.rows.length > 0) {
+      clientId = clientRes.rows[0].id;
+      displayName = clientRes.rows[0].client_number || displayName;
+    }
+  } else if (['CEO', 'MD', 'ADMIN'].includes(dbUser.role)) {
+    displayName = `${dbUser.role} Administrator`;
+  }
+
+  return {
+    userId: dbUser.id,
+    email: dbUser.email,
+    role: dbUser.role,
+    status: dbUser.status,
+    developerId,
+    clientId,
+    displayName,
+  };
+}

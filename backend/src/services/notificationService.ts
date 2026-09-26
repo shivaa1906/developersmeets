@@ -1,5 +1,6 @@
 import { query } from '../database/db.js';
 import { scrubPrivateContactInfo } from '../utils/privacyScrubber.js';
+import { RealtimeEvents } from '../realtime/events.js';
 
 export interface CreateNotificationParams {
   userId: string;
@@ -49,7 +50,15 @@ export class NotificationService {
     ];
 
     const result = client ? await client.query(sql, values) : await query(sql, values);
-    return result.rows[0];
+    const notification = result.rows[0];
+
+    try {
+      RealtimeEvents.emitNotification(userId, notification);
+    } catch (_err) {
+      // Non-blocking realtime notification broadcast
+    }
+
+    return notification;
   }
 
   /**

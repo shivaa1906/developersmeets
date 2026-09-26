@@ -14,6 +14,7 @@ router.get('/marketplace', ProjectController.marketplace);
 
 // Authenticated routes
 router.get('/my-projects', authenticateJwt, ProjectController.myProjects);
+router.get('/my', authenticateJwt, ProjectController.myProjects);
 router.get('/:id', authenticateJwt, ProjectController.getById);
 
 // Client project submission

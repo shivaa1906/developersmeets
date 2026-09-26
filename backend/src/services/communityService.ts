@@ -2,6 +2,7 @@ import { query, withTransaction } from '../database/db.js';
 import { ChatService } from './chatService.js';
 import { NotificationService } from './notificationService.js';
 import { sanitizeRichText } from '../utils/sanitizer.js';
+import { RealtimeEvents } from '../realtime/events.js';
 
 export class CommunityService {
   /**
@@ -376,7 +377,15 @@ export class CommunityService {
       }
     }
 
-    return insRes.rows[0];
+    const newMessage = insRes.rows[0];
+
+    try {
+      RealtimeEvents.emitCommunityMessage(channel.slug, newMessage);
+    } catch (_err) {
+      // Non-blocking
+    }
+
+    return newMessage;
   }
 
   /**
@@ -452,20 +461,40 @@ export class CommunityService {
       [messageId, userId, emoji]
     );
 
+    let added = false;
     if (existing.rows.length > 0) {
       await query(
         `DELETE FROM channel_message_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
         [messageId, userId, emoji]
       );
-      return { added: false, emoji };
+      added = false;
     } else {
       await query(
         `INSERT INTO channel_message_reactions (message_id, user_id, developer_id, emoji)
          VALUES ($1, $2, $3, $4)`,
         [messageId, userId, developerId || null, emoji]
       );
-      return { added: true, emoji };
+      added = true;
     }
+
+    try {
+      const chRes = await query(
+        `SELECT c.slug FROM channel_messages m JOIN channels c ON m.channel_id = c.id WHERE m.id = $1`,
+        [messageId]
+      );
+      if (chRes.rows.length > 0) {
+        const countRes = await query(
+          `SELECT COUNT(*)::int as count FROM channel_message_reactions WHERE message_id = $1 AND emoji = $2`,
+          [messageId, emoji]
+        );
+        const count = countRes.rows[0]?.count || 0;
+        RealtimeEvents.emitCommunityReaction(chRes.rows[0].slug, { messageId, emoji, added, count });
+      }
+    } catch (_err) {
+      // Non-blocking
+    }
+
+    return { added, emoji };
   }
 
   /**

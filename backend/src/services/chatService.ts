@@ -3,6 +3,7 @@ import { scrubPrivateContactInfo } from '../utils/privacyScrubber.js';
 import { sanitizeRichText } from '../utils/sanitizer.js';
 import { EventEmitter } from 'events';
 import { NotificationService } from './notificationService.js';
+import { RealtimeEvents } from '../realtime/events.js';
 
 export const chatEventEmitter = new EventEmitter();
 chatEventEmitter.setMaxListeners(100);
@@ -75,7 +76,7 @@ export class ChatService {
 
     // 2. Fetch messages
     const messagesRes = await query(
-      `SELECT m.id, m.sender_user_id, m.message, m.message_type, m.created_at,
+      `SELECT m.id, m.sender_user_id, m.message, m.message_type, m.attachment_url, m.created_at,
               u.role as sender_system_role,
               cl.client_number,
               pc.anonymous_tag
@@ -126,6 +127,7 @@ export class ChatService {
         senderDisplayName,
         message: msg.message,
         messageType: msg.message_type,
+        attachmentUrl: msg.attachment_url,
         createdAt: msg.created_at,
         isMe,
       };
@@ -193,6 +195,12 @@ export class ChatService {
       [conversationId, userId]
     );
 
+    try {
+      RealtimeEvents.emitChatRead(conversationId, { userId, unreadCount: 0 });
+    } catch (_err) {
+      // Non-blocking broadcast
+    }
+
     return {
       success: true,
       conversationId,
@@ -204,7 +212,7 @@ export class ChatService {
   /**
    * Sends a message with automated privacy redaction, realtime event broadcast, and closed chat defense
    */
-  static async sendMessage(conversationId: string, senderUserId: string, rawText: string) {
+  static async sendMessage(conversationId: string, senderUserId: string, rawText: string, attachmentUrl?: string) {
     // 1. Membership & conversation status check
     const memberCheck = await query(
       `SELECT cm.id, cm.role, c.status as conversation_status, c.project_id
@@ -244,10 +252,10 @@ export class ChatService {
 
     // 4. Insert message
     const msgRes = await query(
-      `INSERT INTO messages (conversation_id, sender_user_id, message, message_type)
-       VALUES ($1, $2, $3, 'TEXT')
-       RETURNING id, conversation_id, sender_user_id, message, created_at`,
-      [conversationId, senderUserId, sanitizedText]
+      `INSERT INTO messages (conversation_id, sender_user_id, message, message_type, attachment_url)
+       VALUES ($1, $2, $3, 'TEXT', $4)
+       RETURNING id, conversation_id, sender_user_id, message, attachment_url, created_at`,
+      [conversationId, senderUserId, sanitizedText, attachmentUrl || null]
     );
 
     // 5. Update sender's last_read_at so sender never has unread count for own messages
@@ -261,6 +269,7 @@ export class ChatService {
       conversationId,
       senderId: senderUserId,
       message: msgRes.rows[0].message,
+      attachmentUrl: msgRes.rows[0].attachment_url,
       createdAt: msgRes.rows[0].created_at,
       projectId: project_id,
     };
@@ -308,6 +317,16 @@ export class ChatService {
         } else if (s.system_role === 'CEO' || s.system_role === 'MD' || s.system_role === 'ADMIN') {
           senderDisplayName = 'Platform Support';
         }
+      }
+
+      // Emit WebSocket real-time event to conversation channel with strict anonymity
+      try {
+        RealtimeEvents.emitChatMessage(conversationId, {
+          ...messageData,
+          senderDisplayName,
+        });
+      } catch (_err) {
+        // Non-blocking realtime broadcast
       }
 
       const rawSnippet = scrubbed.scrubbedText;

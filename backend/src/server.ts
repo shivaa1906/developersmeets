@@ -1,8 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import http from 'http';
 import { env } from './config/environment.js';
 import { errorHandler } from './middlewares/errorHandler.js';
+import { realtimeServer } from './realtime/realtimeServer.js';
 import authRoutes from './routes/authRoutes.js';
 import projectRoutes from './routes/projectRoutes.js';
 import creditRoutes from './routes/creditRoutes.js';
@@ -87,11 +89,16 @@ app.use('/api/analytics', analyticsRoutes);
 // Global Error Handler
 app.use(errorHandler);
 
+const httpServer = http.createServer(app);
+realtimeServer.init(httpServer);
+
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(env.PORT, () => {
+  httpServer.listen(env.PORT, () => {
     console.log(`[Backend Service] Listening on port ${env.PORT} (${env.NODE_ENV})`);
+    console.log(`[WebSocket Service] Initialized on ws://localhost:${env.PORT}/ws`);
     console.log(`[Governance] CEO: ${LEADERSHIP.CEO.NAME} | MD: ${LEADERSHIP.MD.NAME}`);
   });
 }
 
+export { app, httpServer };
 export default app;

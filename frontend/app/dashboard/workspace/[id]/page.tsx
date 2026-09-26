@@ -213,6 +213,28 @@ export default function ProjectWorkspacePage() {
         </div>
       </div>
 
+      {/* Completed Project Support Banner */}
+      {['COMPLETED', 'PUBLISHED'].includes(overview.status) && (
+        <div className="p-4 rounded-lg border border-accent/40 bg-accent/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start space-x-3">
+            <div className="h-8 w-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center text-accent shrink-0 mt-0.5">
+              <LifeBuoy className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Project Completed & Sealed</h3>
+              <p className="text-xs text-muted mt-0.5">
+                Original project chat is sealed. For warranty assistance, configuration, or bug remediation, open a Support Ticket.
+              </p>
+            </div>
+          </div>
+          <Link href={`/dashboard/support?action=create&projectId=${projectId}`}>
+            <Button size="sm" leftIcon={<LifeBuoy className="h-3.5 w-3.5" />}>
+              Create Support Ticket
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* 9 Workspace Navigation Tabs */}
       <Tabs tabs={workspaceTabs} activeTab={activeTab} onChange={setActiveTab} />
 
@@ -589,32 +611,52 @@ export default function ProjectWorkspacePage() {
       {/* SECTION 9: SUPPORT */}
       {activeTab === 'support' && (
         <Card className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-bold text-foreground">Tripartite Support Tickets</h3>
               <p className="text-xs text-muted">Direct escalation bridges involving Client, Developer, and Leadership Support.</p>
             </div>
+            {isClient && (
+              <Link href={`/dashboard/support?action=create&projectId=${projectId}`}>
+                <Button size="sm" leftIcon={<LifeBuoy className="h-3.5 w-3.5" />}>
+                  Create Support Ticket
+                </Button>
+              </Link>
+            )}
           </div>
 
           {support.length === 0 ? (
-            <div className="p-8 text-center text-xs text-muted">
-              No open support tickets for this project.
+            <div className="p-8 text-center text-xs text-muted space-y-3">
+              <LifeBuoy className="h-8 w-8 text-muted mx-auto" />
+              <p>No open support tickets for this project.</p>
+              {isClient && (
+                <Link href={`/dashboard/support?action=create&projectId=${projectId}`}>
+                  <Button size="sm" variant="outline">
+                    Open a Support Ticket
+                  </Button>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
               {support.map((ticket: any) => (
-                <div key={ticket.id} className="p-4 bg-surface-elevated rounded border border-border flex items-center justify-between text-xs">
+                <div key={ticket.id} className="p-4 bg-surface-elevated rounded border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="font-mono text-muted">{ticket.ticket_number}</span>
+                      <span className="font-mono text-accent font-semibold">{ticket.ticket_number}</span>
                       <Badge variant="outline">{ticket.priority}</Badge>
+                      <Badge variant={ticket.status === 'RESOLVED' ? 'success' : 'warning'}>
+                        {ticket.status}
+                      </Badge>
                     </div>
                     <h5 className="font-bold text-foreground text-sm mt-1">{ticket.subject}</h5>
                     <p className="text-muted text-xs mt-0.5">{ticket.description}</p>
                   </div>
-                  <Badge variant={ticket.status === 'RESOLVED' ? 'success' : 'warning'}>
-                    {ticket.status}
-                  </Badge>
+                  <Link href={`/dashboard/support/${ticket.id}`} className="shrink-0">
+                    <Button size="sm" variant="secondary" rightIcon={<ExternalLink className="h-3 w-3" />}>
+                      Open Bridge
+                    </Button>
+                  </Link>
                 </div>
               ))}
             </div>

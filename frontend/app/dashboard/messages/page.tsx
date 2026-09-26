@@ -5,8 +5,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
+import { useAuth } from '@/hooks/use-auth';
+import { useRealtime } from '@/hooks/use-realtime';
+import { realtimeClient } from '@/lib/realtime-client';
 import { apiClient } from '@/lib/api-client';
-import { Send, Shield, Lock, MessageSquare } from 'lucide-react';
+import { Send, Shield, Lock, MessageSquare, Radio } from 'lucide-react';
 
 interface ConversationItem {
   id: string;
@@ -25,11 +28,14 @@ interface MessageItem {
 }
 
 export default function DashboardMessagesPage() {
+  const { user } = useAuth();
   const { addToast } = useToast();
+  const { subscribe, sendTyping, isConnected } = useRealtime();
   const [conversations, setConversations] = React.useState<ConversationItem[]>([]);
   const [activeConversationId, setActiveConversationId] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<MessageItem[]>([]);
   const [inputMessage, setInputMessage] = React.useState('');
+  const [typingStatus, setTypingStatus] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSending, setIsSending] = React.useState(false);
 
@@ -60,13 +66,52 @@ export default function DashboardMessagesPage() {
     }
   }, []);
 
+  // Real-time WebSocket connection to active conversation room
   React.useEffect(() => {
-    if (activeConversationId) {
-      fetchMessages(activeConversationId);
-      const interval = setInterval(() => fetchMessages(activeConversationId), 5000);
-      return () => clearInterval(interval);
+    if (!activeConversationId) return;
+
+    fetchMessages(activeConversationId);
+
+    const channel = `chat:${activeConversationId}`;
+    const unsubscribe = subscribe(channel, (event: any) => {
+      if (event.event === 'chat:message') {
+        const newMsg = event.data;
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          return [
+            ...prev,
+            {
+              id: newMsg.id,
+              senderDisplayName: newMsg.senderDisplayName || 'Participant',
+              message: newMsg.message,
+              createdAt: newMsg.createdAt,
+              isMe: newMsg.senderId === user?.id,
+            },
+          ];
+        });
+      }
+    });
+
+    const unsubTyping = realtimeClient.on(`typing:${channel}`, (payload: any) => {
+      if (payload.isTyping) {
+        setTypingStatus(`${payload.displayName || 'Participant'} is typing...`);
+      } else {
+        setTypingStatus(null);
+      }
+    });
+
+    // Fallback polling only when WS is disconnected
+    let pollInterval: any = null;
+    if (!isConnected) {
+      pollInterval = setInterval(() => fetchMessages(activeConversationId), 15000);
     }
-  }, [activeConversationId, fetchMessages]);
+
+    return () => {
+      unsubscribe();
+      unsubTyping();
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [activeConversationId, fetchMessages, subscribe, isConnected, user?.id]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,9 +215,17 @@ export default function DashboardMessagesPage() {
                     ANON
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-foreground">
-                      {activeConv?.project_title || 'Anonymous Channel'}
-                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-sm font-bold text-foreground">
+                        {activeConv?.project_title || 'Anonymous Channel'}
+                      </h3>
+                      {isConnected && (
+                        <span className="flex items-center space-x-1 rounded-full bg-status-success/10 border border-status-success/30 px-2 py-0.5 text-[9px] font-semibold text-status-success">
+                          <span className="h-1.5 w-1.5 rounded-full bg-status-success animate-pulse" />
+                          <span>REALTIME</span>
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-muted">
                       Project: {activeConv?.project_number || 'Confidential'} • Shielded Channel
                     </p>
@@ -215,6 +268,14 @@ export default function DashboardMessagesPage() {
                 )}
               </div>
 
+              {/* Realtime Typing Indicator */}
+              {typingStatus && (
+                <div className="px-4 py-1.5 bg-surface-elevated/40 border-t border-border flex items-center space-x-2 text-[10px] text-accent font-medium animate-pulse">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                  <span>{typingStatus}</span>
+                </div>
+              )}
+
               {/* Input Bar */}
               <form
                 onSubmit={handleSendMessage}
@@ -224,7 +285,12 @@ export default function DashboardMessagesPage() {
                   type="text"
                   placeholder="Type an anonymous message (contact details will be automatically redacted)..."
                   value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
+                  onChange={(e) => {
+                    setInputMessage(e.target.value);
+                    if (activeConversationId) {
+                      sendTyping(`chat:${activeConversationId}`, e.target.value.length > 0);
+                    }
+                  }}
                   className="flex-1 bg-transparent px-3 py-2 text-xs text-foreground placeholder:text-muted focus:outline-none"
                 />
                 <Button

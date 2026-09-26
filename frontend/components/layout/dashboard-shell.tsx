@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
 import {
@@ -17,8 +17,12 @@ import {
   LogOut,
   Terminal,
   Bell,
+  LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { useRealtime } from '@/hooks/use-realtime';
+import { useToast } from '@/components/ui/toast';
+import { apiClient } from '@/lib/api-client';
 
 const iconMap: Record<string, React.ReactNode> = {
   Overview: <LayoutDashboard className="h-4 w-4" />,
@@ -26,6 +30,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Projects: <FolderGit2 className="h-4 w-4" />,
   Messages: <MessageSquare className="h-4 w-4" />,
   Community: <Users2 className="h-4 w-4" />,
+  Support: <LifeBuoy className="h-4 w-4" />,
   Inquiries: <Mail className="h-4 w-4" />,
   'Credits & Wallet': <Coins className="h-4 w-4" />,
   Settings: <Settings className="h-4 w-4" />,
@@ -33,10 +38,57 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { user, token, isLoading, logout } = useAuth();
+  const { subscribe } = useRealtime();
+  const { addToast } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-  const displayName = user?.name || user?.email?.split('@')[0] || 'Developer #01';
-  const roleDisplay = user?.role === 'CLIENT' ? (user.clientNumber || 'Client #001') : 'Verified Developer';
+  const [unreadCount, setUnreadCount] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!isLoading && (!token || !user)) {
+      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+    }
+  }, [isLoading, token, user, pathname, router]);
+
+  const displayName = user?.name || user?.email?.split('@')[0] || 'User';
+  const roleDisplay = user?.role === 'CLIENT'
+    ? (user.clientNumber || 'Client #001')
+    : user?.role === 'CEO'
+    ? 'Chief Executive Officer'
+    : user?.role === 'MD'
+    ? 'Managing Director'
+    : user?.role === 'SUPPORT'
+    ? 'Support Staff'
+    : 'Verified Developer';
+
+  React.useEffect(() => {
+    if (!user?.id) return;
+
+    // Fetch initial unread count
+    apiClient
+      .get<{ unreadCount: number }>('/notifications?limit=1')
+      .then((res) => {
+        if (typeof res.unreadCount === 'number') {
+          setUnreadCount(res.unreadCount);
+        }
+      })
+      .catch(() => {});
+
+    // Subscribe to personal notification channel
+    const userChannel = `user:${user.id}`;
+    const unsubscribe = subscribe(userChannel, (event: any) => {
+      if (event.event === 'notification:new') {
+        const notif = event.data;
+        setUnreadCount((prev) => prev + 1);
+        addToast('info', notif.title || 'Notification', notif.message);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.id, subscribe, addToast]);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -132,7 +184,11 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
             {/* Notification Bell */}
             <button className="relative rounded-lg p-2 text-muted hover:bg-surface-elevated hover:text-foreground transition-colors" aria-label="Notifications">
               <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-accent" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold text-black">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </header>

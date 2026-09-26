@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AdminController } from '../controllers/adminController.js';
+import { SupportController } from '../controllers/supportController.js';
 import { authenticateJwt } from '../middlewares/authMiddleware.js';
 import { requireRole } from '../middlewares/rbacMiddleware.js';
 import { ROLES } from '../config/constants.js';
@@ -45,6 +46,18 @@ router.get('/payments', AdminController.listPayments);
 
 // Support administration
 router.get('/support/tickets', AdminController.listSupportTickets);
+router.get('/support/staff', SupportController.listStaff);
+router.post('/support/staff', SupportController.addStaff);
+router.post('/support/staff/invite', SupportController.inviteStaff);
+router.patch('/support/staff/:staffId/status', SupportController.updateStaffStatus);
+router.patch('/support/staff/:staffId/permissions', SupportController.updateStaffPermissions);
+router.post('/support/staff/:staffId/suspend', SupportController.suspendStaff);
+router.post('/support/staff/:staffId/remove', SupportController.removeStaffAccess);
+router.post('/support/staff/:staffId/reassign-tickets', SupportController.reassignStaffTickets);
+router.get('/support/teams', SupportController.listTeams);
+router.post('/support/teams', SupportController.createTeam);
+router.post('/support/teams/:teamId/members', SupportController.addTeamMember);
+router.delete('/support/teams/:teamId/members/:staffId', SupportController.removeTeamMember);
 
 // Analytics
 router.get('/analytics', AdminController.getAnalytics);

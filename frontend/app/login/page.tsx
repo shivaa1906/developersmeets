@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Terminal, Shield, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { addToast } = useToast();
   const { login: setAuthSession } = useAuth();
   const [email, setEmail] = React.useState('');
@@ -31,6 +32,13 @@ export default function LoginPage() {
 
       setAuthSession(data.token, data.user);
 
+      const redirect = searchParams.get('redirect');
+      if (redirect && redirect.startsWith('/')) {
+        addToast('success', 'Authentication Successful', `Welcome back, ${data.user.email}`);
+        router.push(redirect);
+        return;
+      }
+
       if (data.user.role === 'CEO' || data.user.role === 'ADMIN' || data.user.role === 'MD') {
         addToast('success', 'Executive Authenticated', `Logged in as ${data.user.name || data.user.email}`);
         router.push('/admin/dashboard');
@@ -38,35 +46,23 @@ export default function LoginPage() {
         addToast('success', 'Authentication Successful', `Welcome back, ${data.user.email}`);
         router.push('/dashboard');
       }
-    } catch (_err) {
-      // Local development mock fallback
-      let mockRole: any = 'DEVELOPER';
-      let mockName = 'Developer #01';
-      if (email.includes('ritesh') || email.includes('ceo')) {
-        mockRole = 'CEO';
-        mockName = 'Ritesh Lingamallu';
-      } else if (email.includes('shiva') || email.includes('md')) {
-        mockRole = 'MD';
-        mockName = 'M. Shiva Gopi';
-      }
-
-      const mockUser = { email, role: mockRole, name: mockName, status: 'ACTIVE' };
-      setAuthSession('mock_jwt_token_for_dev', mockUser);
-
-      if (mockRole === 'CEO' || mockRole === 'MD') {
-        addToast('success', 'Executive Authenticated', `Logged in as ${mockName}.`);
-        router.push('/admin/dashboard');
-      } else {
-        addToast('success', 'Developer Authenticated', `Logged in as ${mockName}.`);
-        router.push('/dashboard');
-      }
+    } catch (err: any) {
+      addToast('error', 'Login Failed', err.message || 'Invalid email or password.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleQuickLogin = (role: 'CEO' | 'MD' | 'DEVELOPER') => {
-    if (role === 'CEO') {
+  const handleQuickLogin = (role: 'CLIENT' | 'DEVELOPER' | 'CEO' | 'MD') => {
+    if (role === 'CLIENT') {
+      setEmail('client001@apexretail.io');
+      setPassword('password123');
+      addToast('info', 'Client Profile Loaded', 'Signing in as Client #001 (Apex Retail Labs)');
+    } else if (role === 'DEVELOPER') {
+      setEmail('rahul@nexus.dev');
+      setPassword('password123');
+      addToast('info', 'Verified Developer Profile Loaded', 'Signing in as Rahul Kumar');
+    } else if (role === 'CEO') {
       setEmail('ritesh@nexus.dev');
       setPassword('password123');
       addToast('info', 'Executive CEO Profile Loaded', 'Signing in as Ritesh Lingamallu');
@@ -74,10 +70,6 @@ export default function LoginPage() {
       setEmail('shiva@nexus.dev');
       setPassword('password123');
       addToast('info', 'Managing Director Profile Loaded', 'Signing in as M. Shiva Gopi');
-    } else {
-      setEmail('developer@nexus.dev');
-      setPassword('password123');
-      addToast('info', 'Verified Developer Profile Loaded', 'Signing in as Developer');
     }
   };
 
@@ -130,7 +122,25 @@ export default function LoginPage() {
               <span className="text-[10px] uppercase font-bold text-muted tracking-wider block mb-2">
                 Quick Role Autofill
               </span>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickLogin('CLIENT')}
+                  className="text-[11px] h-8 border-accent/30 text-accent hover:bg-accent/10"
+                >
+                  Client #001
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickLogin('DEVELOPER')}
+                  className="text-[11px] h-8"
+                >
+                  Developer
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -148,15 +158,6 @@ export default function LoginPage() {
                   className="text-[11px] h-8"
                 >
                   MD Shiva
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickLogin('DEVELOPER')}
-                  className="text-[11px] h-8"
-                >
-                  Developer
                 </Button>
               </div>
             </div>
