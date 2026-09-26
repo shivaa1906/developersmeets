@@ -514,4 +514,128 @@ export class ProjectController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  /**
+   * Developer submits project for completion review
+   */
+  static async submitForReview(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const { notes } = req.body;
+
+    try {
+      const result = await ProjectService.submitForReview(
+        projectId,
+        {
+          userId: req.user!.userId,
+          role: req.user!.role,
+          developerId: req.user?.developerId,
+        },
+        notes
+      );
+      res.json(result);
+    } catch (error: any) {
+      if (error.message.includes('Forbidden') || error.message.includes('Unauthorized')) {
+        res.status(403).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    }
+  }
+
+  /**
+   * Client requests adjustments during project completion review
+   */
+  static async requestChanges(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const { feedback } = req.body;
+
+    try {
+      const result = await ProjectService.requestChanges(
+        projectId,
+        {
+          userId: req.user!.userId,
+          role: req.user!.role,
+          clientId: req.user?.clientId,
+        },
+        feedback
+      );
+      res.json(result);
+    } catch (error: any) {
+      if (error.message.includes('Forbidden') || error.message.includes('Unauthorized')) {
+        res.status(403).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    }
+  }
+
+  /**
+   * Client approves project completion
+   */
+  static async approveCompletion(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+    const { feedback, rating, publishImmediately } = req.body;
+
+    try {
+      const result = await ProjectService.approveCompletion(
+        projectId,
+        {
+          userId: req.user!.userId,
+          role: req.user!.role,
+          clientId: req.user?.clientId,
+        },
+        { feedback, rating, publishImmediately }
+      );
+      res.json(result);
+    } catch (error: any) {
+      if (error.message.includes('Forbidden') || error.message.includes('Unauthorized')) {
+        res.status(403).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    }
+  }
+
+  /**
+   * Client / Leadership publishes project to public portfolio showcase
+   */
+  static async publishProject(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { projectId } = req.params;
+
+    try {
+      const result = await ProjectService.publishProject(projectId, {
+        userId: req.user!.userId,
+        role: req.user!.role,
+        clientId: req.user?.clientId,
+      });
+      res.json(result);
+    } catch (error: any) {
+      if (error.message.includes('Forbidden') || error.message.includes('Unauthorized')) {
+        res.status(403).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    }
+  }
+
+  /**
+   * Public route: retrieve published project by slug or ID with privacy shielding
+   */
+  static async getPublishedBySlug(req: Request, res: Response): Promise<void> {
+    const { slug } = req.params;
+
+    try {
+      const project = await ProjectService.getPublicProjectBySlug(slug);
+
+      if (!project) {
+        res.status(404).json({ error: 'Public project not found or not published' });
+        return;
+      }
+
+      res.json({ project });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
+

@@ -322,6 +322,8 @@ CREATE TABLE IF NOT EXISTS support_tickets (
 CREATE TABLE IF NOT EXISTS support_bridges (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     ticket_id UUID UNIQUE NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+    bridge_number VARCHAR(50),
+    conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     closed_at TIMESTAMP WITH TIME ZONE
 );

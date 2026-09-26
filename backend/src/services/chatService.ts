@@ -219,8 +219,21 @@ export class ChatService {
     const { conversation_status, project_id } = memberCheck.rows[0];
 
     // 2. Closed conversation protection
-    if (conversation_status === 'CLOSED') {
-      throw new Error('Forbidden: This conversation is closed. Unselected project conversations cannot accept new messages.');
+    if (conversation_status === 'CLOSED' || conversation_status === 'READ_ONLY') {
+      throw new Error('Forbidden: This conversation is closed or read-only. Completed or unselected project conversations cannot accept new messages.');
+    }
+
+    // Completed project chat protection
+    if (project_id) {
+      const projCheck = await query(`SELECT status FROM projects WHERE id = $1`, [project_id]);
+      if (projCheck.rows.length > 0) {
+        const pStatus = projCheck.rows[0].status;
+        const convTypeRes = await query(`SELECT type FROM conversations WHERE id = $1`, [conversationId]);
+        const convType = convTypeRes.rows[0]?.type;
+        if (['COMPLETED', 'PUBLISHED'].includes(pStatus) && convType === 'PROJECT_PRIVATE') {
+          throw new Error('Forbidden: Project is completed. Original project chat is closed and read-only. For post-delivery assistance, please create a Support Ticket.');
+        }
+      }
     }
 
     // 3. Run Privacy Scrubber

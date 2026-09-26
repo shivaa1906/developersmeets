@@ -8,6 +8,8 @@ const router = Router();
 
 // Public routes
 router.get('/published', ProjectController.listPublished);
+router.get('/published/:slug', ProjectController.getPublishedBySlug);
+router.get('/public/:slug', ProjectController.getPublishedBySlug);
 router.get('/marketplace', ProjectController.marketplace);
 
 // Authenticated routes
@@ -78,6 +80,33 @@ router.post(
   authenticateJwt,
   requireRole(ROLES.CLIENT, ROLES.CEO, ROLES.ADMIN),
   ProjectController.select
+);
+
+// Project completion lifecycle
+router.post(
+  '/:projectId/submit-for-review',
+  authenticateJwt,
+  ProjectController.submitForReview
+);
+
+router.post(
+  '/:projectId/request-changes',
+  authenticateJwt,
+  ProjectController.requestChanges
+);
+
+router.post(
+  '/:projectId/approve-completion',
+  authenticateJwt,
+  requireRole(ROLES.CLIENT, ROLES.CEO, ROLES.ADMIN),
+  ProjectController.approveCompletion
+);
+
+router.post(
+  '/:projectId/publish',
+  authenticateJwt,
+  requireRole(ROLES.CLIENT, ROLES.CEO, ROLES.ADMIN),
+  ProjectController.publishProject
 );
 
 export default router;

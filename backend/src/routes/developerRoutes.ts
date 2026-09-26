@@ -8,6 +8,7 @@ const router = Router();
 // Public routes
 router.get('/public', DeveloperController.listPublic);
 router.get('/profile/:username', DeveloperController.getByUsername);
+router.get('/:username', DeveloperController.getByUsername);
 
 // Protected routes for developers
 router.get('/me', authenticateJwt, DeveloperController.getMyProfile);

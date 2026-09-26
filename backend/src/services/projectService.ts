@@ -754,4 +754,351 @@ export class ProjectService {
       slots_remaining: Math.max(0, r.max_claims - parseInt(r.current_claims, 10)),
     }));
   }
+
+  /**
+   * Developer submits project for client completion review
+   */
+  static async submitForReview(
+    projectId: string,
+    user: { userId: string; role: string; developerId?: string },
+    notes?: string
+  ) {
+    const projRes = await query(
+      `SELECT p.id, p.title, p.status, p.client_id, p.lead_developer_id, c.user_id as client_user_id
+       FROM projects p
+       JOIN clients c ON p.client_id = c.id
+       WHERE p.id = $1`,
+      [projectId]
+    );
+
+    if (projRes.rows.length === 0) {
+      throw new Error('Project not found');
+    }
+
+    const project = projRes.rows[0];
+
+    const isLeadership = [ROLES.CEO, ROLES.MD, ROLES.ADMIN].includes(user.role as any);
+    const isLeadDev = Boolean(user.developerId && user.developerId === project.lead_developer_id);
+
+    let isTeamMember = false;
+    if (user.developerId) {
+      const memberRes = await query(
+        `SELECT 1 FROM project_members WHERE project_id = $1 AND developer_id = $2`,
+        [projectId, user.developerId]
+      );
+      isTeamMember = memberRes.rows.length > 0;
+    }
+
+    if (!isLeadership && !isLeadDev && !isTeamMember) {
+      throw new Error('Forbidden: Only the assigned developer can submit a project for completion review');
+    }
+
+    const validPriorStatuses = ['DEVELOPER_SELECTED', 'IN_PROGRESS'];
+    if (!validPriorStatuses.includes(project.status)) {
+      throw new Error(`Cannot submit for review from status: ${project.status}`);
+    }
+
+    await query(
+      `UPDATE projects SET status = 'SUBMITTED_FOR_REVIEW', updated_at = NOW() WHERE id = $1`,
+      [projectId]
+    );
+
+    if (project.client_user_id) {
+      await query(
+        `INSERT INTO notifications (user_id, type, title, message)
+         VALUES ($1, 'PROJECT_SUBMITTED_FOR_REVIEW', 'Project Submitted for Review', $2)`,
+        [
+          project.client_user_id,
+          `Developer has finalized work on "${project.title}" and submitted it for completion sign-off. Notes: ${notes || 'Ready for review.'}`,
+        ]
+      );
+    }
+
+    await AuditLogger.log({
+      actorUserId: user.userId,
+      action: 'PROJECT_SUBMITTED_FOR_REVIEW',
+      entityType: 'PROJECT',
+      entityId: projectId,
+      metadata: { notes },
+    });
+
+    return { projectId, status: 'SUBMITTED_FOR_REVIEW' };
+  }
+
+  /**
+   * Client requests changes during project completion review
+   */
+  static async requestChanges(
+    projectId: string,
+    user: { userId: string; role: string; clientId?: string },
+    feedback?: string
+  ) {
+    const projRes = await query(
+      `SELECT p.id, p.title, p.status, p.client_id, p.lead_developer_id, d.user_id as dev_user_id
+       FROM projects p
+       LEFT JOIN developers d ON p.lead_developer_id = d.id
+       WHERE p.id = $1`,
+      [projectId]
+    );
+
+    if (projRes.rows.length === 0) {
+      throw new Error('Project not found');
+    }
+
+    const project = projRes.rows[0];
+
+    const isLeadership = [ROLES.CEO, ROLES.MD, ROLES.ADMIN].includes(user.role as any);
+    const isClientOwner = Boolean(user.clientId && user.clientId === project.client_id);
+
+    if (!isLeadership && !isClientOwner) {
+      throw new Error('Forbidden: Only the project client can request changes on project review');
+    }
+
+    if (project.status !== 'SUBMITTED_FOR_REVIEW') {
+      throw new Error(`Cannot request changes from status: ${project.status}`);
+    }
+
+    await query(
+      `UPDATE projects SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1`,
+      [projectId]
+    );
+
+    if (project.dev_user_id) {
+      await query(
+        `INSERT INTO notifications (user_id, type, title, message)
+         VALUES ($1, 'PROJECT_CHANGES_REQUESTED', 'Changes Requested on Project', $2)`,
+        [
+          project.dev_user_id,
+          `Client requested adjustments on "${project.title}". Feedback: ${feedback || 'Please update and resubmit.'}`,
+        ]
+      );
+    }
+
+    await AuditLogger.log({
+      actorUserId: user.userId,
+      action: 'PROJECT_CHANGES_REQUESTED',
+      entityType: 'PROJECT',
+      entityId: projectId,
+      metadata: { feedback },
+    });
+
+    return { projectId, status: 'IN_PROGRESS', feedback };
+  }
+
+  /**
+   * Client approves project completion
+   */
+  static async approveCompletion(
+    projectId: string,
+    user: { userId: string; role: string; clientId?: string },
+    options?: { feedback?: string; rating?: number; publishImmediately?: boolean }
+  ) {
+    return withTransaction(async (client) => {
+      const projRes = await client.query(
+        `SELECT id, client_id, lead_developer_id, title, status FROM projects WHERE id = $1 FOR UPDATE`,
+        [projectId]
+      );
+
+      if (projRes.rows.length === 0) {
+        throw new Error('Project not found');
+      }
+
+      const project = projRes.rows[0];
+
+      const isLeadership = [ROLES.CEO, ROLES.MD, ROLES.ADMIN].includes(user.role as any);
+      const isClientOwner = Boolean(user.clientId && user.clientId === project.client_id);
+
+      if (!isLeadership && !isClientOwner) {
+        throw new Error('Forbidden: Only the project client can approve completion');
+      }
+
+      const validStatuses = ['SUBMITTED_FOR_REVIEW', 'IN_PROGRESS', 'DEVELOPER_SELECTED'];
+      if (!validStatuses.includes(project.status)) {
+        throw new Error(`Cannot approve completion from status: ${project.status}`);
+      }
+
+      // Mark all milestones as completed
+      await client.query(
+        `UPDATE project_milestones
+         SET status = 'COMPLETED', completed_at = COALESCE(completed_at, NOW())
+         WHERE project_id = $1`,
+        [projectId]
+      );
+
+      const nextStatus = options?.publishImmediately ? 'PUBLISHED' : 'COMPLETED';
+
+      await client.query(
+        `UPDATE projects SET status = $1::project_status, updated_at = NOW() WHERE id = $2`,
+        [nextStatus, projectId]
+      );
+
+      if (project.lead_developer_id) {
+        const devUser = await client.query(
+          `SELECT user_id FROM developers WHERE id = $1`,
+          [project.lead_developer_id]
+        );
+        if (devUser.rows.length > 0) {
+          await client.query(
+            `INSERT INTO notifications (user_id, type, title, message)
+             VALUES ($1, 'PROJECT_COMPLETED', 'Project Completion Approved!', $2)`,
+            [
+              devUser.rows[0].user_id,
+              `Congratulations! The client has approved completion for "${project.title}".`,
+            ]
+          );
+        }
+      }
+
+      await AuditLogger.log({
+        actorUserId: user.userId,
+        action: options?.publishImmediately ? 'PROJECT_COMPLETED_AND_PUBLISHED' : 'PROJECT_COMPLETED',
+        entityType: 'PROJECT',
+        entityId: projectId,
+        metadata: {
+          rating: options?.rating || 5,
+          feedback: options?.feedback || 'Project completion approved.',
+          status: nextStatus,
+        },
+      });
+
+      return {
+        projectId,
+        status: nextStatus,
+        completed: true,
+        published: nextStatus === 'PUBLISHED',
+      };
+    });
+  }
+
+  /**
+   * Publish completed project to the public showcase
+   */
+  static async publishProject(
+    projectId: string,
+    user: { userId: string; role: string; clientId?: string }
+  ) {
+    const projRes = await query(
+      `SELECT p.id, p.client_id, p.lead_developer_id, p.title, p.status, d.user_id as dev_user_id
+       FROM projects p
+       LEFT JOIN developers d ON p.lead_developer_id = d.id
+       WHERE p.id = $1`,
+      [projectId]
+    );
+
+    if (projRes.rows.length === 0) {
+      throw new Error('Project not found');
+    }
+
+    const project = projRes.rows[0];
+
+    const isLeadership = [ROLES.CEO, ROLES.MD, ROLES.ADMIN].includes(user.role as any);
+    const isClientOwner = Boolean(user.clientId && user.clientId === project.client_id);
+
+    if (!isLeadership && !isClientOwner) {
+      throw new Error('Forbidden: Only client or leadership can publish project');
+    }
+
+    await query(
+      `UPDATE projects SET status = 'PUBLISHED', updated_at = NOW() WHERE id = $1`,
+      [projectId]
+    );
+
+    if (project.dev_user_id) {
+      await query(
+        `INSERT INTO notifications (user_id, type, title, message)
+         VALUES ($1, 'PROJECT_PUBLISHED', 'Project Published to Public Portfolio!', $2)`,
+        [
+          project.dev_user_id,
+          `"${project.title}" has been published to the public showcase and is now attributed on your developer profile.`,
+        ]
+      );
+    }
+
+    await AuditLogger.log({
+      actorUserId: user.userId,
+      action: 'PROJECT_PUBLISHED',
+      entityType: 'PROJECT',
+      entityId: projectId,
+    });
+
+    return { projectId, status: 'PUBLISHED' };
+  }
+
+  /**
+   * Retrieve publicly published project by slug or ID with privacy sanitization
+   */
+  static async getPublicProjectBySlug(slugOrId: string) {
+    const projRes = await query(
+      `SELECT p.id, p.project_number, p.slug, p.title, p.description, p.category,
+              p.timeline, p.required_technologies, p.attachments, p.status, p.created_at,
+              d.id as dev_id, d.username as dev_username, d.display_name as dev_name,
+              d.role_title as dev_title, d.profile_image as dev_avatar
+       FROM projects p
+       LEFT JOIN developers d ON p.lead_developer_id = d.id
+       WHERE (p.slug = $1 OR p.id::text = $1)`,
+      [slugOrId]
+    );
+
+    if (projRes.rows.length === 0) {
+      return null;
+    }
+
+    const project = projRes.rows[0];
+
+    // Privacy guard: Non-published projects are NEVER returned on public endpoints
+    if (project.status !== 'PUBLISHED') {
+      return null;
+    }
+
+    let technologies: string[] = [];
+    if (Array.isArray(project.required_technologies)) {
+      technologies = project.required_technologies;
+    } else if (typeof project.required_technologies === 'string') {
+      try {
+        technologies = JSON.parse(project.required_technologies);
+      } catch {
+        technologies = [project.required_technologies];
+      }
+    }
+
+    let screenshots: any[] = [];
+    if (Array.isArray(project.attachments)) {
+      screenshots = project.attachments;
+    } else if (typeof project.attachments === 'string') {
+      try {
+        screenshots = JSON.parse(project.attachments);
+      } catch {
+        screenshots = [];
+      }
+    }
+
+    const leadDevName = project.dev_name || 'Nexus Engineer';
+    const leadDevUsername = project.dev_username || null;
+
+    return {
+      id: project.id,
+      projectNumber: project.project_number,
+      slug: project.slug,
+      title: project.title,
+      description: project.description,
+      category: project.category,
+      status: project.status,
+      timeline: project.timeline,
+      technology: technologies,
+      technologies,
+      screenshots,
+      leadDeveloper: leadDevUsername
+        ? {
+            id: project.dev_id,
+            name: leadDevName,
+            username: leadDevUsername,
+            roleTitle: project.dev_title,
+            avatarUrl: project.dev_avatar,
+          }
+        : null,
+      attribution: `Built by ${leadDevName}`,
+      developerLink: leadDevUsername ? `/developers/${leadDevUsername}` : null,
+    };
+  }
 }
+
