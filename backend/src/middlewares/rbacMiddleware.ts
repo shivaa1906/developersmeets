@@ -56,11 +56,26 @@ export async function requireVerifiedDeveloper(
 
   try {
     const devRes = await query(
-      `SELECT verification_status FROM developers WHERE id = $1`,
+      `SELECT d.verification_status, u.status as user_status
+       FROM developers d
+       JOIN users u ON d.user_id = u.id
+       WHERE d.id = $1`,
       [req.user.developerId]
     );
 
-    if (devRes.rows.length === 0 || devRes.rows[0].verification_status !== 'VERIFIED') {
+    if (devRes.rows.length === 0) {
+      res.status(403).json({ error: 'Forbidden: developer profile not found.' });
+      return;
+    }
+
+    if (devRes.rows[0].user_status === 'SUSPENDED' || devRes.rows[0].verification_status === 'SUSPENDED') {
+      res.status(403).json({
+        error: 'Forbidden: developer account is suspended.',
+      });
+      return;
+    }
+
+    if (devRes.rows[0].verification_status !== 'VERIFIED') {
       res.status(403).json({
         error: 'Forbidden: developer profile is pending verification. Unapproved developers cannot perform this action.',
       });
