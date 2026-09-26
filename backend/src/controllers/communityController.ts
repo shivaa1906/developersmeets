@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { query } from '../database/db.js';
 import { CommunityService } from '../services/communityService.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { ROLES } from '../config/constants.js';
@@ -314,13 +315,21 @@ export class CommunityController {
     }
 
     const { channelId, title, content, tags } = req.body;
-    if (!channelId || !title || !content) {
+    let effectiveChannelId = channelId;
+    if (!effectiveChannelId) {
+      const defaultChannel = await query(`SELECT id FROM channels WHERE is_private = FALSE ORDER BY created_at ASC LIMIT 1`);
+      if (defaultChannel.rows.length > 0) {
+        effectiveChannelId = defaultChannel.rows[0].id;
+      }
+    }
+
+    if (!effectiveChannelId || !title || !content) {
       res.status(400).json({ error: 'channelId, title, and content are required' });
       return;
     }
 
     try {
-      const post = await CommunityService.createPost(developerId, channelId, title, content, tags);
+      const post = await CommunityService.createPost(developerId, effectiveChannelId, title, content, tags);
       res.status(201).json({ post });
     } catch (error: any) {
       res.status(400).json({ error: error.message });

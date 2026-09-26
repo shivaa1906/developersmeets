@@ -261,8 +261,11 @@ export class SupportService {
       return {
         ...ticket,
         bridgeId,
+        bridge_id: bridgeId,
         bridgeNumber,
+        bridge_number: bridgeNumber,
         conversationId,
+        conversation_id: conversationId,
       };
     });
   }
@@ -402,6 +405,7 @@ export class SupportService {
       SELECT st.id, st.ticket_number, st.subject, st.description, st.priority, st.status,
              st.category, st.attachments, st.assigned_to_user_id,
              st.created_at, st.updated_at, st.closed_at, st.project_id,
+             st.developer_id, st.client_id,
              st.response_due_at, st.resolution_due_at, st.escalated_at, st.escalation_reason,
              COALESCE(p.title, 'Platform Support') as project_title,
              sb.id as bridge_id, sb.bridge_number, sb.conversation_id,

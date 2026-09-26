@@ -358,10 +358,10 @@ async function runTestSuite() {
     });
     const devProjTicketData: any = await devProjTicketRes.json();
     assert(devProjTicketRes.status === 201, 'Developer creates project support ticket for claimed project (201)');
-    assert(Boolean(devProjTicketData.ticket?.bridge_id), 'Support bridge automatically created for project support');
+    const bridgeId = devProjTicketData.ticket?.bridge_id || devProjTicketData.ticket?.bridgeId;
+    assert(Boolean(bridgeId), 'Support bridge automatically created for project support');
 
     const projTicketId = devProjTicketData.ticket.id;
-    const bridgeId = devProjTicketData.ticket.bridge_id;
 
     // Developer can access their authorized project ticket
     const viewProjTicketRes = await fetch(`${baseUrl}/api/support/tickets/${projTicketId}`, {
@@ -500,9 +500,11 @@ async function runTestSuite() {
     // -------------------------------------------------------------------------
     // CLEANUP
     // -------------------------------------------------------------------------
-    await query('DELETE FROM support_bridge_messages WHERE bridge_id IN (SELECT id FROM support_bridges WHERE ticket_id = $1)', [projTicketId]);
+    await query('DELETE FROM messages WHERE conversation_id IN (SELECT conversation_id FROM support_bridges WHERE ticket_id = $1)', [projTicketId]);
+    await query('DELETE FROM conversation_members WHERE conversation_id IN (SELECT conversation_id FROM support_bridges WHERE ticket_id = $1)', [projTicketId]);
     await query('DELETE FROM support_bridge_members WHERE bridge_id IN (SELECT id FROM support_bridges WHERE ticket_id = $1)', [projTicketId]);
     await query('DELETE FROM support_bridges WHERE ticket_id = $1', [projTicketId]);
+    await query('DELETE FROM conversations WHERE id IN (SELECT conversation_id FROM support_bridges WHERE ticket_id = $1)', [projTicketId]);
     await query('DELETE FROM support_tickets WHERE id IN ($1, $2, $3)', [devTicket1Id, devTicket2Data.ticket.id, projTicketId]);
     await query('DELETE FROM project_claims WHERE project_id = $1', [testProjectId]);
     await query('DELETE FROM projects WHERE id IN ($1, $2)', [testProjectId, foreignProjId]);
