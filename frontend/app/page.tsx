@@ -50,18 +50,14 @@ export default function HomePage() {
             <span>Developer Company Operating System 2.0</span>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-foreground uppercase max-w-4xl mx-auto leading-none">
-            BUILD. <span className="text-accent">CREATE.</span> INNOVATE.
-          </h1>
+          {/* Autolooping Typewriter Headline in place of BUILD. CREATE. INNOVATE. */}
+          <TypewriterQuotes />
 
           <p className="mt-6 text-base sm:text-lg md:text-xl text-muted max-w-2xl mx-auto font-normal leading-relaxed">
             Developer-powered technology company building mission-critical digital products. Verified talent, anonymous project claims, credit ledgers, and seamless execution.
           </p>
 
-          {/* Autolooping Typewriter Quotes Widget (5s per quote) */}
-          <TypewriterQuotes />
-
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link href="/projects">
               <Button size="lg" rightIcon={<ArrowRight className="h-4 w-4" />}>
                 Explore Projects
