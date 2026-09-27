@@ -3,16 +3,16 @@
 @tailwind utilities;
 
 :root {
-  --background: #050505;
-  --surface: #0D0D0D;
-  --surface-elevated: #141414;
-  --surface-border: rgba(255, 255, 255, 0.08);
-  --foreground: #FFFFFF;
-  --foreground-muted: #A1A1AA;
-  --accent: #00F0FF;
-  --accent-glow: rgba(0, 240, 255, 0.25);
-  --electric-blue: #3B82F6;
-  --electric-purple: #8B5CF6;
+  --background: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-elevated: #F8FAFC;
+  --surface-border: #E2E8F0;
+  --foreground: #0F172A;
+  --foreground-muted: #64748B;
+  --accent: #0284C7;
+  --accent-glow: rgba(2, 132, 199, 0.2);
+  --electric-blue: #2563EB;
+  --electric-purple: #7C3AED;
 }
 
 * {
@@ -21,7 +21,7 @@
 }
 
 html {
-  color-scheme: dark;
+  color-scheme: light;
   background-color: var(--background);
 }
 
@@ -31,29 +31,29 @@ body {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   min-height: 100vh;
   overflow-x: hidden;
-  selection-background-color: #00F0FF;
-  selection-color: #050505;
+  selection-background-color: #0284C7;
+  selection-color: #FFFFFF;
 }
 
 ::selection {
-  background: rgba(0, 240, 255, 0.3);
-  color: #FFFFFF;
+  background: rgba(2, 132, 199, 0.2);
+  color: #0F172A;
 }
 
 /* Subtle futuristic grid pattern utility */
 .bg-grid-subtle {
   background-size: 40px 40px;
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
 }
 
 /* Glass panel */
 .glass-panel {
-  background: rgba(13, 13, 13, 0.7);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #E2E8F0;
 }
 
 /* Custom minimal scrollbar */
@@ -62,12 +62,12 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #050505;
+  background: #F8FAFC;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272A;
+  background: #CBD5E1;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3F3F46;
+  background: #94A3B8;
 }

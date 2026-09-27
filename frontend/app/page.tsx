@@ -16,6 +16,7 @@ import {
   Users2,
   CheckCircle2,
 } from 'lucide-react';
+import { TypewriterQuotes } from '@/components/landing/typewriter-quotes';
 
 export default function HomePage() {
   const leadership = siteConfig.company.leadership;
@@ -57,7 +58,10 @@ export default function HomePage() {
             Developer-powered technology company building mission-critical digital products. Verified talent, anonymous project claims, credit ledgers, and seamless execution.
           </p>
 
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+          {/* Autolooping Typewriter Quotes Widget (5s per quote) */}
+          <TypewriterQuotes />
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link href="/projects">
               <Button size="lg" rightIcon={<ArrowRight className="h-4 w-4" />}>
                 Explore Projects
@@ -139,7 +143,7 @@ export default function HomePage() {
               </div>
               <span className="text-[11px] font-mono text-muted">transaction-ledger.ts</span>
             </div>
-            <pre className="text-xs font-mono text-muted/90 overflow-x-auto p-2 bg-[#050505] rounded-lg leading-relaxed">
+            <pre className="text-xs font-mono text-slate-200 overflow-x-auto p-4 bg-slate-900 rounded-lg leading-relaxed border border-slate-800 shadow-inner">
               <code>{`// Core Business Transaction
 await db.$transaction(async (tx) => {
   // 1. Lock developer credit account
@@ -283,7 +287,7 @@ await db.$transaction(async (tx) => {
 
       {/* 6. CALL TO ACTION */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="rounded-2xl border border-accent/30 bg-gradient-to-b from-surface-elevated to-[#050505] p-8 md:p-12 text-center relative overflow-hidden shadow-2xl">
+        <div className="rounded-2xl border border-accent/30 bg-gradient-to-b from-surface-elevated via-surface to-surface-elevated p-8 md:p-12 text-center relative overflow-hidden shadow-surface-card">
           <div className="absolute top-0 right-0 w-72 h-72 bg-accent/10 blur-[90px] rounded-full pointer-events-none" />
           <h2 className="text-3xl font-extrabold text-foreground sm:text-4xl">
             Ready to Build The Future?

@@ -82,14 +82,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="light">
       <head>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className="min-h-screen bg-background font-sans antialiased selection:bg-accent/30 selection:text-white">
+      <body className="min-h-screen bg-background font-sans antialiased text-foreground">
         <ToastProvider>
           <AuthProvider>
             <MeshBackground />

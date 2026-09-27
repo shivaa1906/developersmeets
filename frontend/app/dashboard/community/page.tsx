@@ -163,7 +163,7 @@ export default function DashboardCommunityPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Channel Navigation */}
-        <div className="md:col-span-1 space-y-1 rounded-xl border border-border bg-[#080808] p-3 h-[540px] overflow-y-auto">
+        <div className="md:col-span-1 space-y-1 rounded-xl border border-border bg-surface-elevated p-3 h-[540px] overflow-y-auto">
           <span className="text-[10px] uppercase font-bold text-muted tracking-wider block px-2 py-1">
             Channels
           </span>

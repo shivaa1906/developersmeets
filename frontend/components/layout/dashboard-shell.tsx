@@ -117,7 +117,7 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* Sidebar */}
-      <aside className="hidden w-64 flex-col border-r border-border bg-[#080808] md:flex">
+      <aside className="hidden w-64 flex-col border-r border-border bg-surface-elevated md:flex">
         {/* Brand */}
         <div className="flex h-16 items-center px-6 border-b border-border">
           <Link href="/" className="flex items-center space-x-2.5">
@@ -184,7 +184,7 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top Header */}
-        <header className="flex h-16 items-center justify-between border-b border-border bg-[#080808]/70 px-4 sm:px-6 backdrop-blur-md">
+        <header className="flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 sm:px-6 backdrop-blur-md">
           <div className="flex items-center space-x-3">
             {/* Mobile menu trigger */}
             <button
@@ -233,7 +233,7 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-b border-border bg-[#0a0a0a] px-4 py-4 space-y-2">
+          <div className="md:hidden border-b border-border bg-surface px-4 py-4 space-y-2">
             <div className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
               {isClient ? 'Client Portal Menu' : 'Workspace Menu'}
             </div>

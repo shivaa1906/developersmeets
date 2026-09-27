@@ -58,7 +58,7 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* Admin Sidebar */}
-      <aside className="hidden w-64 flex-col border-r border-border bg-[#070707] md:flex">
+      <aside className="hidden w-64 flex-col border-r border-border bg-surface-elevated md:flex">
         {/* Brand */}
         <div className="flex h-16 items-center justify-between px-6 border-b border-border">
           <Link href={isSupport ? "/admin/support" : "/admin/dashboard"} className="flex items-center space-x-2.5">
@@ -102,7 +102,7 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
         </nav>
 
         {/* User Identity Footprint */}
-        <div className="border-t border-border p-4 bg-[#050505]">
+        <div className="border-t border-border p-4 bg-surface">
           <div className="rounded-lg bg-surface p-3 border border-border space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase font-semibold text-muted tracking-wider">
@@ -143,7 +143,7 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
       {/* Main Content */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Top Header */}
-        <header className="flex h-16 items-center justify-between border-b border-border bg-[#070707]/80 px-4 sm:px-6 backdrop-blur-md">
+        <header className="flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 sm:px-6 backdrop-blur-md">
           <div className="flex items-center space-x-2 sm:space-x-3">
             {/* Mobile menu trigger */}
             <button
@@ -177,7 +177,7 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-b border-border bg-[#090909] px-4 py-4 space-y-2">
+          <div className="md:hidden border-b border-border bg-surface px-4 py-4 space-y-2">
             <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
               Executive Modules
             </div>

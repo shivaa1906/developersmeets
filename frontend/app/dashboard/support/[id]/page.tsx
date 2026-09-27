@@ -547,7 +547,7 @@ export default function SupportBridgePage() {
             </CardHeader>
 
             {/* Messages Feed */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#060606]">
+            <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-surface-elevated/50">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-xs text-muted">
                   <LifeBuoy className="h-8 w-8 text-muted mb-2" />

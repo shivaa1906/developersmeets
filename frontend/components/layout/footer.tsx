@@ -17,7 +17,7 @@ export const Footer: React.FC = () => {
   }
 
   return (
-    <footer className="border-t border-border bg-[#030303] text-muted">
+    <footer className="border-t border-border bg-surface-elevated text-muted">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4 lg:grid-cols-5">
           {/* Brand & mission */}
