@@ -55,7 +55,7 @@ export function CinematicQuotes({ className }: { className?: string } = {}) {
       return (
         <>
           <span>{parts[0]}</span>
-          <span className="bg-gradient-to-r from-sky-400 via-accent to-indigo-400 bg-clip-text text-transparent font-black">
+          <span className="bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 dark:from-sky-400 dark:via-accent dark:to-indigo-400 bg-clip-text text-transparent font-black">
             {currentQuote.highlight}
           </span>
           <span>{parts.slice(1).join(currentQuote.highlight)}</span>
@@ -97,7 +97,7 @@ export function CinematicQuotes({ className }: { className?: string } = {}) {
               duration: 0.75,
               ease: [0.16, 1, 0.3, 1], // Cinematic optical lens ease curve
             }}
-            className={`text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white max-w-5xl leading-[1.15] text-center will-change-[transform,filter,opacity] drop-shadow-lg ${className || ''}`}
+            className={`text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-slate-950 dark:text-white max-w-5xl leading-[1.15] text-center will-change-[transform,filter,opacity] drop-shadow-sm dark:drop-shadow-lg ${className || ''}`}
           >
             {renderHighlightedContent()}
           </motion.h1>
@@ -118,7 +118,7 @@ export function CinematicQuotes({ className }: { className?: string } = {}) {
               className={`block h-1.5 rounded-full transition-all duration-500 ${
                 i === index
                   ? 'w-8 bg-accent shadow-[0_0_12px_rgba(59,130,246,0.6)]'
-                  : 'w-2 bg-white/30 group-hover:bg-white/60'
+                  : 'w-2 bg-slate-400/40 dark:bg-white/30 group-hover:bg-slate-600/60 dark:group-hover:bg-white/60'
               }`}
             />
           </button>

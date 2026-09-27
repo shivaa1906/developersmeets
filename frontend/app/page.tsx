@@ -33,9 +33,9 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col space-y-24 pb-20">
-      {/* 🎬 HERO SECTION WITH BACKGROUND VIDEO */}
-      <section className="relative min-h-[92vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-20">
-        {/* Full-bleed Background Video */}
+      {/* 🎬 HERO SECTION WITH THEME-ADAPTIVE BACKGROUND VIDEO */}
+      <section className="relative min-h-[90vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-20">
+        {/* Full-bleed Theme-Adaptive Background Video */}
         <div className="absolute inset-0 w-full h-full -z-10 overflow-hidden pointer-events-none select-none">
           <video
             autoPlay
@@ -43,18 +43,18 @@ export default function HomePage() {
             muted
             playsInline
             poster="/videos/hero-developer-poster.jpg"
-            className="w-full h-full object-cover object-center filter brightness-[0.72] contrast-[1.08]"
+            className="w-full h-full object-cover object-center filter brightness-100 contrast-105 opacity-75 dark:opacity-85 transition-opacity duration-700"
           >
             <source src="/videos/hero-developer.mp4" type="video/mp4" />
           </video>
-          {/* Subtle Dark Vignette & Gradient Overlays for Maximum Legibility */}
-          <div className="absolute inset-0 bg-black/55 backdrop-blur-[0.5px]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-black/20 to-black/60" />
-          <div className="absolute inset-0 bg-gradient-to-r from-background/40 via-transparent to-background/40" />
+          {/* Theme-Adaptive Luminous Scrim (Light wash in Bright Theme, Deep wash in Dark Theme) */}
+          <div className="absolute inset-0 bg-white/70 dark:bg-black/50 backdrop-blur-[0.5px] transition-colors duration-500" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/50 transition-colors duration-500" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-transparent to-background transition-colors duration-500" />
         </div>
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 text-center flex flex-col items-center justify-center">
-          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/15 backdrop-blur-md px-3.5 py-1 text-xs font-semibold text-accent mb-6 shadow-[0_0_15px_rgba(2,132,199,0.3)]">
+          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 dark:bg-accent/15 backdrop-blur-md px-3.5 py-1 text-xs font-semibold text-accent mb-6 shadow-sm">
             <Sparkles className="h-3.5 w-3.5" />
             <span className="font-mono uppercase tracking-wider text-[11px]">Developer Company Operating System 2.0</span>
           </div>
@@ -62,7 +62,7 @@ export default function HomePage() {
           {/* Autolooping Quotes with Infosys-style Optical Blur & Focus */}
           <CinematicQuotes />
 
-          <p className="mt-6 text-base sm:text-lg md:text-xl text-slate-200 max-w-2xl mx-auto font-normal leading-relaxed drop-shadow-sm">
+          <p className="mt-6 text-base sm:text-lg md:text-xl text-slate-700 dark:text-slate-200 max-w-2xl mx-auto font-normal leading-relaxed drop-shadow-sm transition-colors duration-300">
             Developer-powered technology company building mission-critical digital products. Verified talent, anonymous project claims, credit ledgers, and seamless execution.
           </p>
 
@@ -73,34 +73,38 @@ export default function HomePage() {
               </Button>
             </Link>
             <Link href="/join-developer">
-              <Button variant="secondary" size="lg" className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md">
+              <Button variant="secondary" size="lg" className="bg-surface/85 hover:bg-surface text-foreground border border-border shadow-sm backdrop-blur-md">
                 Join Developer Network
               </Button>
             </Link>
             <Link href="/start-project">
-              <Button variant="outline" size="lg" className="border-white/30 text-white hover:bg-white/10 backdrop-blur-md">
+              <Button variant="outline" size="lg" className="bg-surface/50 hover:bg-surface text-foreground border border-border shadow-sm backdrop-blur-md">
                 Start a Project
               </Button>
             </Link>
           </div>
 
           {/* Quick metric stats in frosted glass cards */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-white/15 pt-10 text-left w-full">
-            <div className="p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 shadow-xl">
+          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-border/70 pt-10 text-left w-full">
+            <div className="p-4 rounded-xl bg-surface/80 dark:bg-surface-elevated/70 backdrop-blur-md border border-border shadow-md transition-all hover:border-accent/40">
               <div className="text-2xl sm:text-3xl font-bold text-accent font-mono">100%</div>
-              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Verified Developers</div>
+              <div className="text-xs text-muted mt-1 uppercase tracking-wider font-semibold">Verified Developers</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">Strict KYC & tech screening</div>
             </div>
-            <div className="p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 shadow-xl">
-              <div className="text-2xl sm:text-3xl font-bold text-white font-mono">₹50 / Cr</div>
-              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Configurable Claim Credit</div>
+            <div className="p-4 rounded-xl bg-surface/80 dark:bg-surface-elevated/70 backdrop-blur-md border border-border shadow-md transition-all hover:border-accent/40">
+              <div className="text-2xl sm:text-3xl font-bold text-foreground font-mono">₹50 / Cr</div>
+              <div className="text-xs text-muted mt-1 uppercase tracking-wider font-semibold">Configurable Claims</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">Pay only to submit verified bids</div>
             </div>
-            <div className="p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 shadow-xl">
+            <div className="p-4 rounded-xl bg-surface/80 dark:bg-surface-elevated/70 backdrop-blur-md border border-border shadow-md transition-all hover:border-accent/40">
               <div className="text-2xl sm:text-3xl font-bold text-electric-purple font-mono">Atomic</div>
-              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Ledger & Auto-Refunds</div>
+              <div className="text-xs text-muted mt-1 uppercase tracking-wider font-semibold">Automatic Refunds</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">Zero credit risk if unselected</div>
             </div>
-            <div className="p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 shadow-xl">
-              <div className="text-2xl sm:text-3xl font-bold text-white font-mono">Private</div>
-              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Anonymous Project Bridge</div>
+            <div className="p-4 rounded-xl bg-surface/80 dark:bg-surface-elevated/70 backdrop-blur-md border border-border shadow-md transition-all hover:border-accent/40">
+              <div className="text-2xl sm:text-3xl font-bold text-foreground font-mono">Private</div>
+              <div className="text-xs text-muted mt-1 uppercase tracking-wider font-semibold">Anonymous Bridge</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">Zero bias client-dev matching</div>
             </div>
           </div>
         </div>
