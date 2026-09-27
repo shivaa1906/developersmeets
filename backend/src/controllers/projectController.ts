@@ -19,7 +19,7 @@ export class ProjectController {
         SELECT p.id, p.project_number, p.slug, p.title, p.description, p.category, 
                p.timeline, p.required_technologies, p.status, p.created_at,
                d.username as lead_dev_username, d.display_name as lead_dev_name,
-               d.profile_image as lead_dev_avatar, d.role_title as lead_dev_title
+               COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as lead_dev_avatar, d.role_title as lead_dev_title
         FROM projects p
         LEFT JOIN developers d ON p.lead_developer_id = d.id
         WHERE p.status = 'PUBLISHED'

@@ -21,7 +21,7 @@ export class WorkspaceService {
     const projRes = await query(
       `SELECT p.*, c.client_number, c.company_name,
               d.id as dev_id, d.username as dev_username, d.display_name as dev_name,
-              d.role_title as dev_title, d.profile_image as dev_avatar
+              d.role_title as dev_title, COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as dev_avatar
        FROM projects p
        JOIN clients c ON p.client_id = c.id
        LEFT JOIN developers d ON p.lead_developer_id = d.id
@@ -69,7 +69,7 @@ export class WorkspaceService {
 
     // 2. Project Team Members
     const membersRes = await query(
-      `SELECT pm.*, d.username, d.display_name, d.role_title, d.profile_image as avatar_url
+      `SELECT pm.*, d.username, d.display_name, d.role_title, COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as avatar_url
        FROM project_members pm
        JOIN developers d ON pm.developer_id = d.id
        WHERE pm.project_id = $1`,

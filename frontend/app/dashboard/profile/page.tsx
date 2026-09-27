@@ -221,6 +221,7 @@ export default function DashboardProfilePage() {
       await apiClient.patch('/auth/profile', {
         name: form.displayName.trim(),
         phone: form.phone.trim(),
+        location: form.location.trim(),
         profileImage: form.profilePhoto,
         avatarUrl: form.profilePhoto,
         roleTitle: form.roleTitle.trim(),
@@ -240,6 +241,7 @@ export default function DashboardProfilePage() {
           displayName: form.displayName.trim(),
           roleTitle: form.roleTitle.trim(),
           bio: form.bio.trim(),
+          location: form.location.trim(),
           experience: Number(form.experience) || 0,
           availability: form.availability,
           githubUrl: form.githubUrl.trim(),

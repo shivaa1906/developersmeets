@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
 
 export interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
   src?: string;
@@ -28,6 +27,10 @@ export const Avatar: React.FC<AvatarProps> = ({
 }) => {
   const [imageError, setImageError] = React.useState(false);
 
+  React.useEffect(() => {
+    setImageError(false);
+  }, [src]);
+
   return (
     <div
       className={cn(
@@ -38,16 +41,17 @@ export const Avatar: React.FC<AvatarProps> = ({
       {...props}
     >
       {src && !imageError ? (
-        <Image
+        <img
           src={src}
           alt={alt}
-          fill
-          sizes="80px"
-          className="object-cover"
+          referrerPolicy="no-referrer"
+          className="h-full w-full object-cover"
           onError={() => setImageError(true)}
         />
       ) : (
-        <span className="select-none uppercase text-muted tracking-wider">{fallback.slice(0, 2)}</span>
+        <span className="select-none uppercase text-muted tracking-wider">
+          {(fallback || '??').slice(0, 2)}
+        </span>
       )}
     </div>
   );

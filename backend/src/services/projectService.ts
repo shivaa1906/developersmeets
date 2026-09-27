@@ -1188,7 +1188,7 @@ export class ProjectService {
       `SELECT p.id, p.project_number, p.slug, p.title, p.description, p.category,
               p.timeline, p.required_technologies, p.attachments, p.status, p.created_at,
               d.id as dev_id, d.username as dev_username, d.display_name as dev_name,
-              d.role_title as dev_title, d.profile_image as dev_avatar
+              d.role_title as dev_title, COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as dev_avatar
        FROM projects p
        LEFT JOIN developers d ON p.lead_developer_id = d.id
        WHERE (p.slug = $1 OR p.id::text = $1)`,

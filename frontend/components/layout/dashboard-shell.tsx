@@ -161,8 +161,19 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
         <div className="border-t border-border p-4">
           <div className="flex items-center justify-between rounded-lg bg-surface p-2.5 border border-border">
             <div className="flex items-center space-x-2.5 overflow-hidden">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent font-semibold text-xs">
-                {displayName.slice(0, 2).toUpperCase()}
+              <div className="relative h-7 w-7 shrink-0 rounded-full overflow-hidden border border-border bg-accent/20">
+                {user?.profileImage || user?.avatarUrl ? (
+                  <img
+                    src={user.profileImage || user.avatarUrl}
+                    alt={displayName}
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-accent font-semibold text-xs">
+                    {displayName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
               </div>
               <div className="truncate">
                 <p className="text-xs font-medium text-foreground truncate">{displayName}</p>

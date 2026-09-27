@@ -72,7 +72,7 @@ export class CommunityService {
       SELECT cp.id, cp.title, cp.content, cp.tags, cp.upvotes, cp.created_at,
              c.name as channel_name, c.slug as channel_slug,
              d.username as author_username, d.display_name as author_name,
-             d.profile_image as author_avatar, d.role_title as author_title,
+             COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as author_avatar, d.role_title as author_title,
              COUNT(cc.id) as comments_count
       FROM community_posts cp
       JOIN channels c ON cp.channel_id = c.id
@@ -108,7 +108,7 @@ export class CommunityService {
     const postRes = await query(
       `SELECT cp.*, c.name as channel_name, c.slug as channel_slug,
               d.username as author_username, d.display_name as author_name,
-              d.profile_image as author_avatar, d.role_title as author_title
+              COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as author_avatar, d.role_title as author_title
        FROM community_posts cp
        JOIN channels c ON cp.channel_id = c.id
        JOIN developers d ON cp.author_developer_id = d.id
@@ -125,7 +125,7 @@ export class CommunityService {
     // Fetch comments
     const commentsRes = await query(
       `SELECT cc.*, d.username as author_username, d.display_name as author_name,
-              d.profile_image as author_avatar, d.role_title as author_title
+              COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as author_avatar, d.role_title as author_title
        FROM community_comments cc
        JOIN developers d ON cc.author_developer_id = d.id
        WHERE cc.post_id = $1
@@ -227,7 +227,7 @@ export class CommunityService {
               m.is_pinned, m.pinned_at, m.moderation_reason, m.created_at,
               u.id as author_user_id, u.role as author_system_role,
               d.id as author_developer_id, d.username as author_username,
-              d.display_name as author_name, d.profile_image as author_avatar,
+              d.display_name as author_name, COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as author_avatar,
               d.role_title as author_title,
               rm.content as reply_to_content,
               rd.display_name as reply_to_author_name

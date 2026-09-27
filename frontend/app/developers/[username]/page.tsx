@@ -157,53 +157,65 @@ const developerDatabase: Record<string, any> = {
 };
 
 async function getDeveloper(username: string) {
-  if (developerDatabase[username]) {
-    return developerDatabase[username];
-  }
+  let liveDev: any = null;
+  const backendTarget = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+
   try {
-    const res = await fetch(`http://127.0.0.1:5000/api/v1/developers/profile/${username}`, {
+    const res = await fetch(`${backendTarget}/api/developers/profile/${username}`, {
       cache: 'no-store',
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.developer) return null;
-    const d = data.developer;
-    return {
-      name: d.display_name,
-      username: d.username,
-      role: d.role_title,
-      location: d.location || 'Global / Remote',
-      experience: d.experience || 0,
-      verification_status: d.verification_status,
-      bio: d.bio,
-      skills: Array.isArray(d.skills)
-        ? d.skills.map((s: any) => (typeof s === 'string' ? s : s.name))
-        : [],
-      certifications: Array.isArray(d.certifications)
-        ? d.certifications.map((c: any) => (typeof c === 'string' ? c : c.name))
-        : [],
-      achievements: [
-        'Verified Platform Engineering Specialist',
-        'Direct project delivery signoff',
-      ],
-      github: d.github_url,
-      linkedin: d.linkedin_url,
-      portfolio: d.portfolio_url,
-      associatedProjects: Array.isArray(d.attributedProjects)
-        ? d.attributedProjects.map((p: any) => ({
-            slug: p.slug,
-            title: p.title,
-            project_number: p.project_number,
-            role: p.project_role || 'Contributor',
-            timeline: p.timeline || 'Enterprise',
-            category: p.category || 'Engineering',
-            status: 'PUBLISHED',
-          }))
-        : [],
-    };
+    if (res.ok) {
+      const data = await res.json();
+      if (data.developer) {
+        liveDev = data.developer;
+      }
+    }
   } catch (_err) {
+    // Network / fallback
+  }
+
+  const seed = developerDatabase[username];
+
+  if (!liveDev && !seed) {
     return null;
   }
+
+  const d = liveDev ? { ...seed, ...liveDev } : seed;
+
+  return {
+    name: d.display_name || d.name,
+    username: d.username,
+    role: d.role_title || d.role,
+    location: d.location || 'Global / Remote',
+    experience: d.experience !== undefined ? d.experience : 0,
+    verification_status: d.verification_status || 'VERIFIED',
+    bio: d.bio || '',
+    avatar: d.profile_photo || d.avatar_url || d.profile_image || seed?.avatar || null,
+    skills: Array.isArray(d.skills)
+      ? d.skills.map((s: any) => (typeof s === 'string' ? s : s.name))
+      : seed?.skills || [],
+    certifications: Array.isArray(d.certifications)
+      ? d.certifications.map((c: any) => (typeof c === 'string' ? c : c.name))
+      : seed?.certifications || [],
+    achievements: seed?.achievements || [
+      'Verified Platform Engineering Specialist',
+      'Direct project delivery signoff',
+    ],
+    github: d.github_url || d.github,
+    linkedin: d.linkedin_url || d.linkedin,
+    portfolio: d.portfolio_url || d.portfolio,
+    associatedProjects: Array.isArray(d.attributedProjects) && d.attributedProjects.length > 0
+      ? d.attributedProjects.map((p: any) => ({
+          slug: p.slug,
+          title: p.title,
+          project_number: p.project_number,
+          role: p.project_role || 'Contributor',
+          timeline: p.timeline || 'Enterprise',
+          category: p.category || 'Engineering',
+          status: 'PUBLISHED',
+        }))
+      : seed?.associatedProjects || [],
+  };
 }
 
 export async function generateMetadata({ params }: DeveloperProfileProps): Promise<Metadata> {
@@ -275,7 +287,7 @@ export default async function DeveloperDetailPage({ params }: DeveloperProfilePr
       <div className="rounded-2xl border border-border bg-surface-elevated p-8 relative overflow-hidden shadow-2xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-start sm:items-center space-x-5">
-            <Avatar fallback={dev.name} size="xl" className="border-2 border-accent/40" />
+            <Avatar fallback={dev.name} src={dev.avatar} size="xl" className="border-2 border-accent/40 shadow-md" />
             <div className="space-y-1">
               <div className="flex items-center space-x-2">
                 <h1 className="text-2xl sm:text-3xl font-bold text-foreground">{dev.name}</h1>

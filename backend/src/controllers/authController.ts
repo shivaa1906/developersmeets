@@ -1180,6 +1180,7 @@ export class AuthController {
     const {
       name,
       phone,
+      location,
       profileImage,
       avatarUrl,
       bio,
@@ -1259,6 +1260,7 @@ export class AuthController {
           displayName: name,
           roleTitle,
           bio,
+          location,
           experience: experience !== undefined ? Number(experience) : undefined,
           availability,
           profilePhoto: photo,

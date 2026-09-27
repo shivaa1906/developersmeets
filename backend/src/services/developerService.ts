@@ -26,7 +26,12 @@ export class DeveloperService {
    */
   static async getVerifiedDevelopers(filter?: { search?: string; skill?: string; category?: string }) {
     let sql = `
-      SELECT d.id, d.username, d.display_name, d.profile_image as avatar_url, d.bio, d.role_title,
+      SELECT d.id, d.username, d.display_name,
+             COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as avatar_url,
+             COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as profile_photo,
+             COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as profile_image,
+             d.location,
+             d.bio, d.role_title,
              d.experience, d.availability, d.verification_status, d.github_url, d.linkedin_url,
              d.portfolio_url, d.profile_views_count,
              COUNT(DISTINCT p.id) as completed_projects_count,
@@ -35,6 +40,7 @@ export class DeveloperService {
                FILTER (WHERE s.id IS NOT NULL), '[]'
              ) as skills
       FROM developers d
+      LEFT JOIN users u ON d.user_id = u.id
       LEFT JOIN project_members pm ON d.id = pm.developer_id
       LEFT JOIN projects p ON (pm.project_id = p.id AND p.status = 'PUBLISHED')
       LEFT JOIN developer_skills ds ON d.id = ds.developer_id
@@ -76,7 +82,7 @@ export class DeveloperService {
       )`;
     }
 
-    sql += ` GROUP BY d.id ORDER BY completed_projects_count DESC, d.experience DESC`;
+    sql += ` GROUP BY d.id, u.id ORDER BY completed_projects_count DESC, d.experience DESC`;
 
     const res = await query(sql, params);
     return res.rows.map((row) => ({
@@ -120,7 +126,12 @@ export class DeveloperService {
    */
   static async getDeveloperByUsername(username: string) {
     const devRes = await query(
-      `SELECT d.id, d.username, d.display_name, d.profile_image as avatar_url, d.bio, d.role_title,
+      `SELECT d.id, d.username, d.display_name,
+              COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as avatar_url,
+              COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as profile_photo,
+              COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as profile_image,
+              d.location,
+              d.bio, d.role_title,
               d.experience, d.availability, d.verification_status, d.verified_at,
               d.github_url, d.linkedin_url, d.portfolio_url, d.profile_views_count,
               u.uid as user_uid, u.public_uid as user_public_uid
@@ -205,7 +216,12 @@ export class DeveloperService {
    */
   static async getDeveloperById(developerId: string) {
     const devRes = await query(
-      `SELECT d.id, d.user_id, d.username, d.display_name, d.profile_image as avatar_url, d.bio, d.role_title,
+      `SELECT d.id, d.user_id, d.username, d.display_name,
+              COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as avatar_url,
+              COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as profile_photo,
+              COALESCE(d.profile_photo, d.profile_image, d.avatar_url, u.avatar_url, u.profile_image) as profile_image,
+              d.location,
+              d.bio, d.role_title,
               d.experience, d.availability, d.verification_status, d.verified_at,
               d.github_url, d.linkedin_url, d.portfolio_url, d.profile_views_count,
               u.uid as user_uid, u.public_uid as user_public_uid, u.email, u.status as user_status
@@ -381,6 +397,7 @@ export class DeveloperService {
       githubUrl?: string;
       linkedinUrl?: string;
       portfolioUrl?: string;
+      location?: string;
       profilePhoto?: string;
       skills?: string[];
       experiences?: DeveloperExperienceInput[];
@@ -401,8 +418,9 @@ export class DeveloperService {
              profile_photo = COALESCE($9, profile_photo),
              profile_image = COALESCE($9, profile_image),
              avatar_url = COALESCE($9, avatar_url),
+             location = COALESCE($10, location),
              updated_at = NOW()
-         WHERE id = $10`,
+         WHERE id = $11`,
         [
           data.displayName ? sanitizeInput(data.displayName) : null,
           data.roleTitle ? sanitizeInput(data.roleTitle) : null,
@@ -413,6 +431,7 @@ export class DeveloperService {
           data.linkedinUrl || null,
           data.portfolioUrl || null,
           data.profilePhoto || null,
+          data.location ? sanitizeInput(data.location) : null,
           developerId,
         ]
       );
