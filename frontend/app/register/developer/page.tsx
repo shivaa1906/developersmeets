@@ -8,13 +8,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { Terminal, Shield, CheckCircle2, ArrowRight, Code2, Globe, Github, Linkedin, Award, Cpu } from 'lucide-react';
+import { Terminal, Shield, CheckCircle2, ArrowRight, Code2, Globe, Github, Linkedin, Award, Cpu, Eye, EyeOff } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 export default function RegisterDeveloperPage() {
   const { addToast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const [formData, setFormData] = React.useState({
     fullName: '',
@@ -224,19 +225,41 @@ export default function RegisterDeveloperPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                   label="Password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="Minimum 8 characters"
                   value={formData.password}
                   onChange={(e) => handleChange('password', e.target.value)}
+                  rightElement={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-muted hover:text-foreground focus:outline-none p-1 transition-colors"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  }
                   required
                   minLength={8}
                 />
                 <Input
                   label="Confirm Password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="Re-enter password"
                   value={formData.confirmPassword}
                   onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                  rightElement={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-muted hover:text-foreground focus:outline-none p-1 transition-colors"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  }
                   required
                   minLength={8}
                 />

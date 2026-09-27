@@ -5,11 +5,21 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/hooks/use-auth';
 import { apiClient } from '@/lib/api-client';
-import { Terminal, Shield, ArrowRight, Lock, KeyRound, AlertTriangle } from 'lucide-react';
+import {
+  Terminal,
+  ShieldCheck,
+  ArrowRight,
+  Lock,
+  Mail,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  ArrowLeft,
+} from 'lucide-react';
 
 function getSafeRedirect(candidate: string | null): string | null {
   if (!candidate) return null;
@@ -25,8 +35,11 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const { addToast } = useToast();
   const { login: setAuthSession } = useAuth();
+
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [rememberMe, setRememberMe] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
@@ -36,10 +49,13 @@ export default function LoginPage() {
     setErrorMessage(null);
 
     try {
-      const data = await apiClient.post<{ token: string; user: any; redirectUrl?: string }>('/auth/login', {
-        email,
-        password,
-      });
+      const data = await apiClient.post<{ token: string; user: any; redirectUrl?: string }>(
+        '/auth/login',
+        {
+          email: email.trim().toLowerCase(),
+          password,
+        }
+      );
 
       setAuthSession(data.token, data.user);
 
@@ -51,12 +67,12 @@ export default function LoginPage() {
       addToast(
         'success',
         'Authentication Successful',
-        `Signed in as ${data.user.name || data.user.email} (${data.user.role})`
+        `Welcome back, ${data.user.name || data.user.email}!`
       );
 
       router.push(destination);
     } catch (err: any) {
-      const msg = err.message || 'Invalid email or password.';
+      const msg = err.message || 'Invalid email or password. Please verify your credentials.';
       setErrorMessage(msg);
       addToast('error', 'Authentication Failed', msg);
     } finally {
@@ -64,172 +80,151 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = (role: 'CLIENT' | 'DEVELOPER' | 'SUPPORT' | 'ADMIN' | 'CEO' | 'MD') => {
-    setErrorMessage(null);
-    if (role === 'CLIENT') {
-      setEmail('client001@apexretail.io');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'Client Profile Autofilled', 'Apex Retail Labs (Client #001)');
-    } else if (role === 'DEVELOPER') {
-      setEmail('rahul@nexus.dev');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'Verified Developer Autofilled', 'Rahul Kumar');
-    } else if (role === 'SUPPORT') {
-      setEmail('support@nexus.dev');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'Support Specialist Autofilled', 'Platform Support Operations');
-    } else if (role === 'ADMIN') {
-      setEmail('admin@nexus.dev');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'Platform Admin Autofilled', 'Platform Administrator');
-    } else if (role === 'CEO') {
-      setEmail('shivaa1906@gmail.com');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'CEO Profile Autofilled', 'M. Shiva Gopi');
-    } else if (role === 'MD') {
-      setEmail('md@example.invalid');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'MD Profile Autofilled', 'Development MD Placeholder');
-    }
-  };
-
   return (
-    <div className="flex min-h-[85vh] items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md space-y-6">
+    <div className="flex min-h-[88vh] items-center justify-center px-4 py-12">
+      <div className="w-full max-w-[440px] space-y-6">
+        {/* Brand & Heading Header */}
         <div className="text-center space-y-2">
-          <Link href="/" className="inline-flex items-center space-x-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-accent/40 bg-accent/10 text-accent">
+          <Link href="/" className="inline-flex items-center space-x-2.5 mb-2 group">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-accent/40 bg-accent/10 text-accent shadow-accent-glow transition-transform group-hover:scale-105">
               <Terminal className="h-5 w-5" />
             </div>
-            <span className="text-base font-bold tracking-wider text-foreground">
-              NEXUS<span className="text-accent">.DEV</span>
-            </span>
+            <div className="flex flex-col text-left">
+              <span className="text-sm font-bold tracking-wider text-foreground">
+                NEXUS<span className="text-accent">.DEV</span>
+              </span>
+              <span className="text-[9px] uppercase tracking-widest text-muted">
+                Enterprise Co.
+              </span>
+            </div>
           </Link>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Sign In to Platform</h1>
-          <p className="text-xs text-muted">
-            Enter your credentials. Your verified role and permissions are server-authenticated.
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Sign In
+          </h1>
+          <p className="text-xs sm:text-sm text-muted max-w-sm mx-auto">
+            Access your verified developer workspace or client management portal.
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center justify-between">
-              <span>Authentication</span>
-              <Shield className="h-4 w-4 text-accent" />
-            </CardTitle>
-            <CardDescription>Enter your email and password to access your portal</CardDescription>
-          </CardHeader>
-          <CardContent>
+        {/* Elevated Professional Card */}
+        <Card className="rounded-2xl border border-border bg-surface p-6 sm:p-8 shadow-surface-card backdrop-blur-xl">
+          <CardContent className="p-0">
+            {/* Error Notification */}
             {errorMessage && (
-              <div className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-start space-x-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{errorMessage}</span>
+              <div className="mb-5 p-3.5 rounded-xl bg-status-danger/10 border border-status-danger/25 text-status-danger text-xs flex items-start space-x-2.5 animate-in fade-in duration-200">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-status-danger" />
+                <span className="leading-relaxed font-medium">{errorMessage}</span>
               </div>
             )}
 
             <form onSubmit={handleLogin} className="space-y-4">
+              {/* Email Input with Mail Icon */}
               <Input
                 label="Email Address"
                 type="email"
-                placeholder="name@nexus.dev or name@company.com"
+                placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                leftIcon={<Mail className="h-4 w-4" />}
+                autoComplete="email"
                 required
               />
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-foreground">Password</span>
-                  <Link href="/forgot-password" className="text-accent hover:underline text-[11px]">
+
+              {/* Password Input with Lock Icon and Eye Visibility Toggle */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-medium uppercase tracking-wider text-muted">
+                    Password
+                  </label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs text-accent hover:underline font-medium transition-colors"
+                  >
                     Forgot password?
                   </Link>
                 </div>
                 <Input
-                  type="password"
-                  placeholder="••••••••"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  leftIcon={<Lock className="h-4 w-4" />}
+                  rightElement={
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-muted hover:text-foreground focus:outline-none p-1 transition-colors"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  }
+                  autoComplete="current-password"
                   required
                 />
               </div>
 
-              <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
-                Sign In
+              {/* Remember Me */}
+              <div className="flex items-center justify-between pt-1">
+                <label className="flex items-center space-x-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-accent focus:ring-accent accent-accent transition-colors"
+                  />
+                  <span className="text-xs text-muted hover:text-foreground transition-colors">
+                    Remember this device
+                  </span>
+                </label>
+              </div>
+
+              {/* Primary Sign In Button */}
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full h-11 font-semibold text-sm shadow-accent-glow mt-2"
+                isLoading={isLoading}
+                rightIcon={<ArrowRight className="h-4 w-4" />}
+              >
+                Sign In to Workspace
               </Button>
             </form>
 
-            {/* Quick Demo Access Bar */}
-            <div className="mt-6 pt-4 border-t border-border">
-              <span className="text-[10px] uppercase font-bold text-muted tracking-wider block mb-2">
-                Quick Role Autofill (Demo & Testing)
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickLogin('CLIENT')}
-                  className="text-[11px] h-8 border-accent/30 text-accent hover:bg-accent/10"
-                >
-                  Client #001
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickLogin('DEVELOPER')}
-                  className="text-[11px] h-8"
-                >
-                  Developer
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickLogin('SUPPORT')}
-                  className="text-[11px] h-8"
-                >
-                  Support
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickLogin('ADMIN')}
-                  className="text-[11px] h-8"
-                >
-                  Admin
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickLogin('CEO')}
-                  className="text-[11px] h-8"
-                >
-                  CEO Shiva
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleQuickLogin('MD')}
-                  className="text-[11px] h-8"
-                >
-                  MD Sample
-                </Button>
-              </div>
+            {/* Security Guarantee Badge */}
+            <div className="mt-6 pt-5 border-t border-border flex items-center justify-center space-x-2 text-[11px] text-muted">
+              <ShieldCheck className="h-3.5 w-3.5 text-status-success shrink-0" />
+              <span>End-to-end encrypted session • 256-bit SSL</span>
             </div>
           </CardContent>
-          <CardFooter className="flex items-center justify-between text-xs text-muted border-t border-border pt-4">
-            <Link href="/" className="hover:text-foreground">
-              Return Home
-            </Link>
-            <Link href="/register" className="text-accent hover:underline flex items-center space-x-1 font-medium">
-              <span>Create Account</span>
-              <ArrowRight className="h-3 w-3" />
-            </Link>
-          </CardFooter>
         </Card>
+
+        {/* Card Footer: Account Creation & Home Navigation */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 text-xs text-muted">
+          <Link
+            href="/"
+            className="inline-flex items-center space-x-1.5 hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span>Return to Home</span>
+          </Link>
+
+          <div>
+            Don&apos;t have an account?{' '}
+            <Link
+              href="/register"
+              className="text-accent font-semibold hover:underline transition-colors"
+            >
+              Sign up
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );
