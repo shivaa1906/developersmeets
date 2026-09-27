@@ -1,22 +1,14 @@
 import Link from 'next/link';
 import { siteConfig } from '@/config/site';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  ArrowRight,
-  Terminal,
-  Code2,
-  Cpu,
-  ShieldCheck,
-  Coins,
-  Lock,
   Workflow,
-  Sparkles,
-  Users2,
+  Coins,
+  ShieldCheck,
   CheckCircle2,
 } from 'lucide-react';
-import { TypewriterQuotes } from '@/components/landing/typewriter-quotes';
+import { CinematicVideoHero } from '@/components/landing/cinematic-video-hero';
 
 export default function HomePage() {
   const leadership = siteConfig.company.leadership;
@@ -38,70 +30,16 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col space-y-24 pb-20">
-      {/* 1. HERO SECTION */}
-      <section className="relative pt-20 md:pt-32 overflow-hidden bg-grid-subtle">
-        {/* Glow ambient backdrops */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-accent/15 blur-[120px] rounded-full pointer-events-none" />
-        <div className="absolute top-1/3 left-1/3 w-[300px] h-[250px] bg-electric-purple/15 blur-[100px] rounded-full pointer-events-none" />
+      {/* 🎬 SCENE 01: HERO & VIDEO EXPERIENCE */}
+      <CinematicVideoHero />
 
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/30 bg-accent/5 px-3 py-1 text-xs font-semibold text-accent mb-6 shadow-accent-glow">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Developer Company Operating System 2.0</span>
-          </div>
-
-          {/* Autolooping Typewriter Headline in place of BUILD. CREATE. INNOVATE. */}
-          <TypewriterQuotes />
-
-          <p className="mt-6 text-base sm:text-lg md:text-xl text-muted max-w-2xl mx-auto font-normal leading-relaxed">
-            Developer-powered technology company building mission-critical digital products. Verified talent, anonymous project claims, credit ledgers, and seamless execution.
-          </p>
-
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link href="/projects">
-              <Button size="lg" rightIcon={<ArrowRight className="h-4 w-4" />}>
-                Explore Projects
-              </Button>
-            </Link>
-            <Link href="/join-developer">
-              <Button variant="secondary" size="lg">
-                Join Developer Network
-              </Button>
-            </Link>
-            <Link href="/start-project">
-              <Button variant="outline" size="lg">
-                Start a Project
-              </Button>
-            </Link>
-          </div>
-
-          {/* Quick metric stats */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-border/70 pt-10 text-left">
-            <div className="p-4 rounded-lg bg-surface/40 border border-border">
-              <div className="text-2xl font-bold text-accent font-mono">100%</div>
-              <div className="text-xs text-muted mt-1 uppercase tracking-wider">Verified Developers</div>
-            </div>
-            <div className="p-4 rounded-lg bg-surface/40 border border-border">
-              <div className="text-2xl font-bold text-foreground font-mono">₹50 / Cr</div>
-              <div className="text-xs text-muted mt-1 uppercase tracking-wider">Configurable Claim Credit</div>
-            </div>
-            <div className="p-4 rounded-lg bg-surface/40 border border-border">
-              <div className="text-2xl font-bold text-electric-purple font-mono">Atomic</div>
-              <div className="text-xs text-muted mt-1 uppercase tracking-wider">Ledger & Auto-Refunds</div>
-            </div>
-            <div className="p-4 rounded-lg bg-surface/40 border border-border">
-              <div className="text-2xl font-bold text-foreground font-mono">Private</div>
-              <div className="text-xs text-muted mt-1 uppercase tracking-wider">Anonymous Project Bridge</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. COMPANY INTRODUCTION */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {/* 🎬 SCENE 02: THE PROTOCOL & ARCHITECTURE */}
+      <section id="protocol" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-20">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <Badge variant="default">The Architecture</Badge>
+            <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono">
+              <span>SCENE 02 // PROTOCOL & ARCHITECTURE</span>
+            </div>
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               Software Company + Developer Network + Client Ecosystem
             </h2>
@@ -159,11 +97,11 @@ await db.$transaction(async (tx) => {
         </div>
       </section>
 
-      {/* 3. TECHNOLOGIES */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-        <Badge variant="outline" className="mb-4">
-          Tech Stack
-        </Badge>
+      {/* 🎬 SCENE 03: INDUSTRIAL TECHNOLOGIES */}
+      <section id="technologies" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center scroll-mt-20">
+        <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono mb-4">
+          <span>SCENE 03 // INDUSTRIAL TECH STACK</span>
+        </div>
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
           Built With Modern Industrial Technologies
         </h2>
@@ -171,7 +109,7 @@ await db.$transaction(async (tx) => {
           {sampleTechnologies.map((tech) => (
             <span
               key={tech}
-              className="rounded-lg border border-border bg-surface px-4 py-2 text-xs font-mono text-foreground hover:border-accent/40 transition-colors"
+              className="rounded-lg border border-border bg-surface px-4 py-2 text-xs font-mono text-foreground hover:border-accent/40 hover:bg-surface-elevated transition-colors"
             >
               {tech}
             </span>
@@ -179,12 +117,12 @@ await db.$transaction(async (tx) => {
         </div>
       </section>
 
-      {/* 4. MASTER WORKFLOW */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {/* 🎬 SCENE 04: ECOSYSTEM PIPELINE */}
+      <section id="pipeline" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-20">
         <div className="text-center max-w-2xl mx-auto mb-12">
-          <Badge variant="default" className="mb-3">
-            Ecosystem Pipeline
-          </Badge>
+          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono mb-3">
+            <span>SCENE 04 // ECOSYSTEM PIPELINE</span>
+          </div>
           <h2 className="text-3xl font-bold text-foreground">How The Platform Works</h2>
           <p className="mt-2 text-xs text-muted">
             From client submission to developer claim, anonymous proposal comparison, and verified public delivery.
@@ -230,12 +168,12 @@ await db.$transaction(async (tx) => {
         </div>
       </section>
 
-      {/* 5. LEADERSHIP SECTION */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 border-t border-border pt-16">
+      {/* 🎬 SCENE 05: EXECUTIVE GOVERNANCE & LEADERSHIP */}
+      <section id="leadership" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 border-t border-border pt-16 scroll-mt-20">
         <div className="text-center max-w-2xl mx-auto mb-12">
-          <Badge variant="outline" className="mb-3">
-            Governance
-          </Badge>
+          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono mb-3">
+            <span>SCENE 05 // EXECUTIVE GOVERNANCE</span>
+          </div>
           <h2 className="text-3xl font-bold text-foreground">Company Leadership</h2>
           <p className="mt-2 text-xs text-muted">
             Direct executive oversight across developer verification, project claims, and platform integrity.
@@ -281,10 +219,13 @@ await db.$transaction(async (tx) => {
         </div>
       </section>
 
-      {/* 6. CALL TO ACTION */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="rounded-2xl border border-accent/30 bg-gradient-to-b from-surface-elevated via-surface to-surface-elevated p-8 md:p-12 text-center relative overflow-hidden shadow-surface-card">
+      {/* 🎬 SCENE 06: DEPLOY THE FUTURE */}
+      <section id="cta" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-20">
+        <div className="rounded-2xl border border-accent/40 bg-gradient-to-b from-surface-elevated via-surface to-surface-elevated p-8 md:p-12 text-center relative overflow-hidden shadow-surface-card">
           <div className="absolute top-0 right-0 w-72 h-72 bg-accent/10 blur-[90px] rounded-full pointer-events-none" />
+          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono mb-4">
+            <span>SCENE 06 // PRODUCTION LAUNCH</span>
+          </div>
           <h2 className="text-3xl font-extrabold text-foreground sm:text-4xl">
             Ready to Build The Future?
           </h2>
