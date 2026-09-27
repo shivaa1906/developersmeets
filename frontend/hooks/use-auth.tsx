@@ -23,6 +23,8 @@ export interface AuthSessionUser {
   clientNumber?: string;
   supportStaffId?: string;
   verificationStatus?: string;
+  profileImage?: string;
+  avatarUrl?: string;
 }
 
 interface AuthContextType {
@@ -31,6 +33,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (token: string, user: AuthSessionUser) => void;
   logout: () => void;
+  updateUser: (partialUser: Partial<AuthSessionUser>) => void;
   isCEO: boolean;
   isAdmin: boolean;
   isMD: boolean;
@@ -100,6 +103,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     router.replace('/login');
   };
 
+  const updateUser = (partialUser: Partial<AuthSessionUser>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...partialUser };
+      try {
+        localStorage.setItem('nexus_auth_user', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
   const isCEO = user?.role === 'CEO';
   const isAdmin = user?.role === 'ADMIN' || isCEO;
   const isMD = user?.role === 'MD' || isCEO;
@@ -116,6 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         logout,
+        updateUser,
         isCEO,
         isAdmin,
         isMD,

@@ -220,8 +220,17 @@ export const Navbar: React.FC = () => {
                       className="flex items-center space-x-2 rounded-full p-1 hover:bg-surface-elevated focus:outline-none transition-colors border border-transparent hover:border-border"
                       aria-label="Account Menu"
                     >
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 border border-accent/30 text-accent text-xs font-bold">
-                        {userInitials}
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 border border-accent/30 text-accent text-xs font-bold overflow-hidden">
+                        {user?.profileImage || user?.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={user.profileImage || user.avatarUrl}
+                            alt="Avatar"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          userInitials
+                        )}
                       </div>
                       <span className="text-xs font-medium text-foreground truncate max-w-[120px] hidden lg:inline-block">
                         {userDisplayName}

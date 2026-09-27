@@ -19,6 +19,7 @@ import {
   EyeOff,
   AlertCircle,
   ArrowLeft,
+  Sparkles,
 } from 'lucide-react';
 
 function getSafeRedirect(candidate: string | null): string | null {
@@ -80,9 +81,38 @@ export default function LoginPage() {
     }
   };
 
+  const handleQuickLogin = (role: 'CLIENT' | 'DEVELOPER' | 'SUPPORT' | 'ADMIN' | 'CEO' | 'MD') => {
+    setErrorMessage(null);
+    if (role === 'CLIENT') {
+      setEmail('client001@apexretail.io');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'Client #001 Selected', 'Credentials populated for Apex Retail Labs.');
+    } else if (role === 'DEVELOPER') {
+      setEmail('rahul@nexus.dev');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'Verified Developer Selected', 'Credentials populated for Rahul Kumar.');
+    } else if (role === 'SUPPORT') {
+      setEmail('support@nexus.dev');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'Support Selected', 'Credentials populated for Platform Support.');
+    } else if (role === 'ADMIN') {
+      setEmail('admin@nexus.dev');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'Platform Admin Selected', 'Credentials populated for Administrator.');
+    } else if (role === 'CEO') {
+      setEmail('shivaa1906@gmail.com');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'CEO Shiva Selected', 'Credentials populated for Chief Executive.');
+    } else if (role === 'MD') {
+      setEmail('md@example.invalid');
+      setPassword('DevPlatform2026!Secure');
+      addToast('info', 'MD Sample Selected', 'Credentials populated for Managing Director.');
+    }
+  };
+
   return (
     <div className="flex min-h-[88vh] items-center justify-center px-4 py-12">
-      <div className="w-full max-w-[440px] space-y-6">
+      <div className="w-full max-w-[460px] space-y-6">
         {/* Brand & Heading Header */}
         <div className="text-center space-y-2">
           <Link href="/" className="inline-flex items-center space-x-2.5 mb-2 group">
@@ -197,8 +227,101 @@ export default function LoginPage() {
               </Button>
             </form>
 
+            {/* Clean Professional Demo Role Autofill */}
+            <div className="mt-6 pt-5 border-t border-border">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider flex items-center space-x-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-accent" />
+                  <span>Demo Role Quick Fill</span>
+                </span>
+                <span className="text-[10px] font-mono text-muted bg-surface-elevated px-2 py-0.5 rounded border border-border">
+                  1-Click Fill
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('CLIENT')}
+                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span className="h-2 w-2 rounded-full bg-status-info" />
+                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
+                      Client #001
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted truncate w-full">Apex Retail</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('DEVELOPER')}
+                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span className="h-2 w-2 rounded-full bg-status-success" />
+                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
+                      Developer
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted truncate w-full">Rahul Kumar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('SUPPORT')}
+                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span className="h-2 w-2 rounded-full bg-status-warning" />
+                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
+                      Support
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted truncate w-full">Staff Agent</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('ADMIN')}
+                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span className="h-2 w-2 rounded-full bg-electric-purple" />
+                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
+                      Admin
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted truncate w-full">Platform Ops</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('CEO')}
+                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span className="h-2 w-2 rounded-full bg-accent" />
+                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
+                      CEO Shiva
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted truncate w-full">M. Shiva Gopi</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('MD')}
+                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <span className="h-2 w-2 rounded-full bg-electric-purple" />
+                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
+                      MD Sample
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-muted truncate w-full">Leadership</span>
+                </button>
+              </div>
+            </div>
+
             {/* Security Guarantee Badge */}
-            <div className="mt-6 pt-5 border-t border-border flex items-center justify-center space-x-2 text-[11px] text-muted">
+            <div className="mt-5 pt-4 border-t border-border flex items-center justify-center space-x-2 text-[11px] text-muted">
               <ShieldCheck className="h-3.5 w-3.5 text-status-success shrink-0" />
               <span>End-to-end encrypted session • 256-bit SSL</span>
             </div>

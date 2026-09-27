@@ -40,6 +40,7 @@ const iconMap: Record<string, React.ReactNode> = {
 
 const clientNav = [
   { label: 'Overview', href: '/dashboard' },
+  { label: 'Profile', href: '/dashboard/profile' },
   { label: 'Projects', href: '/dashboard/projects' },
   { label: 'Messages', href: '/dashboard/messages' },
   { label: 'Support', href: '/dashboard/support' },

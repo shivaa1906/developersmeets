@@ -10,6 +10,7 @@ import { ROLES, LEADERSHIP } from '../config/constants.js';
 import { BruteForceProtection } from '../middlewares/rateLimiter.js';
 import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
 import { ProjectService } from '../services/projectService.js';
+import { DeveloperService } from '../services/developerService.js';
 import { hashPassword, verifyPassword, validatePassword } from '../utils/password.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
@@ -1108,6 +1109,104 @@ export class AuthController {
       });
     } catch {
       res.status(401).json({ error: 'Invalid or expired verification token.' });
+    }
+  }
+
+  /**
+   * Update profile details and profile photo for authenticated users
+   */
+  static async updateProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    const {
+      name,
+      phone,
+      profileImage,
+      avatarUrl,
+      bio,
+      roleTitle,
+      companyName,
+      skills,
+      experience,
+      availability,
+      githubUrl,
+      linkedinUrl,
+      portfolioUrl,
+    } = req.body;
+
+    try {
+      const photo = profileImage || avatarUrl || null;
+
+      // 1. Update users table
+      await query(
+        `UPDATE users 
+         SET phone = COALESCE($1, phone),
+             profile_image = COALESCE($2, profile_image),
+             avatar_url = COALESCE($2, avatar_url),
+             updated_at = NOW()
+         WHERE id = $3`,
+        [phone || null, photo, req.user.userId]
+      );
+
+      // 2. If client, update clients table
+      if (req.user.role === ROLES.CLIENT) {
+        await query(
+          `UPDATE clients
+           SET company_name = COALESCE($1, company_name),
+               private_name = COALESCE($2, private_name),
+               phone = COALESCE($3, phone),
+               updated_at = NOW()
+           WHERE user_id = $4`,
+          [companyName || null, name || null, phone || null, req.user.userId]
+        );
+      }
+
+      // 3. If developer, executive, or admin, update developer record if exists
+      const devRes = await query(
+        `SELECT id FROM developers WHERE user_id = $1`,
+        [req.user.userId]
+      );
+
+      if (devRes.rows.length > 0) {
+        const devId = devRes.rows[0].id;
+        await DeveloperService.updateProfile(devId, {
+          displayName: name,
+          roleTitle,
+          bio,
+          experience: experience !== undefined ? Number(experience) : undefined,
+          availability,
+          profilePhoto: photo,
+          githubUrl,
+          linkedinUrl,
+          portfolioUrl,
+          skills: Array.isArray(skills)
+            ? skills
+            : typeof skills === 'string'
+            ? skills.split(',').map((s: string) => s.trim()).filter(Boolean)
+            : undefined,
+        });
+      }
+
+      // Return updated user object
+      const updatedUserRes = await query(
+        `SELECT id, uid, public_uid, email, phone, role, status, profile_image, avatar_url, updated_at
+         FROM users WHERE id = $1`,
+        [req.user.userId]
+      );
+
+      res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        user: {
+          ...updatedUserRes.rows[0],
+          name: name || undefined,
+        },
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || 'Failed to update profile' });
     }
   }
 }

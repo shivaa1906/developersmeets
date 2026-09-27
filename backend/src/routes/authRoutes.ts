@@ -19,5 +19,7 @@ router.post('/change-password', authenticateJwt, AuthController.changePassword);
 router.post('/send-verification-email', AuthController.sendVerificationEmail);
 router.post('/verify-email', AuthController.verifyEmail);
 router.get('/me', authenticateJwt, AuthController.me);
+router.patch('/profile', authenticateJwt, AuthController.updateProfile);
+router.put('/profile', authenticateJwt, AuthController.updateProfile);
 
 export default router;

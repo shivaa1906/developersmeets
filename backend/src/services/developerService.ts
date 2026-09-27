@@ -381,6 +381,7 @@ export class DeveloperService {
       githubUrl?: string;
       linkedinUrl?: string;
       portfolioUrl?: string;
+      profilePhoto?: string;
       skills?: string[];
       experiences?: DeveloperExperienceInput[];
       certifications?: DeveloperCertificationInput[];
@@ -397,8 +398,9 @@ export class DeveloperService {
              github_url = COALESCE($6, github_url),
              linkedin_url = COALESCE($7, linkedin_url),
              portfolio_url = COALESCE($8, portfolio_url),
+             profile_photo = COALESCE($9, profile_photo),
              updated_at = NOW()
-         WHERE id = $9`,
+         WHERE id = $10`,
         [
           data.displayName ? sanitizeInput(data.displayName) : null,
           data.roleTitle ? sanitizeInput(data.roleTitle) : null,
@@ -408,9 +410,19 @@ export class DeveloperService {
           data.githubUrl || null,
           data.linkedinUrl || null,
           data.portfolioUrl || null,
+          data.profilePhoto || null,
           developerId,
         ]
       );
+
+      if (data.profilePhoto) {
+        await client.query(
+          `UPDATE users
+           SET profile_image = $1, avatar_url = $1, updated_at = NOW()
+           WHERE id = (SELECT user_id FROM developers WHERE id = $2)`,
+          [data.profilePhoto, developerId]
+        );
+      }
 
       // Upsert skills
       if (Array.isArray(data.skills)) {
