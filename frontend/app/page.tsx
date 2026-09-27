@@ -1,14 +1,17 @@
 import Link from 'next/link';
 import { siteConfig } from '@/config/site';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Workflow,
   Coins,
   ShieldCheck,
   CheckCircle2,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
-import { CinematicVideoHero } from '@/components/landing/cinematic-video-hero';
+import { CinematicQuotes } from '@/components/landing/typewriter-quotes';
 
 export default function HomePage() {
   const leadership = siteConfig.company.leadership;
@@ -30,16 +33,84 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col space-y-24 pb-20">
-      {/* 🎬 SCENE 01: HERO & VIDEO EXPERIENCE */}
-      <CinematicVideoHero />
+      {/* 🎬 HERO SECTION WITH BACKGROUND VIDEO */}
+      <section className="relative min-h-[92vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-20">
+        {/* Full-bleed Background Video */}
+        <div className="absolute inset-0 w-full h-full -z-10 overflow-hidden pointer-events-none select-none">
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            poster="/videos/hero-developer-poster.jpg"
+            className="w-full h-full object-cover object-center filter brightness-[0.72] contrast-[1.08]"
+          >
+            <source src="/videos/hero-developer.mp4" type="video/mp4" />
+          </video>
+          {/* Subtle Dark Vignette & Gradient Overlays for Maximum Legibility */}
+          <div className="absolute inset-0 bg-black/55 backdrop-blur-[0.5px]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-black/20 to-black/60" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background/40 via-transparent to-background/40" />
+        </div>
 
-      {/* 🎬 SCENE 02: THE PROTOCOL & ARCHITECTURE */}
-      <section id="protocol" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 text-center flex flex-col items-center justify-center">
+          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/15 backdrop-blur-md px-3.5 py-1 text-xs font-semibold text-accent mb-6 shadow-[0_0_15px_rgba(2,132,199,0.3)]">
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="font-mono uppercase tracking-wider text-[11px]">Developer Company Operating System 2.0</span>
+          </div>
+
+          {/* Autolooping Quotes with Infosys-style Optical Blur & Focus */}
+          <CinematicQuotes />
+
+          <p className="mt-6 text-base sm:text-lg md:text-xl text-slate-200 max-w-2xl mx-auto font-normal leading-relaxed drop-shadow-sm">
+            Developer-powered technology company building mission-critical digital products. Verified talent, anonymous project claims, credit ledgers, and seamless execution.
+          </p>
+
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <Link href="/projects">
+              <Button size="lg" rightIcon={<ArrowRight className="h-4 w-4" />}>
+                Explore Projects
+              </Button>
+            </Link>
+            <Link href="/join-developer">
+              <Button variant="secondary" size="lg" className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur-md">
+                Join Developer Network
+              </Button>
+            </Link>
+            <Link href="/start-project">
+              <Button variant="outline" size="lg" className="border-white/30 text-white hover:bg-white/10 backdrop-blur-md">
+                Start a Project
+              </Button>
+            </Link>
+          </div>
+
+          {/* Quick metric stats in frosted glass cards */}
+          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-white/15 pt-10 text-left w-full">
+            <div className="p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 shadow-xl">
+              <div className="text-2xl sm:text-3xl font-bold text-accent font-mono">100%</div>
+              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Verified Developers</div>
+            </div>
+            <div className="p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 shadow-xl">
+              <div className="text-2xl sm:text-3xl font-bold text-white font-mono">₹50 / Cr</div>
+              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Configurable Claim Credit</div>
+            </div>
+            <div className="p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 shadow-xl">
+              <div className="text-2xl sm:text-3xl font-bold text-electric-purple font-mono">Atomic</div>
+              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Ledger & Auto-Refunds</div>
+            </div>
+            <div className="p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/15 shadow-xl">
+              <div className="text-2xl sm:text-3xl font-bold text-white font-mono">Private</div>
+              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Anonymous Project Bridge</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. THE PROTOCOL & ARCHITECTURE */}
+      <section id="protocol" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono">
-              <span>SCENE 02 // PROTOCOL & ARCHITECTURE</span>
-            </div>
+            <Badge variant="default">The Architecture</Badge>
             <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               Software Company + Developer Network + Client Ecosystem
             </h2>
@@ -97,11 +168,11 @@ await db.$transaction(async (tx) => {
         </div>
       </section>
 
-      {/* 🎬 SCENE 03: INDUSTRIAL TECHNOLOGIES */}
+      {/* 3. INDUSTRIAL TECHNOLOGIES */}
       <section id="technologies" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center scroll-mt-20">
-        <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono mb-4">
-          <span>SCENE 03 // INDUSTRIAL TECH STACK</span>
-        </div>
+        <Badge variant="outline" className="mb-4">
+          Tech Stack
+        </Badge>
         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
           Built With Modern Industrial Technologies
         </h2>
@@ -109,7 +180,7 @@ await db.$transaction(async (tx) => {
           {sampleTechnologies.map((tech) => (
             <span
               key={tech}
-              className="rounded-lg border border-border bg-surface px-4 py-2 text-xs font-mono text-foreground hover:border-accent/40 hover:bg-surface-elevated transition-colors"
+              className="rounded-lg border border-border bg-surface px-4 py-2 text-xs font-mono text-foreground hover:border-accent/40 transition-colors"
             >
               {tech}
             </span>
@@ -117,12 +188,12 @@ await db.$transaction(async (tx) => {
         </div>
       </section>
 
-      {/* 🎬 SCENE 04: ECOSYSTEM PIPELINE */}
+      {/* 4. ECOSYSTEM PIPELINE */}
       <section id="pipeline" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-20">
         <div className="text-center max-w-2xl mx-auto mb-12">
-          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono mb-3">
-            <span>SCENE 04 // ECOSYSTEM PIPELINE</span>
-          </div>
+          <Badge variant="default" className="mb-3">
+            Ecosystem Pipeline
+          </Badge>
           <h2 className="text-3xl font-bold text-foreground">How The Platform Works</h2>
           <p className="mt-2 text-xs text-muted">
             From client submission to developer claim, anonymous proposal comparison, and verified public delivery.
@@ -168,12 +239,12 @@ await db.$transaction(async (tx) => {
         </div>
       </section>
 
-      {/* 🎬 SCENE 05: EXECUTIVE GOVERNANCE & LEADERSHIP */}
+      {/* 5. EXECUTIVE GOVERNANCE & LEADERSHIP */}
       <section id="leadership" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 border-t border-border pt-16 scroll-mt-20">
         <div className="text-center max-w-2xl mx-auto mb-12">
-          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono mb-3">
-            <span>SCENE 05 // EXECUTIVE GOVERNANCE</span>
-          </div>
+          <Badge variant="outline" className="mb-3">
+            Governance
+          </Badge>
           <h2 className="text-3xl font-bold text-foreground">Company Leadership</h2>
           <p className="mt-2 text-xs text-muted">
             Direct executive oversight across developer verification, project claims, and platform integrity.
@@ -219,13 +290,10 @@ await db.$transaction(async (tx) => {
         </div>
       </section>
 
-      {/* 🎬 SCENE 06: DEPLOY THE FUTURE */}
+      {/* 6. CALL TO ACTION */}
       <section id="cta" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-20">
-        <div className="rounded-2xl border border-accent/40 bg-gradient-to-b from-surface-elevated via-surface to-surface-elevated p-8 md:p-12 text-center relative overflow-hidden shadow-surface-card">
+        <div className="rounded-2xl border border-accent/30 bg-gradient-to-b from-surface-elevated via-surface to-surface-elevated p-8 md:p-12 text-center relative overflow-hidden shadow-surface-card">
           <div className="absolute top-0 right-0 w-72 h-72 bg-accent/10 blur-[90px] rounded-full pointer-events-none" />
-          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent font-mono mb-4">
-            <span>SCENE 06 // PRODUCTION LAUNCH</span>
-          </div>
           <h2 className="text-3xl font-extrabold text-foreground sm:text-4xl">
             Ready to Build The Future?
           </h2>
