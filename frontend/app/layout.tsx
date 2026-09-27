@@ -3,6 +3,7 @@ import '@/styles/globals.css';
 import { siteConfig } from '@/config/site';
 import { ToastProvider } from '@/components/ui/toast';
 import { AuthProvider } from '@/hooks/use-auth';
+import { ThemeProvider } from '@/hooks/use-theme';
 import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
 import { MeshBackground } from '@/components/ui/mesh-background';
@@ -82,25 +83,57 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="light">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var saved = localStorage.getItem('nexus_theme');
+                  var theme = saved || 'system';
+                  var isDark = false;
+                  if (theme === 'dark') {
+                    isDark = true;
+                  } else if (theme === 'bright') {
+                    isDark = false;
+                  } else {
+                    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  }
+                  var root = document.documentElement;
+                  if (isDark) {
+                    root.classList.add('dark');
+                    root.classList.remove('light');
+                    root.style.colorScheme = 'dark';
+                  } else {
+                    root.classList.add('light');
+                    root.classList.remove('dark');
+                    root.style.colorScheme = 'light';
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased text-foreground">
-        <ToastProvider>
-          <AuthProvider>
-            <MeshBackground />
-            <MouseGlow />
-            <div className="relative z-10 flex min-h-screen flex-col">
-              <Navbar />
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
-          </AuthProvider>
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <MeshBackground />
+              <MouseGlow />
+              <div className="relative z-10 flex min-h-screen flex-col">
+                <Navbar />
+                <main className="flex-1">{children}</main>
+                <Footer />
+              </div>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

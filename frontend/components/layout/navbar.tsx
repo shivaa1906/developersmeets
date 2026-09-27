@@ -24,6 +24,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { ThemeNavbarToggle } from '@/components/ui/theme-selector';
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
@@ -131,6 +132,7 @@ export const Navbar: React.FC = () => {
 
         {/* Actions - Role Based Desktop Bar */}
         <div className="hidden md:flex items-center space-x-3">
+          <ThemeNavbarToggle />
           {user ? (
             <div className="flex items-center space-x-3">
               {/* CLIENT Authenticated State */}
@@ -252,8 +254,9 @@ export const Navbar: React.FC = () => {
           )}
         </div>
 
-        {/* Mobile menu toggle */}
-        <div className="flex md:hidden">
+        {/* Mobile menu toggle & theme toggle */}
+        <div className="flex md:hidden items-center space-x-2">
+          <ThemeNavbarToggle />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="rounded-lg p-2 text-muted hover:text-foreground focus:outline-none"

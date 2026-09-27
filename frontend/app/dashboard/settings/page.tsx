@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
+import { ThemeSettingsCard } from '@/components/ui/theme-selector';
 
 export default function DashboardSettingsPage() {
   const { addToast } = useToast();
@@ -22,10 +23,14 @@ export default function DashboardSettingsPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Account Settings</h1>
-        <p className="text-xs text-muted mt-1">Configure your security, email notifications, and alerts.</p>
+        <h1 className="text-2xl font-bold text-foreground">Account & System Settings</h1>
+        <p className="text-xs text-muted mt-1">Configure your visual appearance, security, and credentials.</p>
       </div>
 
+      {/* Visual Theme Selection (System, Bright, Dark) */}
+      <ThemeSettingsCard />
+
+      {/* Security Credentials */}
       <form onSubmit={handleSave} className="space-y-6">
         <Card>
           <CardHeader>

@@ -22,6 +22,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { ThemeNavbarToggle } from '@/components/ui/theme-selector';
 
 const adminIconMap: Record<string, React.ReactNode> = {
   'Admin Overview': <ShieldAlert className="h-4 w-4" />,
@@ -163,6 +164,7 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
+            <ThemeNavbarToggle />
             <Link href="/dashboard" className="hidden xs:inline text-[11px] sm:text-xs text-muted hover:text-accent transition-colors">
               Developer View
             </Link>

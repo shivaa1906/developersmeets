@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
 import { Sliders, Shield } from 'lucide-react';
 import { siteConfig } from '@/config/site';
+import { ThemeSettingsCard } from '@/components/ui/theme-selector';
 
 export default function AdminSettingsPage() {
   const { addToast } = useToast();
@@ -38,6 +39,9 @@ export default function AdminSettingsPage() {
           Dynamic configuration of credit economy, marketplace limits, and automatic refund algorithms.
         </p>
       </div>
+
+      {/* Visual Theme Selection (System, Bright, Dark) */}
+      <ThemeSettingsCard />
 
       <form onSubmit={handleSave} className="space-y-6">
         <Card>

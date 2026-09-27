@@ -11,29 +11,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#FFFFFF',
+        background: 'rgb(var(--background) / <alpha-value>)',
         surface: {
-          DEFAULT: '#FFFFFF',
-          elevated: '#F8FAFC',
-          highlight: '#F1F5F9',
-          border: '#E2E8F0',
+          DEFAULT: 'rgb(var(--surface) / <alpha-value>)',
+          elevated: 'rgb(var(--surface-elevated) / <alpha-value>)',
+          highlight: 'rgb(var(--surface-highlight) / <alpha-value>)',
+          border: 'rgb(var(--border) / <alpha-value>)',
         },
-        foreground: '#0F172A',
+        foreground: 'rgb(var(--foreground) / <alpha-value>)',
         muted: {
-          DEFAULT: '#64748B',
-          foreground: '#94A3B8',
+          DEFAULT: 'rgb(var(--muted) / <alpha-value>)',
+          foreground: 'rgb(var(--muted-foreground) / <alpha-value>)',
         },
-        border: '#E2E8F0',
+        border: 'rgb(var(--border) / <alpha-value>)',
         accent: {
-          DEFAULT: '#0284C7',
-          foreground: '#FFFFFF',
-          glow: 'rgba(2, 132, 199, 0.2)',
-          muted: 'rgba(2, 132, 199, 0.1)',
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          foreground: 'rgb(var(--accent-foreground) / <alpha-value>)',
+          glow: 'rgba(var(--accent-glow), 0.25)',
+          muted: 'rgba(var(--accent-glow), 0.1)',
         },
         electric: {
-          cyan: '#0284C7',
-          blue: '#2563EB',
-          purple: '#7C3AED',
+          cyan: 'rgb(var(--electric-cyan) / <alpha-value>)',
+          blue: 'rgb(var(--electric-blue) / <alpha-value>)',
+          purple: 'rgb(var(--electric-purple) / <alpha-value>)',
         },
         status: {
           success: '#059669',
@@ -47,9 +47,9 @@ const config: Config = {
         mono: ['var(--font-mono)', 'monospace'],
       },
       boxShadow: {
-        'accent-glow': '0 0 25px -5px rgba(2, 132, 199, 0.25)',
-        'surface-card': '0 4px 20px -2px rgba(15, 23, 42, 0.06)',
-        'subtle-border': 'inset 0 0 0 1px #E2E8F0',
+        'accent-glow': '0 0 25px -5px rgba(var(--accent-glow), 0.25)',
+        'surface-card': 'var(--card-shadow)',
+        'subtle-border': 'inset 0 0 0 1px rgb(var(--border))',
       },
     },
   },

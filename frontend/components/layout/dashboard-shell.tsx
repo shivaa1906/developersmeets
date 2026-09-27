@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useRealtime } from '@/hooks/use-realtime';
 import { useToast } from '@/components/ui/toast';
 import { apiClient } from '@/lib/api-client';
+import { ThemeNavbarToggle } from '@/components/ui/theme-selector';
 
 const iconMap: Record<string, React.ReactNode> = {
   Overview: <LayoutDashboard className="h-4 w-4" />,
@@ -204,6 +205,8 @@ export const DashboardShell: React.FC<{ children: React.ReactNode }> = ({ childr
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
+            <ThemeNavbarToggle />
+
             {/* Credit Counter Pill - Only for Developers */}
             {!isClient && (
               <Link
