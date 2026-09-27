@@ -399,6 +399,8 @@ export class DeveloperService {
              linkedin_url = COALESCE($7, linkedin_url),
              portfolio_url = COALESCE($8, portfolio_url),
              profile_photo = COALESCE($9, profile_photo),
+             profile_image = COALESCE($9, profile_image),
+             avatar_url = COALESCE($9, avatar_url),
              updated_at = NOW()
          WHERE id = $10`,
         [
@@ -416,12 +418,16 @@ export class DeveloperService {
       );
 
       if (data.profilePhoto) {
-        await client.query(
-          `UPDATE users
-           SET profile_image = $1, avatar_url = $1, updated_at = NOW()
-           WHERE id = (SELECT user_id FROM developers WHERE id = $2)`,
-          [data.profilePhoto, developerId]
-        );
+        try {
+          await client.query(
+            `UPDATE users
+             SET profile_image = $1, avatar_url = $1, updated_at = NOW()
+             WHERE id = (SELECT user_id FROM developers WHERE id = $2)`,
+            [data.profilePhoto, developerId]
+          );
+        } catch (uErr: any) {
+          console.warn('[DeveloperService users sync warning]:', uErr?.message);
+        }
       }
 
       // Upsert skills

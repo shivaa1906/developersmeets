@@ -19,6 +19,8 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import { LEADERSHIP } from './config/constants.js';
 import { apiRateLimiter } from './middlewares/rateLimiter.js';
 
+import { runMigrations } from './database/migrate.js';
+
 const app = express();
 
 // Security & utility middlewares
@@ -27,11 +29,13 @@ app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use('/api', apiRateLimiter());
 app.use(
   express.json({
+    limit: '25mb',
     verify: (req: any, _res, buf) => {
       req.rawBody = buf.toString('utf8');
     },
   })
 );
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // SEO & Indexability Enforcement Middleware
 app.use((req, res, next) => {
@@ -93,11 +97,17 @@ const httpServer = http.createServer(app);
 realtimeServer.init(httpServer);
 
 if (process.env.NODE_ENV !== 'test') {
-  httpServer.listen(env.PORT, () => {
-    console.log(`[Backend Service] Listening on port ${env.PORT} (${env.NODE_ENV})`);
-    console.log(`[WebSocket Service] Initialized on ws://localhost:${env.PORT}/ws`);
-    console.log(`[Governance] CEO: ${LEADERSHIP.CEO.NAME} | MD: ${LEADERSHIP.MD.NAME}`);
-  });
+  runMigrations()
+    .catch((err) => {
+      console.warn('[Startup Migration Warning]:', err?.message || err);
+    })
+    .finally(() => {
+      httpServer.listen(env.PORT, () => {
+        console.log(`[Backend Service] Listening on port ${env.PORT} (${env.NODE_ENV})`);
+        console.log(`[WebSocket Service] Initialized on ws://localhost:${env.PORT}/ws`);
+        console.log(`[Governance] CEO: ${LEADERSHIP.CEO.NAME} | MD: ${LEADERSHIP.MD.NAME}`);
+      });
+    });
 }
 
 export { app, httpServer };

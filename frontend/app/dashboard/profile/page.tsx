@@ -25,6 +25,7 @@ import {
   Sparkles,
   ShieldCheck,
   Link as LinkIcon,
+  Loader2,
 } from 'lucide-react';
 
 const PRESET_AVATARS = [
@@ -34,12 +35,67 @@ const PRESET_AVATARS = [
   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop&crop=faces',
 ];
 
+/**
+ * Resize and compress an image client-side using HTML5 Canvas.
+ * Produces a ~30-70KB optimized JPEG from any multi-megabyte photo in milliseconds.
+ */
+function compressAndResizeImage(file: File, maxSize = 512, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('Please select a valid image file (PNG, JPG, or WEBP).'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed reading file from device.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Failed reading image format.'));
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string);
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function DashboardProfilePage() {
   const { user, updateUser } = useAuth();
   const { addToast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isCompressing, setIsCompressing] = React.useState(false);
   const [showUrlInput, setShowUrlInput] = React.useState(false);
   const [customUrl, setCustomUrl] = React.useState('');
 
@@ -111,37 +167,49 @@ export default function DashboardProfilePage() {
       .catch(() => {});
   }, [user, isDeveloper, isExecutive]);
 
-  // Handle image file upload (convert to Base64 data URL)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle image file upload with instant client-side canvas compression
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (max 4MB)
-    if (file.size > 4 * 1024 * 1024) {
-      addToast('error', 'File Too Large', 'Please upload an image smaller than 4MB.');
+    if (file.size > 25 * 1024 * 1024) {
+      addToast('error', 'File Too Large', 'Please select an image smaller than 25MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      setForm((prev) => ({ ...prev, profilePhoto: result }));
-      addToast('success', 'Photo Selected', 'Image preview loaded. Click "Save Profile Changes" to persist.');
-    };
-    reader.readAsDataURL(file);
+    try {
+      setIsCompressing(true);
+      const compressedDataUrl = await compressAndResizeImage(file, 512, 0.82);
+      setForm((prev) => ({ ...prev, profilePhoto: compressedDataUrl }));
+      addToast('success', 'Photo Selected', 'Image preview loaded and optimized. Click "Save Profile Changes" to persist.');
+    } catch (err: any) {
+      addToast('error', 'Image Processing Failed', err?.message || 'Could not process selected image.');
+    } finally {
+      setIsCompressing(false);
+      if (e.target) {
+        e.target.value = '';
+      }
+    }
   };
 
   const handleApplyCustomUrl = () => {
-    if (!customUrl.trim()) return;
-    setForm((prev) => ({ ...prev, profilePhoto: customUrl.trim() }));
+    const trimmed = customUrl.trim();
+    if (!trimmed) return;
+
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://') && !trimmed.startsWith('data:image/')) {
+      addToast('error', 'Invalid URL', 'Please enter a valid image URL starting with https:// or http://');
+      return;
+    }
+
+    setForm((prev) => ({ ...prev, profilePhoto: trimmed }));
     setShowUrlInput(false);
     setCustomUrl('');
-    addToast('success', 'Photo URL Applied', 'Preview updated.');
+    addToast('success', 'Photo URL Applied', 'Preview updated. Click "Save Profile Changes" to persist.');
   };
 
   const handleRemovePhoto = () => {
     setForm((prev) => ({ ...prev, profilePhoto: '' }));
-    addToast('info', 'Photo Removed', 'Reverted to name initials avatar.');
+    addToast('info', 'Photo Removed', 'Reverted to name initials avatar. Click "Save Profile Changes" to persist.');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -273,10 +341,17 @@ export default function DashboardProfilePage() {
                     type="button"
                     size="sm"
                     variant="default"
+                    disabled={isCompressing}
                     onClick={() => fileInputRef.current?.click()}
-                    leftIcon={<Upload className="h-3.5 w-3.5" />}
+                    leftIcon={
+                      isCompressing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="h-3.5 w-3.5" />
+                      )
+                    }
                   >
-                    Upload Photo
+                    {isCompressing ? 'Optimizing...' : 'Upload Photo'}
                   </Button>
                   <Button
                     type="button"

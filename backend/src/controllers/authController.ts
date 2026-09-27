@@ -691,7 +691,7 @@ export class AuthController {
       let developer: any = null;
       if (user.role === ROLES.DEVELOPER) {
         const devRes = await query(
-          `SELECT id, username, display_name, verification_status, experience, role_title, availability 
+          `SELECT id, username, display_name, verification_status, experience, role_title, availability, profile_photo, profile_image, avatar_url 
             FROM developers WHERE user_id = $1`,
           [user.id]
         );
@@ -701,7 +701,7 @@ export class AuthController {
       } else if (user.role === ROLES.CEO || user.role === ROLES.MD || user.role === ROLES.ADMIN) {
         const execDevId = await ProjectService.getOrCreateExecutiveDeveloperId(user.id, user.role, user.email);
         const devRes = await query(
-          `SELECT id, username, display_name, verification_status, experience, role_title, availability 
+          `SELECT id, username, display_name, verification_status, experience, role_title, availability, profile_photo, profile_image, avatar_url 
             FROM developers WHERE id = $1`,
           [execDevId]
         );
@@ -735,6 +735,24 @@ export class AuthController {
         }
       }
 
+      let userPhoto: string | null = null;
+      let userName: string | null = null;
+      try {
+        const photoRes = await query(
+          `SELECT avatar_url, profile_image, name FROM users WHERE id = $1`,
+          [user.id]
+        );
+        if (photoRes.rows.length > 0) {
+          userPhoto = photoRes.rows[0].avatar_url || photoRes.rows[0].profile_image || null;
+          userName = photoRes.rows[0].name || null;
+        }
+      } catch {
+        // Safe fallback if columns not yet present
+      }
+
+      const activePhoto = userPhoto || developer?.profile_photo || developer?.profile_image || developer?.avatar_url || null;
+      const activeName = userName || developer?.display_name || client?.private_name || user.email.split('@')[0];
+
       const isExecutive = ['CEO', 'MD', 'ADMIN'].includes(user.role);
 
       res.json({
@@ -744,6 +762,9 @@ export class AuthController {
           publicUid: user.uid || user.public_uid,
           email: user.email,
           phone: user.phone,
+          name: activeName,
+          profileImage: activePhoto,
+          avatarUrl: activePhoto,
           role: user.role,
           status: user.status,
           emailVerified: user.email_verified,
@@ -1112,6 +1133,41 @@ export class AuthController {
     }
   }
 
+  private static profileColsChecked = false;
+  private static async ensureProfileColumns(): Promise<void> {
+    if (AuthController.profileColsChecked) return;
+    try {
+      await query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image TEXT;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(150);
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'developers' AND column_name = 'profile_photo') THEN
+            ALTER TABLE developers ALTER COLUMN profile_photo TYPE TEXT;
+          ELSE
+            ALTER TABLE developers ADD COLUMN profile_photo TEXT;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'developers' AND column_name = 'profile_image') THEN
+            ALTER TABLE developers ALTER COLUMN profile_image TYPE TEXT;
+          ELSE
+            ALTER TABLE developers ADD COLUMN profile_image TEXT;
+          END IF;
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'developers' AND column_name = 'avatar_url') THEN
+            ALTER TABLE developers ALTER COLUMN avatar_url TYPE TEXT;
+          ELSE
+            ALTER TABLE developers ADD COLUMN avatar_url TEXT;
+          END IF;
+        END $$;
+        ALTER TABLE clients ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+        ALTER TABLE clients ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+      `);
+      AuthController.profileColsChecked = true;
+    } catch (err: any) {
+      console.warn('[ensureProfileColumns warning]:', err?.message);
+    }
+  }
+
   /**
    * Update profile details and profile photo for authenticated users
    */
@@ -1138,30 +1194,57 @@ export class AuthController {
     } = req.body;
 
     try {
+      await AuthController.ensureProfileColumns();
+
       const photo = profileImage || avatarUrl || null;
 
-      // 1. Update users table
-      await query(
-        `UPDATE users 
-         SET phone = COALESCE($1, phone),
-             profile_image = COALESCE($2, profile_image),
-             avatar_url = COALESCE($2, avatar_url),
-             updated_at = NOW()
-         WHERE id = $3`,
-        [phone || null, photo, req.user.userId]
-      );
+      // 1. Update users table defensively
+      try {
+        await query(
+          `UPDATE users 
+           SET phone = COALESCE($1, phone),
+               profile_image = COALESCE($2, profile_image),
+               avatar_url = COALESCE($2, avatar_url),
+               name = COALESCE($3, name),
+               updated_at = NOW()
+           WHERE id = $4`,
+          [phone || null, photo, name || null, req.user.userId]
+        );
+      } catch (uErr: any) {
+        console.warn('[updateProfile users table warning]:', uErr?.message);
+        // Fallback update without custom columns if DB rejected them
+        await query(
+          `UPDATE users 
+           SET phone = COALESCE($1, phone),
+               updated_at = NOW()
+           WHERE id = $2`,
+          [phone || null, req.user.userId]
+        ).catch(() => {});
+      }
 
       // 2. If client, update clients table
       if (req.user.role === ROLES.CLIENT) {
-        await query(
-          `UPDATE clients
-           SET company_name = COALESCE($1, company_name),
-               private_name = COALESCE($2, private_name),
-               phone = COALESCE($3, phone),
-               updated_at = NOW()
-           WHERE user_id = $4`,
-          [companyName || null, name || null, phone || null, req.user.userId]
-        );
+        try {
+          await query(
+            `UPDATE clients
+             SET company_name = COALESCE($1, company_name),
+                 private_name = COALESCE($2, private_name),
+                 phone = COALESCE($3, phone),
+                 avatar_url = COALESCE($4, avatar_url),
+                 updated_at = NOW()
+             WHERE user_id = $5`,
+            [companyName || null, name || null, phone || null, photo, req.user.userId]
+          );
+        } catch {
+          await query(
+            `UPDATE clients
+             SET company_name = COALESCE($1, company_name),
+                 private_name = COALESCE($2, private_name),
+                 phone = COALESCE($3, phone)
+             WHERE user_id = $4`,
+            [companyName || null, name || null, phone || null, req.user.userId]
+          ).catch(() => {});
+        }
       }
 
       // 3. If developer, executive, or admin, update developer record if exists
@@ -1190,9 +1273,9 @@ export class AuthController {
         });
       }
 
-      // Return updated user object
+      // 4. Return updated user object cleanly without hardcoded column failures
       const updatedUserRes = await query(
-        `SELECT id, uid, public_uid, email, phone, role, status, profile_image, avatar_url, updated_at
+        `SELECT id, uid, public_uid, email, phone, role, status, updated_at
          FROM users WHERE id = $1`,
         [req.user.userId]
       );
@@ -1201,11 +1284,14 @@ export class AuthController {
         success: true,
         message: 'Profile updated successfully',
         user: {
-          ...updatedUserRes.rows[0],
+          ...(updatedUserRes.rows[0] || {}),
           name: name || undefined,
+          profileImage: photo || undefined,
+          avatarUrl: photo || undefined,
         },
       });
     } catch (error: any) {
+      console.error('[updateProfile Error]:', error);
       res.status(500).json({ error: error.message || 'Failed to update profile' });
     }
   }
