@@ -15,6 +15,7 @@ router.post('/login', AuthController.login);
 router.post('/logout', authenticateJwt, AuthController.logout);
 router.post('/forgot-password', AuthController.forgotPassword);
 router.post('/reset-password', AuthController.resetPassword);
+router.post('/change-password', authenticateJwt, AuthController.changePassword);
 router.post('/send-verification-email', AuthController.sendVerificationEmail);
 router.post('/verify-email', AuthController.verifyEmail);
 router.get('/me', authenticateJwt, AuthController.me);

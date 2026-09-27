@@ -1,24 +1,27 @@
 import { pool, withTransaction } from './db.js';
-import bcrypt from 'bcryptjs';
+import { hashPassword } from '../utils/password.js';
+import { LEADERSHIP } from '../config/constants.js';
 
 export async function runSeed() {
   console.log('--- Starting Comprehensive Database Seeding ---');
 
-  // Secure default development password hash without exposing plain credentials in code
-  const defaultPasswordHash = await bcrypt.hash(
-    process.env.SEED_DEFAULT_PASSWORD || 'DevPlatform2026!Secure',
-    10
+  // Secure default development password hash using Argon2id with unique salt
+  const defaultPasswordHash = await hashPassword(
+    process.env.SEED_DEFAULT_PASSWORD || 'DevPlatform2026!Secure'
   );
+
+  const ceoEmail = (process.env.SEED_CEO_EMAIL || 'shivaa1906@gmail.com').toLowerCase().trim();
+  const mdEmail = (process.env.SEED_MD_EMAIL || 'md@example.invalid').toLowerCase().trim();
 
   try {
     await withTransaction(async (client) => {
-      // 1. CEO User & Developer Profile (Ritesh Lingamallu)
+      // 1. Primary CEO User & Profile (Configured CEO: shivaa1906@gmail.com)
       const ceoUser = await client.query(
-        `INSERT INTO users (email, phone, password_hash, role, status)
-         VALUES ($1, $2, $3, 'CEO', 'ACTIVE')
-         ON CONFLICT (email) DO UPDATE SET role = 'CEO', status = 'ACTIVE'
+        `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at)
+         VALUES ($1, $2, $3, 'CEO', 'ACTIVE', TRUE, NOW())
+         ON CONFLICT (email) DO UPDATE SET role = 'CEO', status = 'ACTIVE', password_hash = $3
          RETURNING id`,
-        ['ritesh@nexus.dev', '+91 9900011223', defaultPasswordHash]
+        [ceoEmail, '+91 9900011223', defaultPasswordHash]
       );
       const ceoUserId = ceoUser.rows[0].id;
 
@@ -29,36 +32,36 @@ export async function runSeed() {
             github_url, linkedin_url, portfolio_url
          )
          VALUES ($1, $2, $3, $4, $5, $6, 'AVAILABLE', 'VERIFIED', NOW(), $7, $8, $9)
-         ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name
+         ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name, user_id = EXCLUDED.user_id
          RETURNING id`,
         [
           ceoUserId,
-          'ritesh-lingamallu',
-          'Ritesh Lingamallu',
-          'Founder & CEO. High-concurrency systems, distributed ledgers, AI inference microservices, and end-to-end enterprise architecture.',
-          'Founder, CEO & Lead Architect',
+          'ceo-shiva',
+          LEADERSHIP.CEO.NAME,
+          'Founder & Chief Executive Officer. High-concurrency systems, distributed ledgers, AI inference microservices, and end-to-end enterprise architecture.',
+          LEADERSHIP.CEO.TITLE,
           8,
-          'https://github.com/riteshlingamallu',
-          'https://linkedin.com/in/riteshlingamallu',
-          'https://riteshlingamallu.dev',
+          'https://github.com/shivaa1906',
+          'https://linkedin.com/in/shivaa1906',
+          'https://nexus.dev',
         ]
       );
       const ceoDevId = ceoDev.rows[0].id;
 
       await client.query(
-        `INSERT INTO credit_accounts (developer_id, balance)
-         VALUES ($1, 20)
+        `INSERT INTO credit_accounts (developer_id, user_id, balance)
+         VALUES ($1, $2, 20)
          ON CONFLICT (developer_id) DO UPDATE SET balance = 20`,
-        [ceoDevId]
+        [ceoDevId, ceoUserId]
       );
 
-      // 2. MD User & Developer Profile (M. Shiva Gopi)
+      // 2. MD User & Developer Profile (Development Sample MD: md@example.invalid)
       const mdUser = await client.query(
-        `INSERT INTO users (email, phone, password_hash, role, status)
-         VALUES ($1, $2, $3, 'MD', 'ACTIVE')
-         ON CONFLICT (email) DO UPDATE SET role = 'MD', status = 'ACTIVE'
+        `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at)
+         VALUES ($1, $2, $3, 'MD', 'ACTIVE', TRUE, NOW())
+         ON CONFLICT (email) DO UPDATE SET role = 'MD', status = 'ACTIVE', password_hash = $3
          RETURNING id`,
-        ['shiva@nexus.dev', '+91 9900022334', defaultPasswordHash]
+        [mdEmail, '+91 9900022334', defaultPasswordHash]
       );
       const mdUserId = mdUser.rows[0].id;
 
@@ -69,27 +72,27 @@ export async function runSeed() {
             github_url, linkedin_url, portfolio_url
          )
          VALUES ($1, $2, $3, $4, $5, $6, 'AVAILABLE', 'VERIFIED', NOW(), $7, $8, $9)
-         ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name
+         ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name, user_id = EXCLUDED.user_id
          RETURNING id`,
         [
           mdUserId,
-          'shiva-gopi',
-          'M. Shiva Gopi',
-          'Managing Director. Enterprise cloud infrastructure, high-availability Kubernetes clusters, automated CI/CD pipelines, and business operations.',
-          'Managing Director & Systems Architect',
+          'sample-md',
+          LEADERSHIP.MD.NAME,
+          'Managing Director (Development Sample). Enterprise cloud infrastructure, high-availability Kubernetes clusters, automated CI/CD pipelines, and business operations.',
+          LEADERSHIP.MD.TITLE,
           7,
-          'https://github.com/shivagopi',
-          'https://linkedin.com/in/shivagopi',
-          'https://shivagopi.dev',
+          'https://github.com/sample-md',
+          'https://linkedin.com/in/sample-md',
+          'https://nexus.dev',
         ]
       );
       const mdDevId = mdDev.rows[0].id;
 
       await client.query(
-        `INSERT INTO credit_accounts (developer_id, balance)
-         VALUES ($1, 20)
+        `INSERT INTO credit_accounts (developer_id, user_id, balance)
+         VALUES ($1, $2, 20)
          ON CONFLICT (developer_id) DO UPDATE SET balance = 20`,
-        [mdDevId]
+        [mdDevId, mdUserId]
       );
 
       // 3. Additional Verified Developers (Rahul Kumar & Sanjay Kumar)
@@ -240,8 +243,8 @@ export async function runSeed() {
       }
 
       console.log('--- Database Seeding Completed Successfully ---');
-      console.log('CEO Account: ritesh@nexus.dev / Ritesh Lingamallu');
-      console.log('MD Account: shiva@nexus.dev / M. Shiva Gopi');
+      console.log(`CEO Account: ${ceoEmail} / ${LEADERSHIP.CEO.NAME}`);
+      console.log(`MD Account: ${mdEmail} / ${LEADERSHIP.MD.NAME}`);
       console.log('Client Account: client1@apexretail.io / Client #001');
       console.log('Projects PRJ-2026-0001 (PUBLISHED) and PRJ-2026-0004 (OPEN_FOR_CLAIMS) seeded.');
     });

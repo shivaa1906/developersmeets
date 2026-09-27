@@ -83,13 +83,13 @@ export default function LoginPage() {
       setPassword('DevPlatform2026!Secure');
       addToast('info', 'Platform Admin Autofilled', 'Platform Administrator');
     } else if (role === 'CEO') {
-      setEmail('ritesh@nexus.dev');
+      setEmail('shivaa1906@gmail.com');
       setPassword('DevPlatform2026!Secure');
-      addToast('info', 'CEO Profile Autofilled', 'Ritesh Lingamallu');
+      addToast('info', 'CEO Profile Autofilled', 'M. Shiva Gopi');
     } else if (role === 'MD') {
-      setEmail('shiva@nexus.dev');
+      setEmail('md@example.invalid');
       setPassword('DevPlatform2026!Secure');
-      addToast('info', 'MD Profile Autofilled', 'M. Shiva Gopi');
+      addToast('info', 'MD Profile Autofilled', 'Development MD Placeholder');
     }
   };
 
@@ -206,7 +206,7 @@ export default function LoginPage() {
                   onClick={() => handleQuickLogin('CEO')}
                   className="text-[11px] h-8"
                 >
-                  CEO Ritesh
+                  CEO Shiva
                 </Button>
                 <Button
                   type="button"
@@ -215,7 +215,7 @@ export default function LoginPage() {
                   onClick={() => handleQuickLogin('MD')}
                   className="text-[11px] h-8"
                 >
-                  MD Shiva
+                  MD Sample
                 </Button>
               </div>
             </div>

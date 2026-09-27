@@ -10,6 +10,7 @@ import { ROLES, LEADERSHIP } from '../config/constants.js';
 import { BruteForceProtection } from '../middlewares/rateLimiter.js';
 import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
 import { ProjectService } from '../services/projectService.js';
+import { hashPassword, verifyPassword, validatePassword } from '../utils/password.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
 const consumedResetTokens = new Set<string>();
@@ -108,8 +109,9 @@ export class AuthController {
       return;
     }
 
-    if (password.length < 8) {
-      res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+    const passwordValidation = validatePassword(password, req.body.confirmPassword);
+    if (!passwordValidation.valid) {
+      res.status(400).json({ error: passwordValidation.error });
       return;
     }
 
@@ -140,7 +142,7 @@ export class AuthController {
     const generalSkillsArray = parseArray(skills);
 
     try {
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await hashPassword(password);
 
       const result = await withTransaction(async (client) => {
         // Check existing email
@@ -301,13 +303,9 @@ export class AuthController {
       return;
     }
 
-    if (confirmPassword && password !== confirmPassword) {
-      res.status(400).json({ error: 'Passwords do not match.' });
-      return;
-    }
-
-    if (password.length < 8) {
-      res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+    const passwordValidation = validatePassword(password, confirmPassword);
+    if (!passwordValidation.valid) {
+      res.status(400).json({ error: passwordValidation.error });
       return;
     }
 
@@ -318,7 +316,7 @@ export class AuthController {
       : `${cleanPrivateName} Enterprise`;
 
     try {
-      const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await hashPassword(password);
 
       const result = await withTransaction(async (client) => {
         // Check existing email
@@ -387,6 +385,7 @@ export class AuthController {
           publicUid: result.user.uid,
           email: result.user.email,
           role: ROLES.CLIENT,
+          tokenVersion: 1,
           clientId: result.client.id,
           clientNumber: result.client.client_number,
         },
@@ -448,40 +447,12 @@ export class AuthController {
       const effectiveEmail = aliasMap[normalizedEmail] || normalizedEmail;
 
       const userRes = await query(
-        `SELECT id, uid, public_uid, email, phone, password_hash, role, status, email_verified, is_suspended, suspension_reason, last_login_at 
+        `SELECT id, uid, public_uid, email, phone, password_hash, role, status, email_verified, is_suspended, suspension_reason, token_version, last_login_at 
          FROM users WHERE email = $1 OR email = $2`,
         [normalizedEmail, effectiveEmail]
       );
 
       if (userRes.rows.length === 0) {
-        // Fallback demo users if database not yet migrated
-        if (normalizedEmail === 'ritesh@nexus.dev') {
-          const token = jwt.sign(
-            { userId: 'ceo-01', email: normalizedEmail, role: ROLES.CEO },
-            env.JWT_SECRET,
-            { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
-          );
-          res.json({
-            token,
-            user: { email: normalizedEmail, role: ROLES.CEO, name: 'Ritesh Lingamallu' },
-            redirectUrl: '/admin/dashboard',
-          });
-          return;
-        }
-        if (normalizedEmail === 'shiva@nexus.dev') {
-          const token = jwt.sign(
-            { userId: 'md-01', email: normalizedEmail, role: ROLES.MD },
-            env.JWT_SECRET,
-            { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
-          );
-          res.json({
-            token,
-            user: { email: normalizedEmail, role: ROLES.MD, name: 'M. Shiva Gopi' },
-            redirectUrl: '/admin/dashboard',
-          });
-          return;
-        }
-
         const attempt = BruteForceProtection.recordFailedAttempt(normalizedEmail);
         if (attempt.locked) {
           res.status(429).json({
@@ -517,11 +488,10 @@ export class AuthController {
         return;
       }
 
-      const isDevPassword =
-        env.NODE_ENV !== 'production' && (password === 'password123' || password === 'DevPlatform2026!Secure');
-      const valid = isDevPassword || (await bcrypt.compare(password, user.password_hash));
+      // Cryptographically verify password (Argon2id or backward-compatible bcrypt)
+      const verification = await verifyPassword(password, user.password_hash);
 
-      if (!valid) {
+      if (!verification.valid) {
         const attempt = BruteForceProtection.recordFailedAttempt(normalizedEmail);
         if (attempt.locked) {
           res.status(429).json({
@@ -538,6 +508,26 @@ export class AuthController {
 
       // Successful login clears brute force record
       BruteForceProtection.clear(normalizedEmail);
+
+      // Transparent upgrade-on-login: if legacy bcrypt hash was verified, rehash to Argon2id and update database
+      if (verification.needsRehash) {
+        try {
+          const upgradedHash = await hashPassword(password);
+          await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [
+            upgradedHash,
+            user.id,
+          ]);
+          await AuditLogger.log({
+            actorUserId: user.id,
+            action: 'PASSWORD_HASH_UPGRADED_ARGON2ID',
+            entityType: 'USER',
+            entityId: user.id,
+            metadata: { upgradedTo: 'Argon2id' },
+          });
+        } catch (upgradeErr: any) {
+          console.warn('Password hash upgrade warning:', upgradeErr.message);
+        }
+      }
 
       // Record last login timestamp
       await query('UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = $1', [user.id]);
@@ -623,6 +613,7 @@ export class AuthController {
           publicUid: user.uid || user.public_uid,
           email: user.email,
           role: user.role,
+          tokenVersion: user.token_version || 1,
           developerId,
           clientId,
           supportStaffId,
@@ -830,10 +821,11 @@ export class AuthController {
    * Resets password using either resetToken or current password verification
    */
   static async resetPassword(req: Request, res: Response): Promise<void> {
-    const { email, currentPassword, newPassword, resetToken } = req.body;
+    const { email, currentPassword, newPassword, confirmPassword, resetToken } = req.body;
 
-    if (!newPassword || newPassword.length < 8) {
-      res.status(400).json({ error: 'New password must be at least 8 characters long.' });
+    const validation = validatePassword(newPassword, confirmPassword);
+    if (!validation.valid) {
+      res.status(400).json({ error: validation.error });
       return;
     }
 
@@ -879,8 +871,8 @@ export class AuthController {
           return;
         }
         const user = userRes.rows[0];
-        const valid = await bcrypt.compare(currentPassword, user.password_hash);
-        if (!valid) {
+        const verification = await verifyPassword(currentPassword, user.password_hash);
+        if (!verification.valid) {
           res.status(401).json({ error: 'Current password is incorrect.' });
           return;
         }
@@ -895,10 +887,10 @@ export class AuthController {
         return;
       }
 
-      const newHash = await bcrypt.hash(newPassword, 10);
+      const newHash = await hashPassword(newPassword);
       await query(
         `UPDATE users 
-         SET password_hash = $1, password_reset_token = NULL, password_reset_expires_at = NULL, updated_at = NOW() 
+         SET password_hash = $1, password_reset_token = NULL, password_reset_expires_at = NULL, token_version = token_version + 1, password_changed_at = NOW(), updated_at = NOW() 
          WHERE id = $2`,
         [newHash, targetUserId]
       );
@@ -923,10 +915,101 @@ export class AuthController {
   }
 
   /**
-   * Log out authenticated user session
+   * Changes password for authenticated user session.
+   * Verifies current password, applies Argon2id to new password,
+   * and increments token_version to invalidate prior sessions.
+   */
+  static async changePassword(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user?.userId) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: 'Current password and new password are required.' });
+      return;
+    }
+
+    const validation = validatePassword(newPassword, confirmPassword);
+    if (!validation.valid) {
+      res.status(400).json({ error: validation.error });
+      return;
+    }
+
+    try {
+      const userRes = await query(
+        'SELECT id, password_hash, token_version FROM users WHERE id = $1',
+        [req.user.userId]
+      );
+
+      if (userRes.rows.length === 0) {
+        res.status(404).json({ error: 'User account not found.' });
+        return;
+      }
+
+      const user = userRes.rows[0];
+      const verification = await verifyPassword(currentPassword, user.password_hash);
+      if (!verification.valid) {
+        res.status(401).json({ error: 'Current password is incorrect.' });
+        return;
+      }
+
+      const newHash = await hashPassword(newPassword);
+      const nextTokenVersion = (user.token_version || 1) + 1;
+
+      await query(
+        `UPDATE users 
+         SET password_hash = $1, token_version = $2, password_changed_at = NOW(), updated_at = NOW() 
+         WHERE id = $3`,
+        [newHash, nextTokenVersion, user.id]
+      );
+
+      await AuditLogger.log({
+        actorUserId: user.id,
+        action: 'PASSWORD_CHANGED',
+        entityType: 'USER',
+        entityId: user.id,
+        metadata: { success: true },
+      });
+
+      const freshToken = jwt.sign(
+        {
+          userId: req.user.userId,
+          uid: req.user.uid,
+          publicUid: req.user.publicUid,
+          email: req.user.email,
+          role: req.user.role,
+          tokenVersion: nextTokenVersion,
+          developerId: req.user.developerId,
+          clientId: req.user.clientId,
+          supportStaffId: req.user.supportStaffId,
+        },
+        env.JWT_SECRET,
+        { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
+      );
+
+      res.json({
+        message: 'Password changed successfully. Prior active sessions have been invalidated.',
+        token: freshToken,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Log out authenticated user session with audit logging and session invalidation
    */
   static async logout(req: AuthenticatedRequest, res: Response): Promise<void> {
-    if (req.user) {
+    if (req.user?.userId) {
+      if (req.body?.revokeAll === true || req.query?.revokeAll === 'true') {
+        await query('UPDATE users SET token_version = token_version + 1, updated_at = NOW() WHERE id = $1', [
+          req.user.userId,
+        ]);
+      }
+
       await AuditLogger.log({
         actorUserId: req.user.userId,
         action: 'USER_LOGGED_OUT',

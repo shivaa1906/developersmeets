@@ -9,6 +9,7 @@ interface JwtPayload {
   role?: string;
   developerId?: string;
   clientId?: string;
+  tokenVersion?: number;
   iat?: number;
   exp?: number;
 }
@@ -16,7 +17,7 @@ interface JwtPayload {
 /**
  * Authenticates a WebSocket connection using a JWT token.
  * Validates against the database to guarantee the user is active,
- * not suspended, and uses trusted server-side roles rather than trusting client claims.
+ * not suspended, not disabled, and uses trusted server-side roles rather than trusting client claims.
  */
 export async function authenticateSocketToken(token: string): Promise<RealtimeUser> {
   if (!token) {
@@ -40,7 +41,7 @@ export async function authenticateSocketToken(token: string): Promise<RealtimeUs
 
   // Load user from database to ensure fresh status and role
   const userRes = await query(
-    `SELECT id, email, role, status FROM users WHERE id = $1`,
+    `SELECT id, email, role, status, is_suspended, token_version FROM users WHERE id = $1`,
     [userId]
   );
 
@@ -50,8 +51,20 @@ export async function authenticateSocketToken(token: string): Promise<RealtimeUs
 
   const dbUser = userRes.rows[0];
 
-  if (dbUser.status === 'SUSPENDED') {
+  if (dbUser.status === 'SUSPENDED' || dbUser.is_suspended === true) {
     throw new Error('User account is suspended');
+  }
+
+  if (dbUser.status === 'DISABLED') {
+    throw new Error('User account is disabled');
+  }
+
+  if (
+    decoded.tokenVersion !== undefined &&
+    dbUser.token_version !== undefined &&
+    decoded.tokenVersion !== dbUser.token_version
+  ) {
+    throw new Error('Authentication session has been invalidated');
   }
 
   let developerId: string | undefined = undefined;

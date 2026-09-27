@@ -69,6 +69,7 @@ export default function RegisterDeveloperPage() {
         email: formData.email.trim(),
         phone: formData.phone.trim() || undefined,
         password: formData.password,
+        confirmPassword: formData.confirmPassword,
         profilePhoto: formData.profilePhoto.trim() || undefined,
         location: formData.location.trim(),
         roleTitle: formData.developerRole,

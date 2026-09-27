@@ -23,4 +23,8 @@ export const env = {
   PAYMENT_KEY_ID: process.env.PAYMENT_KEY_ID || 'test_pk_nexus_mock',
   PAYMENT_SECRET: process.env.PAYMENT_SECRET || 'test_sk_nexus_mock',
   PAYMENT_WEBHOOK_SECRET: process.env.PAYMENT_WEBHOOK_SECRET || 'test_wh_nexus_mock',
+  ARGON2_MEMORY_COST: parseInt(process.env.ARGON2_MEMORY_COST || '65536', 10),
+  ARGON2_TIME_COST: parseInt(process.env.ARGON2_TIME_COST || '3', 10),
+  ARGON2_PARALLELISM: parseInt(process.env.ARGON2_PARALLELISM || '4', 10),
+  ARGON2_HASH_LENGTH: parseInt(process.env.ARGON2_HASH_LENGTH || '32', 10),
 };
