@@ -3,6 +3,7 @@ import { query } from '../database/db.js';
 import { CommunityService } from '../services/communityService.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { ROLES } from '../config/constants.js';
+import { ProjectService } from '../services/projectService.js';
 
 export class CommunityController {
   /**
@@ -308,7 +309,14 @@ export class CommunityController {
   }
 
   static async createPost(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const developerId = req.user?.developerId;
+    let developerId = req.user?.developerId;
+    const userRole = req.user?.role;
+    const isExecutive = userRole === ROLES.CEO || userRole === ROLES.MD || userRole === ROLES.ADMIN;
+
+    if (!developerId && isExecutive && req.user?.userId) {
+      developerId = await ProjectService.getOrCreateExecutiveDeveloperId(req.user.userId, userRole, req.user.email);
+    }
+
     if (!developerId) {
       res.status(403).json({ error: 'Verified developer profile required to create posts' });
       return;
@@ -337,7 +345,14 @@ export class CommunityController {
   }
 
   static async upvotePost(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const developerId = req.user?.developerId;
+    let developerId = req.user?.developerId;
+    const userRole = req.user?.role;
+    const isExecutive = userRole === ROLES.CEO || userRole === ROLES.MD || userRole === ROLES.ADMIN;
+
+    if (!developerId && isExecutive && req.user?.userId) {
+      developerId = await ProjectService.getOrCreateExecutiveDeveloperId(req.user.userId, userRole, req.user.email);
+    }
+
     if (!developerId) {
       res.status(403).json({ error: 'Developer profile required' });
       return;
@@ -353,7 +368,14 @@ export class CommunityController {
   }
 
   static async addComment(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const developerId = req.user?.developerId;
+    let developerId = req.user?.developerId;
+    const userRole = req.user?.role;
+    const isExecutive = userRole === ROLES.CEO || userRole === ROLES.MD || userRole === ROLES.ADMIN;
+
+    if (!developerId && isExecutive && req.user?.userId) {
+      developerId = await ProjectService.getOrCreateExecutiveDeveloperId(req.user.userId, userRole, req.user.email);
+    }
+
     if (!developerId) {
       res.status(403).json({ error: 'Developer profile required' });
       return;

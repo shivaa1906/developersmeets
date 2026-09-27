@@ -161,7 +161,7 @@ export default function DashboardProjectsPage() {
         </div>
 
         {isClient ? (
-          <Link href="/contact">
+          <Link href="/start-project">
             <Button size="sm" leftIcon={<Briefcase className="h-3.5 w-3.5" />}>
               Start a Project
             </Button>
@@ -329,7 +329,7 @@ export default function DashboardProjectsPage() {
           {myProjects.length === 0 ? (
             <Card className="p-8 text-center text-muted">
               You haven&apos;t submitted any projects yet.{' '}
-              <Link href="/contact" className="text-accent hover:underline">
+              <Link href="/start-project" className="text-accent hover:underline">
                 Submit your first project
               </Link>
             </Card>

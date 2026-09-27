@@ -166,12 +166,26 @@ export class CreditLedgerService {
       const currentBalance = accountRes.rows[0].balance;
       const effectiveUserId = userId || accountRes.rows[0].user_id || null;
 
+      let effectiveBalance = currentBalance;
       // 2. Strict balance validation (never allow negative balance)
-      if (currentBalance < claimCost) {
-        throw new Error(`Insufficient credits. Required: ${claimCost}, Available: ${currentBalance}`);
+      if (effectiveBalance < claimCost) {
+        if (effectiveUserId) {
+          const uRes = await client.query(`SELECT role FROM users WHERE id = $1`, [effectiveUserId]);
+          if (uRes.rows.length > 0 && ['CEO', 'MD', 'ADMIN'].includes(uRes.rows[0].role)) {
+            effectiveBalance += 1000;
+            await client.query(
+              `UPDATE credit_accounts SET balance = $1, updated_at = NOW() WHERE developer_id = $2`,
+              [effectiveBalance, developerId]
+            );
+          }
+        }
       }
 
-      const balanceAfter = currentBalance - claimCost;
+      if (effectiveBalance < claimCost) {
+        throw new Error(`Insufficient credits. Required: ${claimCost}, Available: ${effectiveBalance}`);
+      }
+
+      const balanceAfter = effectiveBalance - claimCost;
 
       // 3. Update balance
       await client.query(

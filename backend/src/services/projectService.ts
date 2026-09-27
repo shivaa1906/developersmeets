@@ -1,6 +1,6 @@
 import { withTransaction, query } from '../database/db.js';
 import { CreditLedgerService } from './creditLedgerService.js';
-import { PROJECT_STATUSES, ROLES } from '../config/constants.js';
+import { PROJECT_STATUSES, ROLES, LEADERSHIP } from '../config/constants.js';
 import { AuditLogger } from '../utils/auditLogger.js';
 import { NotificationService } from './notificationService.js';
 import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
@@ -38,6 +38,73 @@ export interface EligibilityResult {
 
 export class ProjectService {
   /**
+   * Auto-resolves or creates an executive developer profile with VERIFIED status and funded credits
+   * for CEO, MD, and ADMIN users so they are never blocked by developer verification or credit checks.
+   */
+  static async getOrCreateExecutiveDeveloperId(
+    userId: string,
+    role: string,
+    email?: string
+  ): Promise<string> {
+    const existing = await query(
+      `SELECT id, verification_status FROM developers WHERE user_id = $1`,
+      [userId]
+    );
+
+    let devId: string;
+    if (existing.rows.length > 0) {
+      devId = existing.rows[0].id;
+      if (existing.rows[0].verification_status !== 'VERIFIED') {
+        await query(
+          `UPDATE developers SET verification_status = 'VERIFIED', verified_at = NOW(), updated_at = NOW() WHERE id = $1`,
+          [devId]
+        );
+      }
+    } else {
+      const username = `exec_${role.toLowerCase()}_${userId.replace(/-/g, '').slice(0, 10)}`;
+      const displayName =
+        role === ROLES.CEO
+          ? LEADERSHIP.CEO.NAME
+          : role === ROLES.MD
+          ? LEADERSHIP.MD.NAME
+          : 'Platform Administrator';
+
+      const insertRes = await query(
+        `INSERT INTO developers (
+          user_id, username, display_name, role_title, experience,
+          availability, verification_status, verified_at, programming_languages
+        ) VALUES (
+          $1, $2, $3, $4, 10,
+          'AVAILABLE', 'VERIFIED', NOW(), ARRAY['TypeScript', 'Python', 'React', 'Node.js', 'Go']
+        )
+        RETURNING id`,
+        [userId, username, displayName, `${role} - Executive Leadership`]
+      );
+      devId = insertRes.rows[0].id;
+    }
+
+    // Ensure credit account exists and is funded
+    const accountRes = await query(
+      `SELECT id, balance FROM credit_accounts WHERE developer_id = $1 OR user_id = $2`,
+      [devId, userId]
+    );
+    if (accountRes.rows.length === 0) {
+      await query(
+        `INSERT INTO credit_accounts (developer_id, user_id, balance, currency)
+         VALUES ($1, $2, 1000, 'INR')`,
+        [devId, userId]
+      );
+    } else if (accountRes.rows[0].balance < 100) {
+      await query(
+        `UPDATE credit_accounts SET balance = balance + 1000, updated_at = NOW() WHERE id = $1`,
+        [accountRes.rows[0].id]
+      );
+    }
+
+    return devId;
+  }
+
+  /**
    * Client submits a new project, entering the PENDING / SUBMITTED state for admin review
    */
   static async submitProject(
@@ -72,9 +139,9 @@ export class ProjectService {
         `INSERT INTO projects (
             project_number, slug, title, description, category,
             budget_min, budget_max, timeline, requirements, required_technologies,
-            attachments, status, claim_cost, max_claims, claim_deadline, client_id
+            status, claim_cost, max_claims, claim_deadline, client_id
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'SUBMITTED', 1, 5, NOW() + INTERVAL '7 days', $12)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'SUBMITTED', 1, 5, NOW() + INTERVAL '7 days', $11)
          RETURNING id, project_number, status`,
         [
           projectNumber,
@@ -87,7 +154,6 @@ export class ProjectService {
           data.timeline,
           JSON.stringify(data.requirements || []),
           JSON.stringify(data.requiredTechnologies || []),
-          JSON.stringify(data.attachments || []),
           clientId,
         ]
       );
@@ -208,7 +274,8 @@ export class ProjectService {
   static async checkEligibility(
     projectId: string,
     developerId: string,
-    dbClient?: any
+    dbClient?: any,
+    isExecutive: boolean = false
   ): Promise<EligibilityResult> {
     const runner = dbClient ? dbClient.query.bind(dbClient) : query;
 
@@ -233,6 +300,17 @@ export class ProjectService {
     const requiredSkills = Array.from(new Set([...rawRequirements, ...rawTech])).filter(
       (s) => typeof s === 'string' && s.trim().length > 0
     );
+
+    // Executive leadership bypass: unrestricted eligibility
+    if (isExecutive) {
+      return {
+        eligible: true,
+        missingSkills: [],
+        matchedSkills: requiredSkills,
+        requiredSkills,
+        reason: 'Executive leadership unrestricted eligibility',
+      };
+    }
 
     // 2. Fetch developer skills
     const devSkillsRes = await runner(
@@ -290,7 +368,8 @@ export class ProjectService {
   static async claimProject(
     projectId: string,
     developerId: string,
-    userId?: string
+    userId?: string,
+    isExecutive: boolean = false
   ): Promise<{ claimId: string; anonymousTag: string; remainingCredits: number; conversationId: string }> {
     return withTransaction(async (client) => {
       // 1. Fetch project with row lock
@@ -306,23 +385,25 @@ export class ProjectService {
 
       const project = projectRes.rows[0];
 
-      // 2. Verify developer is verified
+      // 2. Verify developer is verified (bypassed for executive leadership)
       const devRes = await client.query(
         `SELECT verification_status, user_id FROM developers WHERE id = $1`,
         [developerId]
       );
-      if (devRes.rows.length === 0 || devRes.rows[0].verification_status !== 'VERIFIED') {
+      if (!isExecutive && (devRes.rows.length === 0 || devRes.rows[0].verification_status !== 'VERIFIED')) {
         throw new Error('Forbidden: Only verified developers can claim project slots.');
       }
 
-      const devUserId = userId || devRes.rows[0].user_id;
+      const devUserId = userId || (devRes.rows.length > 0 ? devRes.rows[0].user_id : null);
 
-      // 2b. Verify skill eligibility
-      const eligibility = await ProjectService.checkEligibility(projectId, developerId, client);
-      if (!eligibility.eligible) {
-        throw new Error(
-          `Forbidden: Developer is not eligible to claim this project. Missing required skills: ${eligibility.missingSkills.join(', ')}`
-        );
+      // 2b. Verify skill eligibility (bypassed for executive leadership)
+      if (!isExecutive) {
+        const eligibility = await ProjectService.checkEligibility(projectId, developerId, client, false);
+        if (!eligibility.eligible) {
+          throw new Error(
+            `Forbidden: Developer is not eligible to claim this project. Missing required skills: ${eligibility.missingSkills.join(', ')}`
+          );
+        }
       }
 
       // 3. Verify project status

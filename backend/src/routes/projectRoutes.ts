@@ -17,11 +17,15 @@ router.get('/my-projects', authenticateJwt, ProjectController.myProjects);
 router.get('/my', authenticateJwt, ProjectController.myProjects);
 router.get('/:id', authenticateJwt, ProjectController.getById);
 
-// Client project submission
+// Client & Executive project submission
 router.post(
   '/submit',
   authenticateJwt,
-  requireRole(ROLES.CLIENT, ROLES.CEO, ROLES.ADMIN),
+  ProjectController.submit
+);
+router.post(
+  '/',
+  authenticateJwt,
   ProjectController.submit
 );
 

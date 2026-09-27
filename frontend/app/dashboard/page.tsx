@@ -112,7 +112,7 @@ export default function DashboardOverviewPage() {
         <div className="flex items-center space-x-3">
           {isClient ? (
             <>
-              <Link href="/contact">
+              <Link href="/start-project">
                 <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>
                   Start a Project
                 </Button>
@@ -345,7 +345,7 @@ export default function DashboardOverviewPage() {
                 {isClient ? (
                   <span>
                     No projects found.{' '}
-                    <Link href="/contact" className="text-accent hover:underline">
+                    <Link href="/start-project" className="text-accent hover:underline">
                       Start your first project
                     </Link>
                   </span>

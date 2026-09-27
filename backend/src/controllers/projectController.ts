@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { ProjectService } from '../services/projectService.js';
 import { query } from '../database/db.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import { ROLES } from '../config/constants.js';
+import { RealtimeEvents } from '../realtime/events.js';
 
 export class ProjectController {
   /**
@@ -147,9 +149,40 @@ export class ProjectController {
    * Client project submission with comprehensive input validation
    */
   static async submit(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const clientId = req.user?.clientId;
+    if (req.user?.role === ROLES.DEVELOPER || req.user?.role === ROLES.SUPPORT) {
+      res.status(403).json({ error: 'Start a project is available to client accounts.' });
+      return;
+    }
+
+    let clientId = req.user?.clientId;
+    if (!clientId && req.user?.userId) {
+      // Resolve client from DB or auto-create client record for CLIENT or EXECUTIVE accounts
+      const clientRes = await query('SELECT id FROM clients WHERE user_id = $1', [req.user.userId]);
+      if (clientRes.rows.length > 0) {
+        clientId = clientRes.rows[0].id;
+      } else {
+        const clientNumSeq = await query(
+          `SELECT COALESCE(MAX(SUBSTRING(client_number FROM 10)::int), 0) + 1 AS next_seq FROM clients WHERE client_number ~ '^CLT-2026-[0-9]+$'`
+        );
+        const nextSeq = clientNumSeq.rows[0]?.next_seq || 1;
+        const newClientNumber = `CLT-2026-${String(nextSeq).padStart(4, '0')}`;
+        const newClient = await query(
+          `INSERT INTO clients (user_id, client_number, company_name, private_name)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [
+            req.user.userId,
+            newClientNumber,
+            req.user.role === ROLES.CLIENT ? 'Client Organization' : `${req.user.role} Executive Office`,
+            req.user.email.split('@')[0],
+          ]
+        );
+        clientId = newClient.rows[0].id;
+      }
+    }
+
     if (!clientId) {
-      res.status(403).json({ error: 'Client account required to submit project.' });
+      res.status(403).json({ error: 'Start a project is available to client accounts.' });
       return;
     }
 
@@ -280,6 +313,18 @@ export class ProjectController {
         preferredProjectNumber,
       });
 
+      // Broadcast project creation realtime event
+      RealtimeEvents.emitProjectCreated({
+        id: result.projectId,
+        project_number: result.projectNumber,
+        status: result.status,
+        title: title.trim(),
+        category: category.trim(),
+        client_id: clientId,
+        budget_min: parsedMin,
+        budget_max: parsedMax,
+      });
+
       res.status(201).json({
         message: 'Project submitted successfully for administrative review.',
         ...result,
@@ -381,15 +426,21 @@ export class ProjectController {
    */
   static async checkEligibility(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { projectId } = req.params;
-    const developerId = req.user?.developerId;
+    let developerId = req.user?.developerId;
+    const userRole = req.user?.role;
+    const isExecutive = userRole === ROLES.CEO || userRole === ROLES.MD || userRole === ROLES.ADMIN;
 
-    if (!developerId) {
+    if (!developerId && isExecutive && req.user?.userId) {
+      developerId = await ProjectService.getOrCreateExecutiveDeveloperId(req.user.userId, userRole, req.user.email);
+    }
+
+    if (!developerId && !isExecutive) {
       res.status(403).json({ error: 'Verified developer profile required to check eligibility' });
       return;
     }
 
     try {
-      const eligibility = await ProjectService.checkEligibility(projectId, developerId);
+      const eligibility = await ProjectService.checkEligibility(projectId, developerId || '', undefined, isExecutive);
       res.json(eligibility);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -401,7 +452,13 @@ export class ProjectController {
    */
   static async claim(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { projectId } = req.params;
-    const developerId = req.user?.developerId;
+    let developerId = req.user?.developerId;
+    const userRole = req.user?.role;
+    const isExecutive = userRole === ROLES.CEO || userRole === ROLES.MD || userRole === ROLES.ADMIN;
+
+    if (!developerId && isExecutive && req.user?.userId) {
+      developerId = await ProjectService.getOrCreateExecutiveDeveloperId(req.user.userId, userRole, req.user.email);
+    }
 
     if (!developerId) {
       res.status(403).json({ error: 'Verified developer profile required to claim project' });
@@ -409,7 +466,7 @@ export class ProjectController {
     }
 
     try {
-      const result = await ProjectService.claimProject(projectId, developerId, req.user!.userId);
+      const result = await ProjectService.claimProject(projectId, developerId, req.user!.userId, isExecutive);
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -421,7 +478,13 @@ export class ProjectController {
    */
   static async submitProposal(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { projectId } = req.params;
-    const developerId = req.user?.developerId;
+    let developerId = req.user?.developerId;
+    const userRole = req.user?.role;
+    const isExecutive = userRole === ROLES.CEO || userRole === ROLES.MD || userRole === ROLES.ADMIN;
+
+    if (!developerId && isExecutive && req.user?.userId) {
+      developerId = await ProjectService.getOrCreateExecutiveDeveloperId(req.user.userId, userRole, req.user.email);
+    }
 
     if (!developerId) {
       res.status(403).json({ error: 'Developer profile required' });

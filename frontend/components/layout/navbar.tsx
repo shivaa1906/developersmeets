@@ -2,16 +2,33 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { siteConfig } from '@/config/site';
 import { Button } from '@/components/ui/button';
+import { Dropdown, DropdownItem } from '@/components/ui/dropdown';
 import { cn } from '@/lib/utils';
-import { Terminal, Menu, X, ArrowRight, LayoutDashboard, LogOut, User } from 'lucide-react';
+import {
+  Terminal,
+  Menu,
+  X,
+  ArrowRight,
+  LayoutDashboard,
+  LogOut,
+  User,
+  Settings,
+  Bell,
+  LifeBuoy,
+  Briefcase,
+  Users,
+  MessageSquare,
+  ChevronDown,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { user, logout, isDeveloper, isClient, isExecutive, isSupport } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const isAuthPage =
@@ -25,17 +42,57 @@ export const Navbar: React.FC = () => {
     return null;
   }
 
-  const dashboardHref =
-    user?.role === 'CEO' || user?.role === 'MD' || user?.role === 'ADMIN'
-      ? '/admin/dashboard'
-      : user?.role === 'SUPPORT'
-      ? '/admin/support'
-      : '/dashboard';
+  const dashboardHref = isExecutive
+    ? '/admin/dashboard'
+    : isSupport
+    ? '/admin/support'
+    : '/dashboard';
 
   const userDisplayName =
     user?.role === 'CLIENT'
-      ? user.clientNumber || 'Client'
+      ? user.clientNumber || user.name || 'Client'
       : user?.name || user?.email?.split('@')[0] || 'Member';
+
+  const userInitials = (
+    user?.role === 'CLIENT'
+      ? user.clientNumber?.slice(0, 2) || 'CL'
+      : (user?.name || user?.email || 'US').slice(0, 2)
+  ).toUpperCase();
+
+  // Avatar Account Dropdown Menu Items
+  const accountMenuItems: DropdownItem[] = [
+    {
+      label: 'Dashboard',
+      icon: <LayoutDashboard className="h-3.5 w-3.5 text-accent" />,
+      onClick: () => router.push(dashboardHref),
+    },
+    {
+      label: 'Profile',
+      icon: <User className="h-3.5 w-3.5" />,
+      onClick: () => router.push('/dashboard/profile'),
+    },
+    {
+      label: 'Notifications',
+      icon: <Bell className="h-3.5 w-3.5" />,
+      onClick: () => router.push('/dashboard/notifications'),
+    },
+    {
+      label: 'Settings',
+      icon: <Settings className="h-3.5 w-3.5" />,
+      onClick: () => router.push('/dashboard/settings'),
+    },
+    {
+      label: 'Support',
+      icon: <LifeBuoy className="h-3.5 w-3.5" />,
+      onClick: () => router.push(isExecutive ? '/admin/support' : '/dashboard/support'),
+    },
+    {
+      label: 'Sign Out',
+      icon: <LogOut className="h-3.5 w-3.5" />,
+      destructive: true,
+      onClick: logout,
+    },
+  ];
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
@@ -53,7 +110,7 @@ export const Navbar: React.FC = () => {
           </div>
         </Link>
 
-        {/* Desktop Navigation - Strictly public, no internal dashboard exposure */}
+        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6 text-xs font-medium">
           {siteConfig.navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
@@ -72,54 +129,126 @@ export const Navbar: React.FC = () => {
           })}
         </nav>
 
-        {/* Actions */}
+        {/* Actions - Role Based Desktop Bar */}
         <div className="hidden md:flex items-center space-x-3">
           {user ? (
             <div className="flex items-center space-x-3">
-              <Link href={dashboardHref}>
-                <Button size="sm" variant="default" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
-                  Dashboard
-                </Button>
-              </Link>
-              <div className="flex items-center space-x-2 pl-2 border-l border-border">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 border border-accent/30 text-accent text-xs font-bold">
-                  {userDisplayName.slice(0, 2).toUpperCase()}
-                </div>
-                <span className="text-xs font-medium text-foreground truncate max-w-[120px]">
-                  {userDisplayName}
-                </span>
-                <button
-                  onClick={logout}
-                  title="Sign Out"
-                  className="text-muted hover:text-status-danger p-1 rounded transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
+              {/* CLIENT Authenticated State */}
+              {isClient && (
+                <>
+                  <Link href="/dashboard">
+                    <Button size="sm" variant="ghost" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <Link href="/start-project">
+                    <Button size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
+                      Start a Project
+                    </Button>
+                  </Link>
+                </>
+              )}
+
+              {/* DEVELOPER Authenticated State */}
+              {isDeveloper && !isExecutive && (
+                <>
+                  <Link href="/dashboard">
+                    <Button size="sm" variant="ghost" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard/projects">
+                    <Button size="sm" variant="ghost" leftIcon={<Briefcase className="h-3.5 w-3.5" />}>
+                      Projects
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard/community">
+                    <Button size="sm" variant="ghost" leftIcon={<Users className="h-3.5 w-3.5" />}>
+                      Community
+                    </Button>
+                  </Link>
+                  <Link href="/dashboard/support">
+                    <Button size="sm" variant="ghost" leftIcon={<LifeBuoy className="h-3.5 w-3.5" />}>
+                      Support
+                    </Button>
+                  </Link>
+                </>
+              )}
+
+              {/* LEADERSHIP (CEO / MD / ADMIN) Authenticated State */}
+              {isExecutive && (
+                <>
+                  <Link href="/admin/dashboard">
+                    <Button size="sm" variant="ghost" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
+                      Dashboard
+                    </Button>
+                  </Link>
+                  <Link href="/start-project">
+                    <Button size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
+                      Start a Project
+                    </Button>
+                  </Link>
+                  <Link href="/admin/support">
+                    <Button size="sm" variant="ghost" leftIcon={<LifeBuoy className="h-3.5 w-3.5" />}>
+                      Support
+                    </Button>
+                  </Link>
+                </>
+              )}
+
+              {/* SUPPORT Authenticated State */}
+              {isSupport && !isExecutive && !isClient && (
+                <>
+                  <Link href="/admin/support">
+                    <Button size="sm" variant="outline" leftIcon={<LifeBuoy className="h-3.5 w-3.5" />}>
+                      Support Queue
+                    </Button>
+                  </Link>
+                </>
+              )}
+
+              {/* Account Dropdown Trigger */}
+              <div className="pl-2 border-l border-border">
+                <Dropdown
+                  align="right"
+                  items={accountMenuItems}
+                  trigger={
+                    <button
+                      type="button"
+                      className="flex items-center space-x-2 rounded-full p-1 hover:bg-surface-elevated focus:outline-none transition-colors border border-transparent hover:border-border"
+                      aria-label="Account Menu"
+                    >
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 border border-accent/30 text-accent text-xs font-bold">
+                        {userInitials}
+                      </div>
+                      <span className="text-xs font-medium text-foreground truncate max-w-[120px] hidden lg:inline-block">
+                        {userDisplayName}
+                      </span>
+                      <ChevronDown className="h-3 w-3 text-muted" />
+                    </button>
+                  }
+                />
               </div>
             </div>
           ) : (
-            <>
+            /* GUEST User Navigation Actions */
+            <div className="flex items-center space-x-2">
               <Link href="/login">
                 <Button variant="ghost" size="sm">
                   Login
                 </Button>
               </Link>
-              <Link href="/register/developer">
+              <Link href="/join-developer">
                 <Button variant="ghost" size="sm" className="hidden lg:inline-flex text-muted hover:text-accent">
                   Join Developer Network
                 </Button>
               </Link>
-              <Link href="/register/client">
-                <Button variant="outline" size="sm">
-                  Get Started
-                </Button>
-              </Link>
-              <Link href="/contact">
+              <Link href="/start-project">
                 <Button size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
                   Start a Project
                 </Button>
               </Link>
-            </>
+            </div>
           )}
         </div>
 
@@ -137,54 +266,134 @@ export const Navbar: React.FC = () => {
 
       {/* Mobile drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-border bg-surface px-4 py-4 space-y-3">
-          <nav className="flex flex-col space-y-2">
+        <div className="md:hidden border-b border-border bg-surface px-4 py-4 space-y-4">
+          <nav className="flex flex-col space-y-1">
             {siteConfig.navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileMenuOpen(false)}
-                className="rounded-md px-3 py-2 text-sm font-medium text-muted hover:bg-surface-elevated hover:text-foreground"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted hover:bg-surface-elevated hover:text-foreground transition-colors"
               >
                 {item.label}
               </Link>
             ))}
           </nav>
+
           <div className="pt-3 border-t border-border flex flex-col space-y-2">
             {user ? (
               <>
-                <div className="px-3 py-1 flex items-center justify-between text-xs text-muted">
-                  <span>Signed in as <strong className="text-foreground">{userDisplayName}</strong></span>
-                  <button onClick={logout} className="text-status-danger hover:underline flex items-center space-x-1">
+                <div className="px-3 py-1.5 flex items-center justify-between text-xs text-muted bg-surface-elevated rounded-lg border border-border">
+                  <span className="truncate">
+                    Signed in as <strong className="text-foreground">{userDisplayName}</strong>
+                  </span>
+                  <span className="font-mono text-[10px] text-accent font-semibold ml-2">
+                    {user.role}
+                  </span>
+                </div>
+
+                {/* Role specific mobile links */}
+                {isClient && (
+                  <>
+                    <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" variant="outline" className="w-full justify-start" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
+                        Dashboard
+                      </Button>
+                    </Link>
+                    <Link href="/start-project" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" className="w-full justify-start" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
+                        Start a Project
+                      </Button>
+                    </Link>
+                  </>
+                )}
+
+                {isDeveloper && !isExecutive && (
+                  <>
+                    <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" variant="outline" className="w-full justify-start" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
+                        Dashboard
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/projects" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" variant="ghost" className="w-full justify-start" leftIcon={<Briefcase className="h-3.5 w-3.5" />}>
+                        Projects
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/community" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" variant="ghost" className="w-full justify-start" leftIcon={<Users className="h-3.5 w-3.5" />}>
+                        Community
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/support" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" variant="ghost" className="w-full justify-start" leftIcon={<LifeBuoy className="h-3.5 w-3.5" />}>
+                        Support
+                      </Button>
+                    </Link>
+                  </>
+                )}
+
+                {isExecutive && (
+                  <>
+                    <Link href="/admin/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" variant="outline" className="w-full justify-start" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
+                        Dashboard
+                      </Button>
+                    </Link>
+                    <Link href="/start-project" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" className="w-full justify-start" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
+                        Start a Project
+                      </Button>
+                    </Link>
+                    <Link href="/admin/support" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" variant="ghost" className="w-full justify-start" leftIcon={<LifeBuoy className="h-3.5 w-3.5" />}>
+                        Support
+                      </Button>
+                    </Link>
+                  </>
+                )}
+
+                {isSupport && !isExecutive && !isClient && (
+                  <Link href="/admin/support" onClick={() => setMobileMenuOpen(false)}>
+                    <Button size="sm" variant="outline" className="w-full justify-start" leftIcon={<LifeBuoy className="h-3.5 w-3.5" />}>
+                      Support Queue
+                    </Button>
+                  </Link>
+                )}
+
+                <div className="pt-2 border-t border-border flex flex-col space-y-1">
+                  <Link href="/dashboard/profile" onClick={() => setMobileMenuOpen(false)}>
+                    <Button size="sm" variant="ghost" className="w-full justify-start text-xs text-muted" leftIcon={<User className="h-3.5 w-3.5" />}>
+                      Profile
+                    </Button>
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      logout();
+                    }}
+                    className="flex items-center space-x-2 px-3 py-2 text-xs text-status-danger hover:bg-status-danger/10 rounded-md transition-colors"
+                  >
                     <LogOut className="h-3.5 w-3.5" />
                     <span>Sign Out</span>
                   </button>
                 </div>
-                <Link href={dashboardHref} onClick={() => setMobileMenuOpen(false)}>
-                  <Button size="sm" className="w-full" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
-                    Open Dashboard
-                  </Button>
-                </Link>
               </>
             ) : (
+              /* GUEST Mobile Menu */
               <>
                 <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full">
                     Login
                   </Button>
                 </Link>
-                <Link href="/register/developer" onClick={() => setMobileMenuOpen(false)}>
+                <Link href="/join-developer" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="ghost" size="sm" className="w-full text-accent hover:bg-accent/10">
                     Join Developer Network
                   </Button>
                 </Link>
-                <Link href="/register/client" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="secondary" size="sm" className="w-full">
-                    Get Started (Client)
-                  </Button>
-                </Link>
-                <Link href="/contact" onClick={() => setMobileMenuOpen(false)}>
-                  <Button size="sm" className="w-full">
+                <Link href="/start-project" onClick={() => setMobileMenuOpen(false)}>
+                  <Button size="sm" className="w-full" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
                     Start a Project
                   </Button>
                 </Link>

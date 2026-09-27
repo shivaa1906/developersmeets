@@ -66,4 +66,14 @@ export class RealtimeEvents {
   static emitAdminEvent(event: string, data: any): void {
     realtimeServer.broadcastToChannel('admin:events', `admin:${event}`, data);
   }
+
+  /**
+   * Broadcasts new project creation event to administrative, client, and marketplace channels
+   */
+  static emitProjectCreated(project: any): void {
+    realtimeServer.broadcastToChannel('admin:events', 'project:create', project);
+    if (project.client_id) {
+      realtimeServer.broadcastToChannel(`client:${project.client_id}`, 'project:create', project);
+    }
+  }
 }

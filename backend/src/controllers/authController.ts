@@ -9,6 +9,7 @@ import { AuditLogger } from '../utils/auditLogger.js';
 import { ROLES, LEADERSHIP } from '../config/constants.js';
 import { BruteForceProtection } from '../middlewares/rateLimiter.js';
 import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
+import { ProjectService } from '../services/projectService.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
 const consumedResetTokens = new Set<string>();
@@ -555,6 +556,16 @@ export class AuthController {
           verificationStatus = devRes.rows[0].verification_status;
           developerName = devRes.rows[0].display_name;
         }
+      } else if (user.role === ROLES.CEO || user.role === ROLES.MD || user.role === ROLES.ADMIN) {
+        // CEO, MD, and ADMIN do not need a separate verified developer profile: auto-provision / resolve
+        developerId = await ProjectService.getOrCreateExecutiveDeveloperId(user.id, user.role, user.email);
+        verificationStatus = 'VERIFIED';
+        developerName =
+          user.role === ROLES.CEO
+            ? LEADERSHIP.CEO.NAME
+            : user.role === ROLES.MD
+            ? LEADERSHIP.MD.NAME
+            : 'Platform Administrator';
       }
 
       let clientId: string | undefined;
@@ -569,6 +580,20 @@ export class AuthController {
           clientId = clientRes.rows[0].id;
           clientNumber = clientRes.rows[0].client_number;
           clientName = clientRes.rows[0].private_name || clientRes.rows[0].company_name;
+        } else {
+          const clientNumSeq = await query(
+            `SELECT COALESCE(MAX(SUBSTRING(client_number FROM 10)::int), 0) + 1 AS next_seq FROM clients WHERE client_number ~ '^CLT-2026-[0-9]+$'`
+          );
+          const nextSeq = clientNumSeq.rows[0]?.next_seq || 1;
+          clientNumber = `CLT-2026-${String(nextSeq).padStart(4, '0')}`;
+          const newClient = await query(
+            `INSERT INTO clients (user_id, client_number, company_name, private_name)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id`,
+            [user.id, clientNumber, 'Apex Retail Labs', user.email.split('@')[0]]
+          );
+          clientId = newClient.rows[0].id;
+          clientName = user.email.split('@')[0];
         }
       }
 
@@ -681,6 +706,17 @@ export class AuthController {
         if (devRes.rows.length > 0) {
           developer = devRes.rows[0];
         }
+      } else if (user.role === ROLES.CEO || user.role === ROLES.MD || user.role === ROLES.ADMIN) {
+        const execDevId = await ProjectService.getOrCreateExecutiveDeveloperId(user.id, user.role, user.email);
+        const devRes = await query(
+          `SELECT id, username, display_name, verification_status, experience, role_title, availability 
+            FROM developers WHERE id = $1`,
+          [execDevId]
+        );
+        if (devRes.rows.length > 0) {
+          developer = devRes.rows[0];
+          developer.verification_status = 'VERIFIED';
+        }
       }
 
       let client: any = null;
@@ -707,6 +743,8 @@ export class AuthController {
         }
       }
 
+      const isExecutive = ['CEO', 'MD', 'ADMIN'].includes(user.role);
+
       res.json({
         user: {
           id: user.id,
@@ -720,6 +758,8 @@ export class AuthController {
           isSuspended: user.is_suspended,
           lastLoginAt: user.last_login_at,
           createdAt: user.created_at,
+          developerId: developer?.id,
+          verificationStatus: developer?.verification_status || (isExecutive ? 'VERIFIED' : undefined),
           developer,
           client,
           supportStaff,

@@ -63,12 +63,12 @@ export default function HomePage() {
                 Explore Projects
               </Button>
             </Link>
-            <Link href="/register/developer">
+            <Link href="/join-developer">
               <Button variant="secondary" size="lg">
                 Join Developer Network
               </Button>
             </Link>
-            <Link href="/contact">
+            <Link href="/start-project">
               <Button variant="outline" size="lg">
                 Start a Project
               </Button>
@@ -292,10 +292,10 @@ await db.$transaction(async (tx) => {
             Whether you are an enterprise client commissioning mission-critical software or a top-tier engineer seeking verified credit-backed projects.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link href="/register">
+            <Link href="/join-developer">
               <Button size="lg">Join as Verified Developer</Button>
             </Link>
-            <Link href="/contact">
+            <Link href="/start-project">
               <Button variant="secondary" size="lg">
                 Submit a Client Project
               </Button>
