@@ -33,78 +33,79 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col space-y-24 pb-20">
-      {/* 🎬 HERO SECTION WITH THEME-ADAPTIVE BACKGROUND VIDEO */}
-      <section className="relative min-h-[90vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-20">
-        {/* Full-bleed Theme-Adaptive Background Video */}
-        <div className="absolute inset-0 w-full h-full -z-10 overflow-hidden pointer-events-none select-none">
+      {/* 🎬 HERO SECTION WITH CRYSTAL-CLEAR BACKGROUND VIDEO */}
+      <section className="relative min-h-[92vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-20">
+        {/* Full-bleed Crystal-Clear Background Video */}
+        <div className="absolute inset-0 w-full h-full -z-10 overflow-hidden pointer-events-none select-none bg-black">
           <video
             autoPlay
             loop
             muted
             playsInline
             poster="/videos/hero-developer-poster.jpg"
-            className="w-full h-full object-cover object-center filter brightness-100 contrast-105 opacity-75 dark:opacity-85 transition-opacity duration-700"
+            className="w-full h-full object-cover object-center filter brightness-105 contrast-110 opacity-100"
           >
             <source src="/videos/hero-developer.mp4" type="video/mp4" />
           </video>
-          {/* Theme-Adaptive Luminous Scrim (Light wash in Bright Theme, Deep wash in Dark Theme) */}
-          <div className="absolute inset-0 bg-white/70 dark:bg-black/50 backdrop-blur-[0.5px] transition-colors duration-500" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/50 transition-colors duration-500" />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-transparent to-background transition-colors duration-500" />
+          {/* Subtle dark contrast scrim: eliminates any white washing while keeping text & buttons razor sharp */}
+          <div className="absolute inset-0 bg-black/35 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/65 pointer-events-none" />
+          {/* Bottom edge transition into next section */}
+          <div className="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-background to-transparent pointer-events-none" />
         </div>
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 text-center flex flex-col items-center justify-center">
-          <div className="inline-flex items-center space-x-2 rounded-full border border-accent/40 bg-accent/10 dark:bg-accent/15 backdrop-blur-md px-3.5 py-1 text-xs font-semibold text-accent mb-6 shadow-sm">
-            <Sparkles className="h-3.5 w-3.5" />
+          <div className="inline-flex items-center space-x-2 rounded-full border border-cyan-400/40 bg-black/60 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-cyan-300 mb-6 shadow-lg shadow-cyan-950/20">
+            <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
             <span className="font-mono uppercase tracking-wider text-[11px]">Developer Company Operating System 2.0</span>
           </div>
 
           {/* Autolooping Quotes with Infosys-style Optical Blur & Focus */}
           <CinematicQuotes />
 
-          <p className="mt-6 text-base sm:text-lg md:text-xl text-slate-700 dark:text-slate-200 max-w-2xl mx-auto font-normal leading-relaxed drop-shadow-sm transition-colors duration-300">
+          <p className="mt-6 text-base sm:text-lg md:text-xl text-slate-100 max-w-2xl mx-auto font-medium leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
             Developer-powered technology company building mission-critical digital products. Verified talent, anonymous project claims, credit ledgers, and seamless execution.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link href="/projects">
-              <Button size="lg" rightIcon={<ArrowRight className="h-4 w-4" />}>
+              <Button size="lg" className="bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg shadow-blue-500/25 border-0 font-semibold" rightIcon={<ArrowRight className="h-4 w-4" />}>
                 Explore Projects
               </Button>
             </Link>
             <Link href="/join-developer">
-              <Button variant="secondary" size="lg" className="bg-surface/85 hover:bg-surface text-foreground border border-border shadow-sm backdrop-blur-md">
+              <Button size="lg" className="bg-black/60 hover:bg-black/80 text-white border border-white/20 shadow-lg backdrop-blur-md transition-all hover:border-cyan-400/50">
                 Join Developer Network
               </Button>
             </Link>
             <Link href="/start-project">
-              <Button variant="outline" size="lg" className="bg-surface/50 hover:bg-surface text-foreground border border-border shadow-sm backdrop-blur-md">
+              <Button size="lg" className="bg-black/40 hover:bg-black/70 text-slate-200 hover:text-white border border-white/20 shadow-lg backdrop-blur-md transition-all hover:border-white/40">
                 Start a Project
               </Button>
             </Link>
           </div>
 
-          {/* Quick metric stats in frosted glass cards */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-border/70 pt-10 text-left w-full">
-            <div className="p-4 rounded-xl bg-surface/80 dark:bg-surface-elevated/70 backdrop-blur-md border border-border shadow-md transition-all hover:border-accent/40">
-              <div className="text-2xl sm:text-3xl font-bold text-accent font-mono">100%</div>
-              <div className="text-xs text-muted mt-1 uppercase tracking-wider font-semibold">Verified Developers</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Strict KYC & tech screening</div>
+          {/* Quick metric stats in dark frosted glass cards */}
+          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-white/15 pt-10 text-left w-full">
+            <div className="p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 shadow-xl transition-all hover:border-cyan-400/50 hover:bg-black/70">
+              <div className="text-2xl sm:text-3xl font-bold text-cyan-400 font-mono">100%</div>
+              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Verified Developers</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">Strict KYC & tech screening</div>
             </div>
-            <div className="p-4 rounded-xl bg-surface/80 dark:bg-surface-elevated/70 backdrop-blur-md border border-border shadow-md transition-all hover:border-accent/40">
-              <div className="text-2xl sm:text-3xl font-bold text-foreground font-mono">₹50 / Cr</div>
-              <div className="text-xs text-muted mt-1 uppercase tracking-wider font-semibold">Configurable Claims</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Pay only to submit verified bids</div>
+            <div className="p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 shadow-xl transition-all hover:border-cyan-400/50 hover:bg-black/70">
+              <div className="text-2xl sm:text-3xl font-bold text-white font-mono">₹50 / Cr</div>
+              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Configurable Claims</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">Pay only to submit verified bids</div>
             </div>
-            <div className="p-4 rounded-xl bg-surface/80 dark:bg-surface-elevated/70 backdrop-blur-md border border-border shadow-md transition-all hover:border-accent/40">
-              <div className="text-2xl sm:text-3xl font-bold text-electric-purple font-mono">Atomic</div>
-              <div className="text-xs text-muted mt-1 uppercase tracking-wider font-semibold">Automatic Refunds</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Zero credit risk if unselected</div>
+            <div className="p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 shadow-xl transition-all hover:border-cyan-400/50 hover:bg-black/70">
+              <div className="text-2xl sm:text-3xl font-bold text-purple-400 font-mono">Atomic</div>
+              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Automatic Refunds</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">Zero credit risk if unselected</div>
             </div>
-            <div className="p-4 rounded-xl bg-surface/80 dark:bg-surface-elevated/70 backdrop-blur-md border border-border shadow-md transition-all hover:border-accent/40">
-              <div className="text-2xl sm:text-3xl font-bold text-foreground font-mono">Private</div>
-              <div className="text-xs text-muted mt-1 uppercase tracking-wider font-semibold">Anonymous Bridge</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">Zero bias client-dev matching</div>
+            <div className="p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 shadow-xl transition-all hover:border-cyan-400/50 hover:bg-black/70">
+              <div className="text-2xl sm:text-3xl font-bold text-emerald-400 font-mono">Private</div>
+              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Anonymous Bridge</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">Zero bias client-dev matching</div>
             </div>
           </div>
         </div>
