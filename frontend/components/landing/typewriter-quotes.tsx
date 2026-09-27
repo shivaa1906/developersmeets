@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface HeroQuote {
   text: string;
@@ -9,96 +10,124 @@ interface HeroQuote {
 
 const HERO_QUOTES: HeroQuote[] = [
   {
-    text: 'BUILD. CREATE. INNOVATE.',
-    highlight: 'CREATE.',
+    text: 'Build. Create. Innovate.',
+    highlight: 'Innovate.',
   },
   {
-    text: 'FIRST SOLVE THE PROBLEM. THEN WRITE THE CODE.',
-    highlight: 'WRITE THE CODE.',
+    text: 'First solve the problem. Then write the code.',
+    highlight: 'write the code.',
   },
   {
-    text: 'SIMPLICITY IS PREREQUISITE FOR RELIABILITY.',
-    highlight: 'SIMPLICITY',
+    text: 'Simplicity is prerequisite for reliability.',
+    highlight: 'reliability.',
   },
   {
-    text: 'MAKE IT WORK. MAKE IT RIGHT. MAKE IT FAST.',
-    highlight: 'MAKE IT FAST.',
+    text: 'Make it work. Make it right. Make it fast.',
+    highlight: 'Make it fast.',
   },
 ];
 
-export function HeroHeadlineTypewriter() {
-  const [quoteIndex, setQuoteIndex] = React.useState(0);
-  const [displayedText, setDisplayedText] = React.useState(HERO_QUOTES[0].text);
-  const [isDeleting, setIsDeleting] = React.useState(false);
-  const [isWaiting, setIsWaiting] = React.useState(true);
-
-  const currentQuote = HERO_QUOTES[quoteIndex];
+/**
+ * Cinematic Gaussian Blur & Focus Fade Quote Rotator
+ * Replicates the optical focus, motion blur, and smooth dissolution
+ * seen in the modern Infosys Topaz/Cobalt enterprise showcase video.
+ */
+export function CinematicQuotes() {
+  const [index, setIndex] = React.useState(0);
+  const [isPaused, setIsPaused] = React.useState(false);
 
   React.useEffect(() => {
-    let timer: NodeJS.Timeout;
+    if (isPaused) return;
 
-    if (isWaiting) {
-      // Exactly 5 seconds display hold time before erasing
-      timer = setTimeout(() => {
-        setIsWaiting(false);
-        setIsDeleting(true);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
+    // 5-second autoloop interval
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % HERO_QUOTES.length);
+    }, 5000);
 
-    if (isDeleting) {
-      if (displayedText.length > 0) {
-        timer = setTimeout(() => {
-          setDisplayedText((prev) => prev.slice(0, -1));
-        }, 22);
-      } else {
-        // Finished deleting, advance to next quote
-        setIsDeleting(false);
-        setQuoteIndex((prev) => (prev + 1) % HERO_QUOTES.length);
-      }
-      return () => clearTimeout(timer);
-    }
+    return () => clearInterval(interval);
+  }, [isPaused]);
 
-    // Typing phase
-    if (displayedText.length < currentQuote.text.length) {
-      timer = setTimeout(() => {
-        setDisplayedText(currentQuote.text.slice(0, displayedText.length + 1));
-      }, 38);
-    } else {
-      // Completed typing full quote, begin 5-second pause
-      setIsWaiting(true);
-    }
-
-    return () => clearTimeout(timer);
-  }, [displayedText, isDeleting, isWaiting, currentQuote.text]);
+  const currentQuote = HERO_QUOTES[index];
 
   const renderHighlightedContent = () => {
-    if (currentQuote.highlight && displayedText.includes(currentQuote.highlight)) {
-      const parts = displayedText.split(currentQuote.highlight);
+    if (currentQuote.highlight && currentQuote.text.includes(currentQuote.highlight)) {
+      const parts = currentQuote.text.split(currentQuote.highlight);
       return (
         <>
           <span>{parts[0]}</span>
-          <span className="text-accent">{currentQuote.highlight}</span>
+          <span className="bg-gradient-to-r from-accent via-sky-500 to-indigo-600 dark:from-accent dark:via-sky-400 dark:to-indigo-400 bg-clip-text text-transparent font-black">
+            {currentQuote.highlight}
+          </span>
           <span>{parts.slice(1).join(currentQuote.highlight)}</span>
         </>
       );
     }
-    return <span>{displayedText}</span>;
+    return <span>{currentQuote.text}</span>;
   };
 
   return (
-    <div className="min-h-[110px] sm:min-h-[145px] md:min-h-[185px] flex items-center justify-center">
-      <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-foreground uppercase max-w-5xl mx-auto leading-tight text-center">
-        {renderHighlightedContent()}
-        <span
-          className="inline-block w-1.5 sm:w-2 md:w-2.5 h-7 sm:h-11 md:h-14 ml-1.5 sm:ml-2.5 bg-accent align-middle animate-pulse rounded-sm"
-          style={{ animationDuration: '0.8s' }}
-          aria-hidden="true"
-        />
-      </h1>
+    <div
+      className="min-h-[120px] sm:min-h-[160px] md:min-h-[210px] flex flex-col items-center justify-center relative select-none"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      <div className="w-full max-w-5xl mx-auto px-4 flex items-center justify-center overflow-hidden py-4">
+        <AnimatePresence mode="wait">
+          <motion.h1
+            key={index}
+            initial={{
+              opacity: 0,
+              filter: 'blur(18px)',
+              scale: 0.96,
+              y: 8,
+            }}
+            animate={{
+              opacity: 1,
+              filter: 'blur(0px)',
+              scale: 1,
+              y: 0,
+            }}
+            exit={{
+              opacity: 0,
+              filter: 'blur(18px)',
+              scale: 1.04,
+              y: -8,
+            }}
+            transition={{
+              duration: 0.75,
+              ease: [0.16, 1, 0.3, 1], // Cinematic optical lens ease curve
+            }}
+            className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-foreground max-w-5xl leading-[1.15] text-center will-change-[transform,filter,opacity] drop-shadow-sm"
+          >
+            {renderHighlightedContent()}
+          </motion.h1>
+        </AnimatePresence>
+      </div>
+
+      {/* Subtle Cinematic Progress Dots */}
+      <div className="flex items-center justify-center space-x-2 mt-2">
+        {HERO_QUOTES.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setIndex(i)}
+            aria-label={`Jump to quote ${i + 1}`}
+            className="group py-2 px-1 focus:outline-none"
+          >
+            <span
+              className={`block h-1.5 rounded-full transition-all duration-500 ${
+                i === index
+                  ? 'w-8 bg-accent shadow-[0_0_12px_rgba(59,130,246,0.5)]'
+                  : 'w-2 bg-muted/30 group-hover:bg-muted/60'
+              }`}
+            />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
 
-// Backwards compatibility alias
-export const TypewriterQuotes = HeroHeadlineTypewriter;
+// Backwards compatibility aliases for existing imports
+export const HeroHeadlineTypewriter = CinematicQuotes;
+export const TypewriterQuotes = CinematicQuotes;
