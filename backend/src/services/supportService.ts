@@ -52,9 +52,21 @@ export class SupportService {
       // 2. Generate ticket number
       let ticketNumber = preferredTicketNumber;
       if (!ticketNumber) {
+        const year = new Date().getFullYear();
         const countRes = await client.query('SELECT COUNT(*) FROM support_tickets');
-        const seq = parseInt(countRes.rows[0].count, 10) + 1;
-        ticketNumber = `SUP-2026-${String(seq).padStart(4, '0')}`;
+        let seq = parseInt(countRes.rows[0].count, 10) + 1;
+        let candidate = `SUP-${year}-${String(seq).padStart(4, '0')}`;
+        let isUnique = false;
+        while (!isUnique) {
+          const existing = await client.query('SELECT 1 FROM support_tickets WHERE ticket_number = $1', [candidate]);
+          if ((existing.rowCount ?? 0) === 0) {
+            isUnique = true;
+          } else {
+            seq++;
+            candidate = `SUP-${year}-${String(seq).padStart(4, '0')}`;
+          }
+        }
+        ticketNumber = candidate;
       }
 
       // 3. Process & validate attachments if provided

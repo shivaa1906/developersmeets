@@ -51,7 +51,7 @@ async function runTest() {
 
   let server: Server | null = null;
   let baseUrl = '';
-  let wsUrl = 'ws://127.0.0.1:5000/ws';
+  const wsUrl = 'ws://127.0.0.1:5000/ws';
 
   try {
     // Launch ephemeral test server
@@ -468,7 +468,7 @@ async function runTest() {
       const wsClient = new WebSocket(`${wsUrl}?token=${client1Token}`);
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => {
-          try { wsClient.close(); } catch {}
+          try { wsClient.close(); } catch { /* ignore */ }
           resolve();
         }, 2500);
 
@@ -490,10 +490,12 @@ async function runTest() {
                 msg.type === 'subscription_rejected' || msg.type === 'error',
                 `WebSocket server rejects foreign support channel subscription (${msg.message || msg.code})`
               );
-              try { wsClient.close(); } catch {}
+              try { wsClient.close(); } catch { /* ignore */ }
               resolve();
             }
-          } catch (_e) {}
+          } catch (_e) {
+            void _e;
+          }
         });
 
         wsClient.on('error', () => {

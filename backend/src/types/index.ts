@@ -10,6 +10,7 @@ export interface AuthUser {
   publicUid?: string;
   email: string;
   role: UserRole;
+  permissions?: string[];
   developerId?: string;
   clientId?: string;
   clientNumber?: string;
@@ -28,6 +29,7 @@ export interface DbUser {
   phone?: string;
   password_hash: string;
   role: UserRole;
+  permissions?: string[];
   status: UserStatus;
   last_login_at?: Date;
   email_verified: boolean;

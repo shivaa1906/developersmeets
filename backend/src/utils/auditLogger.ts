@@ -9,7 +9,8 @@ export class AuditLogger {
       entityId: string;
       metadata?: Record<string, any>;
     },
-    client?: any
+    client?: any,
+    throwOnError: boolean = false
   ): Promise<void> {
     try {
       const runner = client ? client.query.bind(client) : query;
@@ -26,6 +27,22 @@ export class AuditLogger {
       );
     } catch (err: any) {
       console.error('[AuditLogger Error]: Failed to write audit log:', err.message);
+      if (throwOnError) {
+        throw new Error(`Audit logging failed: ${err.message}`);
+      }
     }
+  }
+
+  static async logStrict(
+    params: {
+      actorUserId?: string | null;
+      action: string;
+      entityType: string;
+      entityId: string;
+      metadata?: Record<string, any>;
+    },
+    client?: any
+  ): Promise<void> {
+    return this.log(params, client, true);
   }
 }

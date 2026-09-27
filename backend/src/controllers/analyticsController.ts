@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from '../types/index.js';
 
 export class AnalyticsController {
   /**
-   * Executive analytics for CEO Ritesh Lingamallu & MD M. Shiva Gopi
+   * Executive analytics for CEO M. Shiva Gopi & MD Ritesh Lingamallu
    */
   static async getPlatformOverview(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {

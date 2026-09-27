@@ -20,6 +20,9 @@ router.post('/send-verification-email', AuthController.sendVerificationEmail);
 router.post('/verify-email', AuthController.verifyEmail);
 router.get('/me', authenticateJwt, AuthController.me);
 router.patch('/profile', authenticateJwt, AuthController.updateProfile);
-router.put('/profile', authenticateJwt, AuthController.updateProfile);
+router.get('/account/deletion-eligibility', authenticateJwt, AuthController.getDeletionEligibility);
+router.post('/delete-account', authenticateJwt, AuthController.deactivateAccount);
+router.post('/account/delete', authenticateJwt, AuthController.deactivateAccount);
+router.delete('/account', authenticateJwt, AuthController.deactivateAccount);
 
 export default router;

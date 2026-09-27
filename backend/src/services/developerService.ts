@@ -45,7 +45,7 @@ export class DeveloperService {
       LEFT JOIN projects p ON (pm.project_id = p.id AND p.status = 'PUBLISHED')
       LEFT JOIN developer_skills ds ON d.id = ds.developer_id
       LEFT JOIN skills s ON ds.skill_id = s.id
-      WHERE d.verification_status = 'VERIFIED'
+      WHERE d.verification_status = 'VERIFIED' AND u.is_suspended = FALSE AND u.status = 'ACTIVE'
     `;
 
     const params: any[] = [];
@@ -137,7 +137,7 @@ export class DeveloperService {
               u.uid as user_uid, u.public_uid as user_public_uid
        FROM developers d
        JOIN users u ON d.user_id = u.id
-       WHERE d.username = $1 AND d.verification_status = 'VERIFIED'`,
+       WHERE d.username = $1 AND d.verification_status = 'VERIFIED' AND u.is_suspended = FALSE AND u.status = 'ACTIVE'`,
       [username]
     );
 

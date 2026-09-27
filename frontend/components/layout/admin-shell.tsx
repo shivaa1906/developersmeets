@@ -45,6 +45,16 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const isSupport = user?.role === 'SUPPORT';
+  const isMd = user?.role === 'MD';
+  const isCeo = user?.role === 'CEO';
+  const hasCreditPerm =
+    isCeo ||
+    user?.role === 'ADMIN' ||
+    (Array.isArray((user as any)?.permissions) &&
+      ((user as any).permissions.includes('MANAGE_CREDITS') ||
+        (user as any).permissions.includes('CREDIT_MANAGEMENT') ||
+        (user as any).permissions.includes('*')));
+
   const navItems = React.useMemo(() => {
     if (isSupport) {
       // Support sees: Support Queue, Tickets, Bridges
@@ -53,8 +63,17 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
         ['Support Bridges', 'Inquiries'].includes(item.label)
       );
     }
+    if (isMd) {
+      // MD sees management items, but NOT Platform Settings (CEO only)
+      // Credits & Wallet is also restricted to CEO & Admin unless user has explicit credit permission
+      return siteConfig.adminNav.filter((item) => {
+        if (item.label === 'Platform Settings') return false;
+        if (item.label === 'Credits & Wallet' && !hasCreditPerm) return false;
+        return true;
+      });
+    }
     return siteConfig.adminNav;
-  }, [isSupport]);
+  }, [isSupport, isMd, hasCreditPerm]);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -107,13 +126,13 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
           <div className="rounded-lg bg-surface p-3 border border-border space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase font-semibold text-muted tracking-wider">
-                {isSupport ? 'Staff Session' : 'Executive Sign-in'}
+                {isSupport ? 'Staff Session' : isCeo ? 'CEO Session' : isMd ? 'MD Session' : 'Admin Session'}
               </span>
               <span className="h-2 w-2 rounded-full bg-status-success animate-pulse" />
             </div>
             <div>
               <p className="text-xs font-bold text-foreground">
-                {user?.name || (isSupport ? 'Support Specialist' : siteConfig.company.leadership.ceo.name)}
+                {user?.name || (isCeo ? siteConfig.company.leadership.ceo.name : isMd ? siteConfig.company.leadership.md.name : isSupport ? 'Support Specialist' : user?.email)}
               </p>
               <div className="flex items-center space-x-1.5 mt-0.5">
                 <p className="text-[10px] text-accent">
@@ -132,9 +151,14 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
                 )}
               </div>
             </div>
-            {!isSupport && (
+            {isCeo && (
               <div className="pt-1 border-t border-border/50 text-[10px] text-muted">
                 MD: <span className="text-foreground font-medium">{siteConfig.company.leadership.md.name}</span>
+              </div>
+            )}
+            {isMd && (
+              <div className="pt-1 border-t border-border/50 text-[10px] text-muted">
+                CEO: <span className="text-foreground font-medium">{siteConfig.company.leadership.ceo.name}</span>
               </div>
             )}
           </div>
@@ -155,7 +179,7 @@ export const AdminShell: React.FC<{ children: React.ReactNode }> = ({ children }
               <Terminal className="h-5 w-5 text-status-warning" />
             </button>
             <span className="rounded bg-status-warning/10 px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-bold text-status-warning border border-status-warning/30 uppercase tracking-widest truncate">
-              {isSupport ? 'SUPPORT' : 'SUPERADMIN'}
+              {isSupport ? 'SUPPORT' : isCeo ? 'CEO / ADMIN' : isMd ? 'MANAGING DIRECTOR' : 'ADMINISTRATOR'}
             </span>
             <span className="hidden sm:inline text-xs text-muted">/</span>
             <span className="hidden sm:inline text-xs font-medium text-foreground truncate max-w-[140px] sm:max-w-none">

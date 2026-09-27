@@ -173,30 +173,36 @@ export default function RegisterPage() {
       </div>
 
       {/* Role Selection Tabs */}
-      <div className="grid grid-cols-2 gap-2 p-1 bg-surface-raised rounded-lg border border-border">
+      <div className="grid grid-cols-2 gap-3 p-1.5 bg-surface-raised rounded-xl border border-border">
         <button
           type="button"
           onClick={() => setRoleTab('CLIENT')}
-          className={`flex items-center justify-center space-x-2 py-2.5 px-4 rounded-md text-xs font-semibold transition-all ${
+          className={`flex flex-col items-center justify-center p-3 rounded-lg text-xs font-semibold transition-all ${
             roleTab === 'CLIENT'
               ? 'bg-accent text-accent-foreground shadow-sm'
-              : 'text-muted hover:text-foreground'
+              : 'text-muted hover:text-foreground bg-surface-elevated'
           }`}
         >
-          <Briefcase className="h-4 w-4" />
-          <span>Hire Developers (Client)</span>
+          <div className="flex items-center space-x-2">
+            <Briefcase className="h-4 w-4" />
+            <span className="font-bold">I am a Client</span>
+          </div>
+          <span className="text-[11px] opacity-80 mt-0.5">I want to hire developers</span>
         </button>
         <button
           type="button"
           onClick={() => setRoleTab('DEVELOPER')}
-          className={`flex items-center justify-center space-x-2 py-2.5 px-4 rounded-md text-xs font-semibold transition-all ${
+          className={`flex flex-col items-center justify-center p-3 rounded-lg text-xs font-semibold transition-all ${
             roleTab === 'DEVELOPER'
               ? 'bg-accent text-accent-foreground shadow-sm'
-              : 'text-muted hover:text-foreground'
+              : 'text-muted hover:text-foreground bg-surface-elevated'
           }`}
         >
-          <Code2 className="h-4 w-4" />
-          <span>Join as Developer</span>
+          <div className="flex items-center space-x-2">
+            <Code2 className="h-4 w-4" />
+            <span className="font-bold">I am a Developer</span>
+          </div>
+          <span className="text-[11px] opacity-80 mt-0.5">I want to join the developer network</span>
         </button>
       </div>
 

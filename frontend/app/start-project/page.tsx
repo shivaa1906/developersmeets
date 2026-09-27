@@ -158,10 +158,10 @@ export default function StartProjectPage() {
           <CardContent className="space-y-4 text-xs text-muted leading-relaxed">
             <div className="p-4 rounded-lg bg-surface-elevated border border-border space-y-2">
               <p className="text-foreground font-medium">
-                You are currently signed in as a verified developer (<span className="text-accent font-mono">{user.name || user.email}</span>).
+                Your current account is registered as a Developer (<span className="text-accent font-mono">{user.name || user.email}</span>).
               </p>
               <p>
-                As an engineering partner in our network, you can claim open project slots, submit technical proposals, and build high-impact software.
+                To submit a client project, create or use a Client account.
               </p>
             </div>
           </CardContent>

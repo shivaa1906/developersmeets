@@ -84,7 +84,7 @@ export default function ContactPage() {
             <h2 className="text-2xl font-bold text-foreground">Project Successfully Submitted!</h2>
             <p className="text-sm font-mono text-accent">{submittedProject.projectNumber}</p>
             <p className="text-xs text-muted max-w-md mx-auto">
-              Your project has been recorded in the executive queue. Once approved by CEO Ritesh Lingamallu or MD M. Shiva Gopi, verified developers will claim slots and submit proposals.
+              Your project has been recorded in the executive queue. Once approved by CEO M. Shiva Gopi or MD Ritesh Lingamallu, verified developers will claim slots and submit proposals.
             </p>
           </div>
           <div className="flex justify-center gap-4 pt-4">
@@ -216,8 +216,8 @@ export default function ContactPage() {
               </CardHeader>
               <CardContent className="space-y-2 text-xs text-muted">
                 <p>Every submitted project is personally reviewed by:</p>
-                <p className="font-semibold text-foreground">CEO: Ritesh Lingamallu</p>
-                <p className="font-semibold text-foreground">MD: M. Shiva Gopi</p>
+                <p className="font-semibold text-foreground">CEO: M. Shiva Gopi</p>
+                <p className="font-semibold text-foreground">MD: Ritesh Lingamallu</p>
               </CardContent>
             </Card>
           </div>

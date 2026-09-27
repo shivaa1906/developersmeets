@@ -192,9 +192,22 @@ interface BulkOperationRow {
   completed_at?: string;
 }
 
+import Link from 'next/link';
+import { useAuth } from '@/hooks/use-auth';
+
 export default function AdminCreditsPage() {
+  const { user, isCEO, isAdmin, isLoading } = useAuth();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = React.useState<'ledger' | 'accounts' | 'bulk_operations'>('ledger');
+
+  const hasCreditPermission =
+    isCEO ||
+    isAdmin ||
+    (Array.isArray((user as any)?.permissions) &&
+      ((user as any).permissions.includes('MANAGE_CREDITS') ||
+        (user as any).permissions.includes('CREDIT_MANAGEMENT') ||
+        (user as any).permissions.includes('*')));
+
 
   // Unified "Give Credits" Workflow (Phase 7 Single-User & Phase 8 Bulk-Grant)
   const [isGiveCreditsModalOpen, setIsGiveCreditsModalOpen] = React.useState(false);
@@ -945,6 +958,35 @@ export default function AdminCreditsPage() {
       bo.performed_by_email?.toLowerCase().includes(q)
     );
   });
+
+  if (!isLoading && !hasCreditPermission) {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <Card className="border-status-danger/40 bg-status-danger/5">
+          <CardHeader>
+            <div className="flex items-center space-x-2 text-status-danger">
+              <AlertCircle className="h-5 w-5" />
+              <CardTitle className="text-base">Access Denied (403 Forbidden)</CardTitle>
+            </div>
+            <CardDescription className="text-status-danger/80">
+              Credit Management, Ledger Modifications, and Wallet Grants are restricted to CEO and Platform Administrators.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted">
+              Your current authenticated role is <span className="font-mono font-bold text-foreground">{user?.role || 'UNAUTHORIZED'}</span>.
+              Managing Directors and Support personnel do not receive automatic credit-management authority.
+            </p>
+            <div className="pt-2">
+              <Link href="/admin/dashboard">
+                <Button variant="secondary" size="sm">Return to Admin Overview</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-7xl">

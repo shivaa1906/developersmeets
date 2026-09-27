@@ -11,112 +11,41 @@ interface ProjectDetailProps {
   params: { slug: string };
 }
 
-// Data repository matching PRD
-const projectCatalog: Record<string, any> = {
-  'ai-ecommerce-platform': {
-    project_number: 'PRJ-2026-0001',
-    title: 'Autonomous AI E-Commerce Engine',
-    category: 'AI/ML',
-    description:
-      'A multi-tenant scalable commerce engine powered by generative product recommendations, automated markdown optimization, vector catalog indexing, and real-time inventory synchronization across multi-region clusters.',
-    technologies: ['Next.js 14', 'Python', 'PostgreSQL', 'FastAPI', 'Redis', 'Docker'],
-    status: 'PUBLISHED',
-    timeline: '45 Days',
-    budget_range: 'Enterprise Escrow',
-    lead_developer: {
-      name: 'Ritesh Lingamallu',
-      username: 'ritesh-lingamallu',
-      role: 'Lead Architect',
-      skills: ['Full Stack', 'System Architecture', 'PostgreSQL'],
-    },
-    contributors: [
-      { name: 'Rahul Kumar', username: 'rahul-kumar', role: 'Backend Engineer' },
-      { name: 'Sanjay Kumar', username: 'sanjay-kumar', role: 'Frontend Specialist' },
-    ],
-    deliverables: [
-      'Sub-50ms vector search for 500,000+ inventory items',
-      'Automated double-entry credit ledger and checkout gateway integration',
-      'Anonymous client support bridge transition',
-      'Role-based granular administrative dashboard',
-    ],
-  },
-  'cloud-devops-orchestrator': {
-    project_number: 'PRJ-2026-0002',
-    title: 'Cloud Infrastructure Orchestrator',
-    category: 'Enterprise',
-    description:
-      'Automated multi-cloud cluster manager with GitOps integration, vulnerability scanning, and cost telemetry.',
-    technologies: ['Go', 'Kubernetes', 'Docker', 'React', 'Prometheus'],
-    status: 'PUBLISHED',
-    timeline: '30 Days',
-    budget_range: 'Enterprise Escrow',
-    lead_developer: {
-      name: 'M. Shiva Gopi',
-      username: 'shiva-gopi',
-      role: 'Systems Architect',
-      skills: ['Go', 'Kubernetes', 'Cloud Operations'],
-    },
-    contributors: [{ name: 'Aakash Verma', username: 'aakash-verma', role: 'DevOps Specialist' }],
-    deliverables: [
-      'Dynamic workload autoscale policy orchestration',
-      'Granular cost anomaly reporting engine',
-      'Zero-downtime blue/green deployment controller',
-    ],
-  },
-  'fintech-escrow-ledger': {
-    project_number: 'PRJ-2026-0003',
-    title: 'Cryptographic Ledger & Escrow Protocol',
-    category: 'SaaS',
-    description:
-      'High-performance transactional ledger with automated double-entry verification and microsecond settlement.',
-    technologies: ['TypeScript', 'Node.js', 'PostgreSQL', 'Tailwind CSS'],
-    status: 'PUBLISHED',
-    timeline: '35 Days',
-    budget_range: 'Enterprise Escrow',
-    lead_developer: {
-      name: 'Ritesh Lingamallu',
-      username: 'ritesh-lingamallu',
-      role: 'Lead Engineer',
-      skills: ['TypeScript', 'Fintech Architecture'],
-    },
-    contributors: [],
-    deliverables: [
-      'Deterministic credit transaction balancing',
-      'Configurable refund policy engine',
-      'Strict audit log immutability',
-    ],
-  },
-};
-
 async function getProject(slug: string) {
-  if (projectCatalog[slug]) {
-    return projectCatalog[slug];
-  }
+  const backendTarget = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+
   try {
-    const res = await fetch(`http://127.0.0.1:5000/api/projects/published/${slug}`, {
+    const res = await fetch(`${backendTarget}/api/projects/published/${slug}`, {
       cache: 'no-store',
     });
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.project) return null;
     const p = data.project;
+
     return {
       project_number: p.project_number,
       title: p.title,
       category: p.category,
       description: p.description,
-      technologies: Array.isArray(p.required_technologies) ? p.required_technologies : [],
+      technologies: Array.isArray(p.required_technologies)
+        ? p.required_technologies
+        : Array.isArray(p.technologies)
+        ? p.technologies
+        : [],
       status: p.status,
-      timeline: p.timeline || 'Enterprise',
+      timeline: p.timeline || 'Enterprise Escrow',
       budget_range: 'Enterprise Escrow',
       lead_developer: {
-        name: p.lead_dev_name || 'Verified Developer',
-        username: p.lead_dev_username || 'developer',
-        role: p.lead_dev_title || 'Lead Architect',
+        name: p.lead_dev_name || p.dev_name || 'Verified Developer',
+        username: p.lead_dev_username || p.dev_username || 'developer',
+        role: p.lead_dev_title || p.dev_title || 'Lead Architect',
         skills: [],
       },
-      contributors: [],
-      deliverables: ['Production milestone delivered', 'Verified completion signoff'],
+      contributors: Array.isArray(p.contributors) ? p.contributors : [],
+      deliverables: Array.isArray(p.deliverables) && p.deliverables.length > 0
+        ? p.deliverables
+        : ['Production milestone delivered', 'Verified completion signoff'],
     };
   } catch (_err) {
     return null;

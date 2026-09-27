@@ -320,7 +320,7 @@ export class CreditLedgerService {
 
               // 2. CREDIT_REFUNDED Notification
               await NotificationService.createNotification({
-                userId: devUserId,
+                userId: targetUserId,
                 type: 'CREDIT_REFUNDED',
                 title: 'Credit Refunded',
                 message: `${refundAmt} claim credit has been refunded to your wallet for project "${projectTitle}". New balance: ${balanceAfter} credits.`,
@@ -1061,7 +1061,9 @@ export class CreditLedgerService {
                     link: '/wallet',
                     created_at: new Date().toISOString(),
                   });
-                } catch (_err) {}
+                } catch (_err) {
+                  void _err;
+                }
               }
 
               affectedUsers.push({
@@ -1912,7 +1914,7 @@ export class CreditLedgerService {
       let targetUserId: string | null = user?.id || null;
       let targetDevId: string | null = user?.developer_id || null;
 
-      let acc = await client.query(
+      const acc = await client.query(
         `SELECT id, balance, developer_id, user_id FROM credit_accounts
          WHERE (developer_id IS NOT NULL AND developer_id = $1)
             OR (user_id IS NOT NULL AND user_id = $2)

@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { query, withTransaction } from '../database/db.js';
@@ -42,7 +41,7 @@ export function validateRedirectUrl(target: any, defaultUrl: string): string {
   }
 
   // Validate internal path characters
-  const safeInternalPathRegex = /^\/[a-zA-Z0-9_\-\/\?=&%#\.]*$/;
+  const safeInternalPathRegex = /^\/[a-zA-Z0-9_\-/?=&%#.]*$/;
   if (!safeInternalPathRegex.test(trimmed)) {
     return defaultUrl;
   }
@@ -149,7 +148,9 @@ export class AuthController {
         // Check existing email
         const existingEmail = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
         if (existingEmail.rows.length > 0) {
-          throw new Error('A user with this email address already exists.');
+          const conflictErr: any = new Error('This email is already registered.');
+          conflictErr.statusCode = 409;
+          throw conflictErr;
         }
 
         // Check existing username
@@ -260,6 +261,16 @@ export class AuthController {
           },
           client
         );
+        await AuditLogger.log(
+          {
+            actorUserId: user.id,
+            action: 'DEVELOPER_VERIFICATION_REQUESTED',
+            entityType: 'DEVELOPER',
+            entityId: dev.id,
+            metadata: { username: cleanUsername, status: 'PENDING' },
+          },
+          client
+        );
 
         return { user, developer: dev };
       });
@@ -287,7 +298,14 @@ export class AuthController {
         },
       });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      const statusCode =
+        err.statusCode ||
+        (err.message?.includes('already exists') ||
+        err.message?.includes('already registered') ||
+        err.code === '23505'
+          ? 409
+          : 400);
+      res.status(statusCode).json({ error: err.message || 'Registration failed' });
     }
   }
 
@@ -323,7 +341,9 @@ export class AuthController {
         // Check existing email
         const existingEmail = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
         if (existingEmail.rows.length > 0) {
-          throw new Error('A user with this email address already exists.');
+          const conflictErr: any = new Error('This email is already registered.');
+          conflictErr.statusCode = 409;
+          throw conflictErr;
         }
 
         const userRes = await client.query(
@@ -412,7 +432,14 @@ export class AuthController {
         redirectUrl: '/dashboard',
       });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      const statusCode =
+        err.statusCode ||
+        (err.message?.includes('already exists') ||
+        err.message?.includes('already registered') ||
+        err.code === '23505'
+          ? 409
+          : 400);
+      res.status(statusCode).json({ error: err.message || 'Registration failed' });
     }
   }
 
@@ -604,7 +631,12 @@ export class AuthController {
       // Compute safe redirect URL with open redirect protection
       const defaultRoleRedirect = getDefaultRedirectForRole(user.role);
       const requestedRedirect =
-        req.body.redirect || req.body.next || req.query.redirect || req.query.next;
+        req.body.returnUrl ||
+        req.query.returnUrl ||
+        req.body.redirect ||
+        req.body.next ||
+        req.query.redirect ||
+        req.query.next;
       const safeRedirectUrl = validateRedirectUrl(requestedRedirect, defaultRoleRedirect);
 
       const token = jwt.sign(
@@ -1026,11 +1058,17 @@ export class AuthController {
    */
   static async logout(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (req.user?.userId) {
-      if (req.body?.revokeAll === true || req.query?.revokeAll === 'true') {
-        await query('UPDATE users SET token_version = token_version + 1, updated_at = NOW() WHERE id = $1', [
-          req.user.userId,
-        ]);
-      }
+      await query('UPDATE users SET token_version = COALESCE(token_version, 1) + 1, updated_at = NOW() WHERE id = $1', [
+        req.user.userId,
+      ]);
+
+      await AuditLogger.log({
+        actorUserId: req.user.userId,
+        action: 'SESSION_INVALIDATED',
+        entityType: 'USER',
+        entityId: req.user.userId,
+        metadata: { email: req.user.email, reason: 'LOGOUT' },
+      });
 
       await AuditLogger.log({
         actorUserId: req.user.userId,
@@ -1295,6 +1333,212 @@ export class AuthController {
     } catch (error: any) {
       console.error('[updateProfile Error]:', error);
       res.status(500).json({ error: error.message || 'Failed to update profile' });
+    }
+  }
+
+  /**
+   * Assesses eligibility for account deactivation without performing mutations
+   */
+  static async getDeletionEligibility(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    if (req.user.email === 'shivaa1906@gmail.com' || req.user.role === ROLES.CEO) {
+      res.status(403).json({
+        eligible: false,
+        reasons: ['Chief Executive Officer account is protected and cannot be deleted or deactivated.'],
+        activeProjects: [],
+      });
+      return;
+    }
+
+    if (req.user.role === ROLES.MD) {
+      res.status(403).json({
+        eligible: false,
+        reasons: ['Managing Director account is protected and cannot be deactivated via self-service.'],
+        activeProjects: [],
+      });
+      return;
+    }
+
+    const reasons: string[] = [];
+    let activeProjects: any[] = [];
+
+    if (req.user.role === ROLES.CLIENT) {
+      const clientRes = await query('SELECT id FROM clients WHERE user_id = $1', [req.user.userId]);
+      if (clientRes.rows.length > 0) {
+        const clientId = clientRes.rows[0].id;
+        const projRes = await query(
+          `SELECT id, project_number, title, status FROM projects 
+           WHERE client_id = $1 AND status IN ('IN_PROGRESS', 'DEVELOPER_SELECTED', 'SUBMITTED_FOR_REVIEW', 'SELECTION_PENDING', 'OPEN_FOR_CLAIMS', 'CLAIMS_ACTIVE', 'REVIEWING')`,
+          [clientId]
+        );
+        if (projRes.rows.length > 0) {
+          activeProjects = projRes.rows;
+          reasons.push('Your account has active projects. Please resolve or transfer those projects before deleting the account.');
+        }
+      }
+    } else if (req.user.role === ROLES.DEVELOPER) {
+      const devRes = await query('SELECT id FROM developers WHERE user_id = $1', [req.user.userId]);
+      if (devRes.rows.length > 0) {
+        const devId = devRes.rows[0].id;
+        const projRes = await query(
+          `SELECT id, project_number, title, status FROM projects 
+           WHERE lead_developer_id = $1 AND status IN ('IN_PROGRESS', 'DEVELOPER_SELECTED', 'SUBMITTED_FOR_REVIEW')`,
+          [devId]
+        );
+        if (projRes.rows.length > 0) {
+          activeProjects = projRes.rows;
+          reasons.push('Your account has active lead projects in progress. Please complete or transfer those projects before deleting the account.');
+        }
+      }
+    }
+
+    res.json({
+      eligible: reasons.length === 0,
+      reasons,
+      activeProjects,
+    });
+  }
+
+  /**
+   * Safely deactivates user account after verifying explicit confirmation and zero active projects
+   * Historical projects, financial transactions, and audit records remain strictly preserved.
+   */
+  static async deactivateAccount(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    // CEO and MD Protection
+    if (req.user.email === 'shivaa1906@gmail.com' || req.user.role === ROLES.CEO) {
+      res.status(403).json({ error: 'Chief Executive Officer account is protected and cannot be deleted or deactivated.' });
+      return;
+    }
+
+    if (req.user.role === ROLES.MD) {
+      res.status(403).json({ error: 'Managing Director account is protected and cannot be deactivated via self-service.' });
+      return;
+    }
+
+    // Require explicit confirmation
+    const { confirmation, confirmText } = req.body || {};
+    const text = confirmation || confirmText;
+    if (text !== 'DELETE') {
+      res.status(400).json({ error: "Confirmation text 'DELETE' is required to confirm account deactivation." });
+      return;
+    }
+
+    // Check active projects
+    if (req.user.role === ROLES.CLIENT) {
+      const clientRes = await query('SELECT id FROM clients WHERE user_id = $1', [req.user.userId]);
+      if (clientRes.rows.length > 0) {
+        const clientId = clientRes.rows[0].id;
+        const activeProjects = await query(
+          `SELECT id, project_number, title, status FROM projects 
+           WHERE client_id = $1 AND status IN ('IN_PROGRESS', 'DEVELOPER_SELECTED', 'SUBMITTED_FOR_REVIEW', 'SELECTION_PENDING', 'OPEN_FOR_CLAIMS', 'CLAIMS_ACTIVE', 'REVIEWING')`,
+          [clientId]
+        );
+        if (activeProjects.rows.length > 0) {
+          res.status(400).json({
+            error: 'Your account has active projects. Please resolve or transfer those projects before deleting the account.',
+            activeProjects: activeProjects.rows,
+          });
+          return;
+        }
+      }
+    } else if (req.user.role === ROLES.DEVELOPER) {
+      const devRes = await query('SELECT id FROM developers WHERE user_id = $1', [req.user.userId]);
+      if (devRes.rows.length > 0) {
+        const devId = devRes.rows[0].id;
+        const activeLeadProjects = await query(
+          `SELECT id, project_number, title, status FROM projects 
+           WHERE lead_developer_id = $1 AND status IN ('IN_PROGRESS', 'DEVELOPER_SELECTED', 'SUBMITTED_FOR_REVIEW')`,
+          [devId]
+        );
+        if (activeLeadProjects.rows.length > 0) {
+          res.status(400).json({
+            error: 'Your account has active projects in progress. Please complete or transfer those projects before deleting the account.',
+            activeProjects: activeLeadProjects.rows,
+          });
+          return;
+        }
+      }
+    }
+
+    try {
+      await withTransaction(async (client) => {
+        // 1. Audit log: ACCOUNT_DELETION_REQUESTED
+        await AuditLogger.log(
+          {
+            actorUserId: req.user!.userId,
+            action: 'ACCOUNT_DELETION_REQUESTED',
+            entityType: 'USER',
+            entityId: req.user!.userId,
+            metadata: { email: req.user!.email, role: req.user!.role },
+          },
+          client
+        );
+
+        // 2. Safely deactivate user: mark DISABLED and invalidate all session tokens
+        await client.query(
+          `UPDATE users 
+           SET status = 'DISABLED', 
+               is_suspended = TRUE, 
+               suspension_reason = 'Account deactivated by user request', 
+               token_version = COALESCE(token_version, 1) + 1, 
+               updated_at = NOW() 
+           WHERE id = $1`,
+          [req.user!.userId]
+        );
+
+        // 3. If developer, set availability to UNAVAILABLE
+        if (req.user!.role === ROLES.DEVELOPER) {
+          await client.query(
+            `UPDATE developers SET availability = 'UNAVAILABLE', updated_at = NOW() WHERE user_id = $1`,
+            [req.user!.userId]
+          );
+        }
+
+        // 4. Audit log: ACCOUNT_DEACTIVATED
+        await AuditLogger.log(
+          {
+            actorUserId: req.user!.userId,
+            action: 'ACCOUNT_DEACTIVATED',
+            entityType: 'USER',
+            entityId: req.user!.userId,
+            metadata: {
+              email: req.user!.email,
+              role: req.user!.role,
+              preservedHistory: true,
+              deactivatedAt: new Date().toISOString(),
+            },
+          },
+          client
+        );
+
+        // 5. Audit log: SESSION_INVALIDATED
+        await AuditLogger.log(
+          {
+            actorUserId: req.user!.userId,
+            action: 'SESSION_INVALIDATED',
+            entityType: 'USER',
+            entityId: req.user!.userId,
+            metadata: { email: req.user!.email, reason: 'ACCOUNT_DEACTIVATED' },
+          },
+          client
+        );
+      });
+
+      res.json({
+        message: 'Account successfully deactivated. All active sessions have been invalidated.',
+        deactivated: true,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to deactivate account' });
     }
   }
 }

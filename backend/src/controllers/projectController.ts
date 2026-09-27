@@ -150,7 +150,12 @@ export class ProjectController {
    */
   static async submit(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (req.user?.role === ROLES.DEVELOPER || req.user?.role === ROLES.SUPPORT) {
-      res.status(403).json({ error: 'Start a project is available to client accounts.' });
+      res.status(403).json({
+        error:
+          req.user.role === ROLES.DEVELOPER
+            ? 'Your current account is registered as a Developer. To submit a client project, create or use a Client account.'
+            : 'Start a project is available to client accounts.',
+      });
       return;
     }
 
@@ -328,6 +333,11 @@ export class ProjectController {
       res.status(201).json({
         message: 'Project submitted successfully for administrative review.',
         ...result,
+        project: {
+          id: result.projectId,
+          projectNumber: result.projectNumber,
+          status: result.status,
+        },
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message });

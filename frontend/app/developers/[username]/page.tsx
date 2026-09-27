@@ -24,198 +24,59 @@ interface DeveloperProfileProps {
   params: { username: string };
 }
 
-// Full Developer profiles
-const developerDatabase: Record<string, any> = {
-  'ritesh-lingamallu': {
-    name: 'Ritesh Lingamallu',
-    username: 'ritesh-lingamallu',
-    role: 'Founder, CEO & Lead Architect',
-    location: 'Hyderabad, India',
-    experience: 8,
-    verification_status: 'VERIFIED',
-    bio: 'Founder and Chief Executive Officer of Nexus Engineering Corp. Experienced in large-scale system engineering, cryptographic and transactional ledgers, AI inference microservices, and end-to-end full stack architecture.',
-    skills: ['Next.js 14', 'TypeScript', 'PostgreSQL', 'Python', 'FastAPI', 'Redis', 'Docker', 'AWS', 'System Design'],
-    certifications: [
-      'AWS Certified Solutions Architect - Professional',
-      'Certified Kubernetes Administrator (CKA)',
-      'DeepLearning.AI Production Machine Learning Systems',
-    ],
-    achievements: [
-      'Architected high-throughput credit settlement engine for enterprise clients',
-      'Designed zero-bias anonymous developer selection protocol',
-      'Engineered sub-50ms vector search microservice for 500k+ SKUs',
-    ],
-    github: 'https://github.com',
-    linkedin: 'https://linkedin.com',
-    portfolio: 'https://riteshlingamallu.dev',
-    // Strictly associated projects
-    associatedProjects: [
-      {
-        slug: 'ai-ecommerce-platform',
-        title: 'Autonomous AI E-Commerce Engine',
-        project_number: 'PRJ-2026-0001',
-        role: 'Lead Architect',
-        timeline: '45 Days',
-        category: 'AI/ML',
-        status: 'PUBLISHED',
-      },
-      {
-        slug: 'fintech-escrow-ledger',
-        title: 'Cryptographic Ledger & Escrow Protocol',
-        project_number: 'PRJ-2026-0003',
-        role: 'Lead Engineer',
-        timeline: '35 Days',
-        category: 'SaaS',
-        status: 'PUBLISHED',
-      },
-    ],
-  },
-  'shiva-gopi': {
-    name: 'M. Shiva Gopi',
-    username: 'shiva-gopi',
-    role: 'Managing Director & Systems Architect',
-    location: 'Bangalore, India',
-    experience: 7,
-    verification_status: 'VERIFIED',
-    bio: 'Managing Director of Nexus Engineering Corp. Focusing on enterprise cloud infrastructure, high-availability Kubernetes deployments, automated CI/CD pipelines, and business operations.',
-    skills: ['Go', 'Kubernetes', 'AWS', 'Docker', 'Terraform', 'Prometheus', 'React', 'Linux Internals'],
-    certifications: [
-      'Certified Kubernetes Security Specialist (CKS)',
-      'Google Cloud Professional Cloud Architect',
-      'HashiCorp Certified Terraform Associate',
-    ],
-    achievements: [
-      'Built multi-cloud cluster orchestrator scaling to 10k nodes',
-      'Supervised 40+ enterprise delivery milestones with zero slippage',
-      'Optimized cloud expenditure by 42% across corporate workloads',
-    ],
-    github: 'https://github.com',
-    linkedin: 'https://linkedin.com',
-    portfolio: 'https://shivagopi.dev',
-    associatedProjects: [
-      {
-        slug: 'cloud-devops-orchestrator',
-        title: 'Cloud Infrastructure Orchestrator',
-        project_number: 'PRJ-2026-0002',
-        role: 'Systems Architect',
-        timeline: '30 Days',
-        category: 'Enterprise',
-        status: 'PUBLISHED',
-      },
-    ],
-  },
-  'rahul-kumar': {
-    name: 'Rahul Kumar',
-    username: 'rahul-kumar',
-    role: 'Senior Backend Engineer',
-    location: 'Delhi, India',
-    experience: 5,
-    verification_status: 'VERIFIED',
-    bio: 'Senior backend specialist building fault-tolerant microservices, asynchronous message queues, and high-concurrency database optimizations.',
-    skills: ['Node.js', 'PostgreSQL', 'Kafka', 'TypeScript', 'GraphQL', 'Redis'],
-    certifications: ['PostgreSQL Certified Professional', 'Confluent Certified Kafka Developer'],
-    achievements: ['Integrated distributed payment pipelines', 'Maintained 99.99% uptime SLAs across key services'],
-    github: 'https://github.com',
-    linkedin: 'https://linkedin.com',
-    associatedProjects: [
-      {
-        slug: 'ai-ecommerce-platform',
-        title: 'Autonomous AI E-Commerce Engine',
-        project_number: 'PRJ-2026-0001',
-        role: 'Contributor - Backend',
-        timeline: '45 Days',
-        category: 'AI/ML',
-        status: 'PUBLISHED',
-      },
-    ],
-  },
-  'sanjay-kumar': {
-    name: 'Sanjay Kumar',
-    username: 'sanjay-kumar',
-    role: 'Lead Frontend & UI Engineer',
-    location: 'Mumbai, India',
-    experience: 4,
-    verification_status: 'VERIFIED',
-    bio: 'Lead frontend engineer specialized in modern responsive web applications, high frame rate UI animations, and accessible design system implementations.',
-    skills: ['React', 'Next.js', 'Tailwind CSS', 'Three.js', 'Framer Motion', 'Web Accessibility'],
-    certifications: ['Frontend Masters Web Performance Expert'],
-    achievements: ['Engineered accessible design component library across 20+ applications'],
-    github: 'https://github.com',
-    linkedin: 'https://linkedin.com',
-    associatedProjects: [
-      {
-        slug: 'ai-ecommerce-platform',
-        title: 'Autonomous AI E-Commerce Engine',
-        project_number: 'PRJ-2026-0001',
-        role: 'Contributor - Frontend',
-        timeline: '45 Days',
-        category: 'AI/ML',
-        status: 'PUBLISHED',
-      },
-    ],
-  },
-};
-
 async function getDeveloper(username: string) {
-  let liveDev: any = null;
   const backendTarget = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
 
   try {
     const res = await fetch(`${backendTarget}/api/developers/profile/${username}`, {
       cache: 'no-store',
     });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.developer) {
-        liveDev = data.developer;
-      }
+    if (!res.ok) {
+      return null;
     }
+    const data = await res.json();
+    if (!data.developer) {
+      return null;
+    }
+    const d = data.developer;
+
+    return {
+      name: d.display_name || d.name,
+      username: d.username,
+      role: d.role_title || d.role,
+      location: d.location || 'Global / Remote',
+      experience: d.experience !== undefined ? d.experience : 0,
+      verification_status: d.verification_status || 'VERIFIED',
+      bio: d.bio || '',
+      avatar: d.profile_photo || d.avatar_url || d.profile_image || null,
+      skills: Array.isArray(d.skills)
+        ? d.skills.map((s: any) => (typeof s === 'string' ? s : s.name))
+        : [],
+      certifications: Array.isArray(d.certifications)
+        ? d.certifications.map((c: any) => (typeof c === 'string' ? c : c.name))
+        : [],
+      achievements: [
+        'Verified Platform Engineering Specialist',
+        'Direct project delivery signoff',
+      ],
+      github: d.github_url || d.github,
+      linkedin: d.linkedin_url || d.linkedin,
+      portfolio: d.portfolio_url || d.portfolio,
+      associatedProjects: Array.isArray(d.attributedProjects) && d.attributedProjects.length > 0
+        ? d.attributedProjects.map((p: any) => ({
+            slug: p.slug,
+            title: p.title,
+            project_number: p.project_number,
+            role: p.project_role || 'Contributor',
+            timeline: p.timeline || 'Enterprise',
+            category: p.category || 'Engineering',
+            status: 'PUBLISHED',
+          }))
+        : [],
+    };
   } catch (_err) {
-    // Network / fallback
-  }
-
-  const seed = developerDatabase[username];
-
-  if (!liveDev && !seed) {
     return null;
   }
-
-  const d = liveDev ? { ...seed, ...liveDev } : seed;
-
-  return {
-    name: d.display_name || d.name,
-    username: d.username,
-    role: d.role_title || d.role,
-    location: d.location || 'Global / Remote',
-    experience: d.experience !== undefined ? d.experience : 0,
-    verification_status: d.verification_status || 'VERIFIED',
-    bio: d.bio || '',
-    avatar: d.profile_photo || d.avatar_url || d.profile_image || seed?.avatar || null,
-    skills: Array.isArray(d.skills)
-      ? d.skills.map((s: any) => (typeof s === 'string' ? s : s.name))
-      : seed?.skills || [],
-    certifications: Array.isArray(d.certifications)
-      ? d.certifications.map((c: any) => (typeof c === 'string' ? c : c.name))
-      : seed?.certifications || [],
-    achievements: seed?.achievements || [
-      'Verified Platform Engineering Specialist',
-      'Direct project delivery signoff',
-    ],
-    github: d.github_url || d.github,
-    linkedin: d.linkedin_url || d.linkedin,
-    portfolio: d.portfolio_url || d.portfolio,
-    associatedProjects: Array.isArray(d.attributedProjects) && d.attributedProjects.length > 0
-      ? d.attributedProjects.map((p: any) => ({
-          slug: p.slug,
-          title: p.title,
-          project_number: p.project_number,
-          role: p.project_role || 'Contributor',
-          timeline: p.timeline || 'Enterprise',
-          category: p.category || 'Engineering',
-          status: 'PUBLISHED',
-        }))
-      : seed?.associatedProjects || [],
-  };
 }
 
 export async function generateMetadata({ params }: DeveloperProfileProps): Promise<Metadata> {

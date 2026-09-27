@@ -61,7 +61,7 @@ export default function CareersPage() {
             <Terminal className="h-6 w-6 text-electric-purple mb-2" />
             <CardTitle className="text-base">2. Executive Review</CardTitle>
             <CardDescription>
-              Direct review by CEO Ritesh Lingamallu and MD M. Shiva Gopi for standards adherence.
+              Direct review by CEO M. Shiva Gopi and MD Ritesh Lingamallu for standards adherence.
             </CardDescription>
           </CardHeader>
         </Card>

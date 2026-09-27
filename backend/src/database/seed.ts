@@ -2,251 +2,307 @@ import { pool, withTransaction } from './db.js';
 import { hashPassword } from '../utils/password.js';
 import { LEADERSHIP } from '../config/constants.js';
 
-export async function runSeed() {
-  console.log('--- Starting Comprehensive Database Seeding ---');
+/**
+ * System Bootstrap: Required in ALL environments (production and development).
+ * Sets up primary CEO account, skills taxonomy, and official platform channels.
+ */
+export async function seedSystemBootstrap(client: any, defaultPasswordHash: string) {
+  console.log('--- Executing System Bootstrap (Production Essential) ---');
 
-  // Secure default development password hash using Argon2id with unique salt
+  const ceoEmail = (process.env.SEED_CEO_EMAIL || 'shivaa1906@gmail.com').toLowerCase().trim();
+
+  // 1. Primary CEO User & Profile (Configured CEO: shivaa1906@gmail.com)
+  const ceoUser = await client.query(
+    `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at, permissions)
+     VALUES ($1, $2, $3, 'CEO', 'ACTIVE', TRUE, NOW(), '["*"]'::jsonb)
+     ON CONFLICT (email) DO UPDATE SET role = 'CEO', status = 'ACTIVE', permissions = '["*"]'::jsonb, password_hash = $3
+     RETURNING id`,
+    [ceoEmail, '+91 9900011223', defaultPasswordHash]
+  );
+  const ceoUserId = ceoUser.rows[0].id;
+
+  // 1.1 Configured Production MD Account (if explicitly provided in production environment)
+  const prodMdEmail = process.env.PROD_MD_EMAIL ? process.env.PROD_MD_EMAIL.toLowerCase().trim() : null;
+  if (prodMdEmail) {
+    const mdPerms = [
+      'developers:read', 'developers:write',
+      'projects:read', 'projects:write',
+      'clients:read', 'claims:read', 'claims:write',
+      'inquiries:read', 'inquiries:write',
+      'analytics:read', 'audit_logs:read',
+      'payments:read', 'ledger:read',
+      'support:read', 'support:tickets:read', 'support:tickets:write',
+      'community:read', 'community:write'
+    ];
+    await client.query(
+      `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at, permissions)
+       VALUES ($1, $2, $3, 'MD', 'ACTIVE', TRUE, NOW(), $4::jsonb)
+       ON CONFLICT (email) DO UPDATE SET role = 'MD', status = 'ACTIVE', permissions = $4::jsonb
+       RETURNING id`,
+      [prodMdEmail, '+91 9900022334', defaultPasswordHash, JSON.stringify(mdPerms)]
+    );
+  }
+
+  const ceoDev = await client.query(
+    `INSERT INTO developers (
+        user_id, username, display_name, bio, role_title, experience,
+        availability, verification_status, verified_at,
+        github_url, linkedin_url, portfolio_url
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, 'AVAILABLE', 'VERIFIED', NOW(), $7, $8, $9)
+     ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name, user_id = EXCLUDED.user_id
+     RETURNING id`,
+    [
+      ceoUserId,
+      'ceo-shiva',
+      LEADERSHIP.CEO.NAME,
+      'Founder & Chief Executive Officer. High-concurrency systems, distributed ledgers, AI inference microservices, and end-to-end enterprise architecture.',
+      LEADERSHIP.CEO.TITLE,
+      8,
+      'https://github.com/shivaa1906',
+      'https://linkedin.com/in/shivaa1906',
+      'https://nexus.dev',
+    ]
+  );
+  const ceoDevId = ceoDev.rows[0].id;
+
+  await client.query(
+    `INSERT INTO credit_accounts (developer_id, user_id, balance)
+     VALUES ($1, $2, 20)
+     ON CONFLICT (developer_id) DO UPDATE SET balance = 20`,
+    [ceoDevId, ceoUserId]
+  );
+
+  // 2. Skills Catalog
+  const skillList = [
+    { name: 'TypeScript', category: 'Language' },
+    { name: 'Next.js', category: 'Frontend' },
+    { name: 'React', category: 'Frontend' },
+    { name: 'Node.js', category: 'Backend' },
+    { name: 'Go', category: 'Language' },
+    { name: 'Python', category: 'Language' },
+    { name: 'PostgreSQL', category: 'Database' },
+    { name: 'Kubernetes', category: 'DevOps' },
+    { name: 'Docker', category: 'DevOps' },
+    { name: 'Redis', category: 'Database' },
+  ];
+
+  for (const sk of skillList) {
+    await client.query(
+      `INSERT INTO skills (name, category)
+       VALUES ($1, $2)
+       ON CONFLICT (name) DO NOTHING`,
+      [sk.name, sk.category]
+    );
+  }
+
+  // 3. Platform Community Channels
+  const channels = [
+    'general',
+    'announcements',
+    'frontend',
+    'backend',
+    'ai-ml',
+    'database',
+    'devops',
+    'projects',
+    'ui-ux',
+    'job-opportunities',
+    'random',
+  ];
+  for (const ch of channels) {
+    await client.query(
+      `INSERT INTO channels (name, slug, description, is_private, created_by)
+       VALUES ($1, $2, $3, FALSE, $4)
+       ON CONFLICT (name) DO NOTHING`,
+      [`#${ch}`, ch, `Discussion channel for ${ch}`, ceoUserId]
+    );
+  }
+
+  return { ceoUserId, ceoDevId };
+}
+
+/**
+ * Development & Testing Seeds: Strictly guarded and excluded in production.
+ */
+export async function seedDevelopmentData(client: any, defaultPasswordHash: string, bootstrapData: { ceoUserId: string; ceoDevId: string }) {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('[SAFETY] Production environment detected: Skipping development/test seed fixtures.');
+    return;
+  }
+
+  console.log('--- Executing Development/Testing Seeds (Non-Production) ---');
+  const mdEmail = (process.env.SEED_MD_EMAIL || 'md@example.invalid').toLowerCase().trim();
+  const { ceoDevId } = bootstrapData;
+
+  // 1. MD User & Developer Profile (Development Sample MD)
+  const mdDefaultPermissions = [
+    'developers:read', 'developers:write',
+    'projects:read', 'projects:write',
+    'clients:read', 'claims:read', 'claims:write',
+    'inquiries:read', 'inquiries:write',
+    'analytics:read', 'audit_logs:read',
+    'payments:read', 'ledger:read',
+    'support:read', 'support:tickets:read', 'support:tickets:write',
+    'community:read', 'community:write'
+  ];
+
+  const mdUser = await client.query(
+    `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at, permissions)
+     VALUES ($1, $2, $3, 'MD', 'ACTIVE', TRUE, NOW(), $4::jsonb)
+     ON CONFLICT (email) DO UPDATE SET role = 'MD', status = 'ACTIVE', permissions = $4::jsonb, password_hash = $3
+     RETURNING id`,
+    [mdEmail, '+91 9900022334', defaultPasswordHash, JSON.stringify(mdDefaultPermissions)]
+  );
+  const mdUserId = mdUser.rows[0].id;
+
+  const mdDev = await client.query(
+    `INSERT INTO developers (
+        user_id, username, display_name, bio, role_title, experience,
+        availability, verification_status, verified_at,
+        github_url, linkedin_url, portfolio_url
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, 'AVAILABLE', 'VERIFIED', NOW(), $7, $8, $9)
+     ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name, user_id = EXCLUDED.user_id
+     RETURNING id`,
+    [
+      mdUserId,
+      'sample-md',
+      LEADERSHIP.MD.NAME,
+      'Managing Director (Development Sample). Enterprise cloud infrastructure, high-availability Kubernetes clusters, automated CI/CD pipelines, and business operations.',
+      LEADERSHIP.MD.TITLE,
+      7,
+      'https://github.com/sample-md',
+      'https://linkedin.com/in/sample-md',
+      'https://nexus.dev',
+    ]
+  );
+  const mdDevId = mdDev.rows[0].id;
+
+  await client.query(
+    `INSERT INTO credit_accounts (developer_id, user_id, balance)
+     VALUES ($1, $2, 20)
+     ON CONFLICT (developer_id) DO UPDATE SET balance = 20`,
+    [mdDevId, mdUserId]
+  );
+
+  // 2. Verified Sample Developer (Rahul Kumar)
+  const dev1User = await client.query(
+    `INSERT INTO users (email, password_hash, role, status)
+     VALUES ($1, $2, 'DEVELOPER', 'ACTIVE')
+     ON CONFLICT (email) DO UPDATE SET role = 'DEVELOPER', status = 'ACTIVE'
+     RETURNING id`,
+    ['rahul@nexus.dev', defaultPasswordHash]
+  );
+  const dev1Res = await client.query(
+    `INSERT INTO developers (user_id, username, display_name, role_title, experience, verification_status, verified_at)
+     VALUES ($1, 'rahul-kumar', 'Rahul Kumar', 'Senior Backend Engineer', 5, 'VERIFIED', NOW())
+     ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name
+     RETURNING id`,
+    [dev1User.rows[0].id]
+  );
+  const dev1Id = dev1Res.rows[0].id;
+
+  await client.query(
+    `INSERT INTO credit_accounts (developer_id, balance)
+     VALUES ($1, 10)
+     ON CONFLICT (developer_id) DO UPDATE SET balance = 10`,
+    [dev1Id]
+  );
+
+  // 3. Sample Client
+  const client1User = await client.query(
+    `INSERT INTO users (email, phone, password_hash, role, status)
+     VALUES ($1, $2, $3, 'CLIENT', 'ACTIVE')
+     ON CONFLICT (email) DO UPDATE SET role = 'CLIENT'
+     RETURNING id`,
+    ['client1@apexretail.io', '+91 9988776655', defaultPasswordHash]
+  );
+  const client1Res = await client.query(
+    `INSERT INTO clients (user_id, client_number, company_name, private_name, phone)
+     VALUES ($1, 'Client #001', 'Apex Retail Labs', 'Ravi Kumar', '+91 9988776655')
+     ON CONFLICT (client_number) DO UPDATE SET company_name = EXCLUDED.company_name
+     RETURNING id`,
+    [client1User.rows[0].id]
+  );
+  const client1Id = client1Res.rows[0].id;
+
+  // 4. Published Master Project (PRJ-2026-0001)
+  const prj1 = await client.query(
+    `INSERT INTO projects (
+        project_number, slug, title, description, category,
+        budget_min, budget_max, timeline, requirements, required_technologies,
+        status, claim_cost, max_claims, claim_deadline,
+        client_id, lead_developer_id
+     )
+     VALUES (
+        'PRJ-2026-0001', 'ai-ecommerce-platform',
+        'Autonomous AI E-Commerce Engine',
+        'High-throughput distributed commerce system with real-time vector search and multi-tenant billing.',
+        'AI/ML', 50000, 80000, '45 Days',
+        '["Vector search", "Ledger integration", "RBAC"]'::jsonb,
+        '["Next.js", "Python", "PostgreSQL", "FastAPI", "Redis"]'::jsonb,
+        'PUBLISHED', 1, 5, NOW() - INTERVAL '30 days',
+        $1, $2
+     )
+     ON CONFLICT (project_number) DO UPDATE SET title = EXCLUDED.title
+     RETURNING id`,
+    [client1Id, ceoDevId]
+  );
+  const prj1Id = prj1.rows[0].id;
+
+  await client.query(
+    `INSERT INTO project_members (project_id, developer_id, role)
+     VALUES ($1, $2, 'LEAD')
+     ON CONFLICT (project_id, developer_id) DO NOTHING`,
+    [prj1Id, ceoDevId]
+  );
+  await client.query(
+    `INSERT INTO project_members (project_id, developer_id, role)
+     VALUES ($1, $2, 'CONTRIBUTOR')
+     ON CONFLICT (project_id, developer_id) DO NOTHING`,
+    [prj1Id, dev1Id]
+  );
+
+  // 5. Open Project for Marketplace Claims (PRJ-2026-0004)
+  await client.query(
+    `INSERT INTO projects (
+        project_number, slug, title, description, category,
+        budget_min, budget_max, timeline, requirements, required_technologies,
+        status, claim_cost, max_claims, claim_deadline,
+        client_id
+     )
+     VALUES (
+        'PRJ-2026-0004', 'realtime-analytics-dashboard',
+        'High-Concurrency Realtime Analytics Dashboard',
+        'Multi-tenant metrics aggregation engine capable of visualizing 50k events/sec with WebSocket push streaming.',
+        'Enterprise', 60000, 90000, '30 Days',
+        '["Ingestion gateway", "WebSocket streaming", "Sub-second aggregations"]'::jsonb,
+        '["TypeScript", "Next.js", "Go", "ClickHouse", "Tailwind CSS"]'::jsonb,
+        'OPEN_FOR_CLAIMS', 1, 5, NOW() + INTERVAL '3 days',
+        $1
+     )
+     ON CONFLICT (project_number) DO UPDATE SET title = EXCLUDED.title`,
+    [client1Id]
+  );
+}
+
+export async function runSeed() {
+  console.log('--- Starting Database Seeding ---');
+
   const defaultPasswordHash = await hashPassword(
     process.env.SEED_DEFAULT_PASSWORD || 'DevPlatform2026!Secure'
   );
 
-  const ceoEmail = (process.env.SEED_CEO_EMAIL || 'shivaa1906@gmail.com').toLowerCase().trim();
-  const mdEmail = (process.env.SEED_MD_EMAIL || 'md@example.invalid').toLowerCase().trim();
-
   try {
     await withTransaction(async (client) => {
-      // 1. Primary CEO User & Profile (Configured CEO: shivaa1906@gmail.com)
-      const ceoUser = await client.query(
-        `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at)
-         VALUES ($1, $2, $3, 'CEO', 'ACTIVE', TRUE, NOW())
-         ON CONFLICT (email) DO UPDATE SET role = 'CEO', status = 'ACTIVE', password_hash = $3
-         RETURNING id`,
-        [ceoEmail, '+91 9900011223', defaultPasswordHash]
-      );
-      const ceoUserId = ceoUser.rows[0].id;
+      // 1. Always run system bootstrap
+      const bootstrapData = await seedSystemBootstrap(client, defaultPasswordHash);
 
-      const ceoDev = await client.query(
-        `INSERT INTO developers (
-            user_id, username, display_name, bio, role_title, experience,
-            availability, verification_status, verified_at,
-            github_url, linkedin_url, portfolio_url
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, 'AVAILABLE', 'VERIFIED', NOW(), $7, $8, $9)
-         ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name, user_id = EXCLUDED.user_id
-         RETURNING id`,
-        [
-          ceoUserId,
-          'ceo-shiva',
-          LEADERSHIP.CEO.NAME,
-          'Founder & Chief Executive Officer. High-concurrency systems, distributed ledgers, AI inference microservices, and end-to-end enterprise architecture.',
-          LEADERSHIP.CEO.TITLE,
-          8,
-          'https://github.com/shivaa1906',
-          'https://linkedin.com/in/shivaa1906',
-          'https://nexus.dev',
-        ]
-      );
-      const ceoDevId = ceoDev.rows[0].id;
-
-      await client.query(
-        `INSERT INTO credit_accounts (developer_id, user_id, balance)
-         VALUES ($1, $2, 20)
-         ON CONFLICT (developer_id) DO UPDATE SET balance = 20`,
-        [ceoDevId, ceoUserId]
-      );
-
-      // 2. MD User & Developer Profile (Development Sample MD: md@example.invalid)
-      const mdUser = await client.query(
-        `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at)
-         VALUES ($1, $2, $3, 'MD', 'ACTIVE', TRUE, NOW())
-         ON CONFLICT (email) DO UPDATE SET role = 'MD', status = 'ACTIVE', password_hash = $3
-         RETURNING id`,
-        [mdEmail, '+91 9900022334', defaultPasswordHash]
-      );
-      const mdUserId = mdUser.rows[0].id;
-
-      const mdDev = await client.query(
-        `INSERT INTO developers (
-            user_id, username, display_name, bio, role_title, experience,
-            availability, verification_status, verified_at,
-            github_url, linkedin_url, portfolio_url
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, 'AVAILABLE', 'VERIFIED', NOW(), $7, $8, $9)
-         ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name, user_id = EXCLUDED.user_id
-         RETURNING id`,
-        [
-          mdUserId,
-          'sample-md',
-          LEADERSHIP.MD.NAME,
-          'Managing Director (Development Sample). Enterprise cloud infrastructure, high-availability Kubernetes clusters, automated CI/CD pipelines, and business operations.',
-          LEADERSHIP.MD.TITLE,
-          7,
-          'https://github.com/sample-md',
-          'https://linkedin.com/in/sample-md',
-          'https://nexus.dev',
-        ]
-      );
-      const mdDevId = mdDev.rows[0].id;
-
-      await client.query(
-        `INSERT INTO credit_accounts (developer_id, user_id, balance)
-         VALUES ($1, $2, 20)
-         ON CONFLICT (developer_id) DO UPDATE SET balance = 20`,
-        [mdDevId, mdUserId]
-      );
-
-      // 3. Additional Verified Developers (Rahul Kumar & Sanjay Kumar)
-      const dev1User = await client.query(
-        `INSERT INTO users (email, password_hash, role, status)
-         VALUES ($1, $2, 'DEVELOPER', 'ACTIVE')
-         ON CONFLICT (email) DO UPDATE SET role = 'DEVELOPER', status = 'ACTIVE'
-         RETURNING id`,
-        ['rahul@nexus.dev', defaultPasswordHash]
-      );
-      const dev1Res = await client.query(
-        `INSERT INTO developers (user_id, username, display_name, role_title, experience, verification_status, verified_at)
-         VALUES ($1, 'rahul-kumar', 'Rahul Kumar', 'Senior Backend Engineer', 5, 'VERIFIED', NOW())
-         ON CONFLICT (username) DO UPDATE SET display_name = EXCLUDED.display_name
-         RETURNING id`,
-        [dev1User.rows[0].id]
-      );
-      const dev1Id = dev1Res.rows[0].id;
-
-      await client.query(
-        `INSERT INTO credit_accounts (developer_id, balance)
-         VALUES ($1, 10)
-         ON CONFLICT (developer_id) DO UPDATE SET balance = 10`,
-        [dev1Id]
-      );
-
-      // 4. Skills Catalog
-      const skillList = [
-        { name: 'TypeScript', category: 'Language' },
-        { name: 'Next.js', category: 'Frontend' },
-        { name: 'React', category: 'Frontend' },
-        { name: 'Node.js', category: 'Backend' },
-        { name: 'Go', category: 'Language' },
-        { name: 'Python', category: 'Language' },
-        { name: 'PostgreSQL', category: 'Database' },
-        { name: 'Kubernetes', category: 'DevOps' },
-        { name: 'Docker', category: 'DevOps' },
-        { name: 'Redis', category: 'Database' },
-      ];
-
-      for (const sk of skillList) {
-        await client.query(
-          `INSERT INTO skills (name, category)
-           VALUES ($1, $2)
-           ON CONFLICT (name) DO NOTHING`,
-          [sk.name, sk.category]
-        );
-      }
-
-      // 5. Clients with Shielded Numbers
-      const client1User = await client.query(
-        `INSERT INTO users (email, phone, password_hash, role, status)
-         VALUES ($1, $2, $3, 'CLIENT', 'ACTIVE')
-         ON CONFLICT (email) DO UPDATE SET role = 'CLIENT'
-         RETURNING id`,
-        ['client1@apexretail.io', '+91 9988776655', defaultPasswordHash]
-      );
-      const client1Res = await client.query(
-        `INSERT INTO clients (user_id, client_number, company_name, private_name, phone)
-         VALUES ($1, 'Client #001', 'Apex Retail Labs', 'Ravi Kumar', '+91 9988776655')
-         ON CONFLICT (client_number) DO UPDATE SET company_name = EXCLUDED.company_name
-         RETURNING id`,
-        [client1User.rows[0].id]
-      );
-      const client1Id = client1Res.rows[0].id;
-
-      // 6. Published Master Project (PRJ-2026-0001)
-      const prj1 = await client.query(
-        `INSERT INTO projects (
-            project_number, slug, title, description, category,
-            budget_min, budget_max, timeline, requirements, required_technologies,
-            status, claim_cost, max_claims, claim_deadline,
-            client_id, lead_developer_id
-         )
-         VALUES (
-            'PRJ-2026-0001', 'ai-ecommerce-platform',
-            'Autonomous AI E-Commerce Engine',
-            'High-throughput distributed commerce system with real-time vector search and multi-tenant billing.',
-            'AI/ML', 50000, 80000, '45 Days',
-            '["Vector search", "Ledger integration", "RBAC"]'::jsonb,
-            '["Next.js", "Python", "PostgreSQL", "FastAPI", "Redis"]'::jsonb,
-            'PUBLISHED', 1, 5, NOW() - INTERVAL '30 days',
-            $1, $2
-         )
-         ON CONFLICT (project_number) DO UPDATE SET title = EXCLUDED.title
-         RETURNING id`,
-        [client1Id, ceoDevId]
-      );
-      const prj1Id = prj1.rows[0].id;
-
-      // Project Member attribution
-      await client.query(
-        `INSERT INTO project_members (project_id, developer_id, role)
-         VALUES ($1, $2, 'LEAD')
-         ON CONFLICT (project_id, developer_id) DO NOTHING`,
-        [prj1Id, ceoDevId]
-      );
-      await client.query(
-        `INSERT INTO project_members (project_id, developer_id, role)
-         VALUES ($1, $2, 'CONTRIBUTOR')
-         ON CONFLICT (project_id, developer_id) DO NOTHING`,
-        [prj1Id, dev1Id]
-      );
-
-      // 7. Open Project for Marketplace Claims (PRJ-2026-0004)
-      await client.query(
-        `INSERT INTO projects (
-            project_number, slug, title, description, category,
-            budget_min, budget_max, timeline, requirements, required_technologies,
-            status, claim_cost, max_claims, claim_deadline,
-            client_id
-         )
-         VALUES (
-            'PRJ-2026-0004', 'realtime-analytics-dashboard',
-            'High-Concurrency Realtime Analytics Dashboard',
-            'Multi-tenant metrics aggregation engine capable of visualizing 50k events/sec with WebSocket push streaming.',
-            'Enterprise', 60000, 90000, '30 Days',
-            '["Ingestion gateway", "WebSocket streaming", "Sub-second aggregations"]'::jsonb,
-            '["TypeScript", "Next.js", "Go", "ClickHouse", "Tailwind CSS"]'::jsonb,
-            'OPEN_FOR_CLAIMS', 1, 5, NOW() + INTERVAL '3 days',
-            $1
-         )
-         ON CONFLICT (project_number) DO UPDATE SET title = EXCLUDED.title`,
-        [client1Id]
-      );
-
-      // 8. Community Channels
-      const channels = [
-        'general',
-        'announcements',
-        'frontend',
-        'backend',
-        'ai-ml',
-        'database',
-        'devops',
-        'projects',
-        'ui-ux',
-        'job-opportunities',
-        'random',
-      ];
-      for (const ch of channels) {
-        await client.query(
-          `INSERT INTO channels (name, slug, description, is_private, created_by)
-           VALUES ($1, $2, $3, FALSE, $4)
-           ON CONFLICT (name) DO NOTHING`,
-          [`#${ch}`, ch, `Discussion channel for ${ch}`, ceoUserId]
-        );
-      }
+      // 2. Only run development data if not in production
+      await seedDevelopmentData(client, defaultPasswordHash, bootstrapData);
 
       console.log('--- Database Seeding Completed Successfully ---');
-      console.log(`CEO Account: ${ceoEmail} / ${LEADERSHIP.CEO.NAME}`);
-      console.log(`MD Account: ${mdEmail} / ${LEADERSHIP.MD.NAME}`);
-      console.log('Client Account: client1@apexretail.io / Client #001');
-      console.log('Projects PRJ-2026-0001 (PUBLISHED) and PRJ-2026-0004 (OPEN_FOR_CLAIMS) seeded.');
     });
   } catch (error: any) {
     console.warn('Note on seeding:', error.message);

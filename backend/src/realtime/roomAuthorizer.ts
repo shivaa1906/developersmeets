@@ -181,8 +181,14 @@ export async function authorizeSubscription(
     return { authorized: false, reason: 'Forbidden: You are not authorized for this support channel' };
   }
 
-  // 6. Admin operational dashboard (admin:events)
+  // 6. Admin operational dashboard (admin:events, admin:executive, admin:settings)
   if (scope === 'admin') {
+    if (id === 'executive' || id === 'settings') {
+      if (user.role === 'CEO') {
+        return { authorized: true };
+      }
+      return { authorized: false, reason: 'Forbidden: Executive channel restricted to Chief Executive Officer' };
+    }
     if (['CEO', 'MD', 'ADMIN'].includes(user.role)) {
       return { authorized: true };
     }

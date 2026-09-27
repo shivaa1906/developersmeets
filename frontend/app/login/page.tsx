@@ -60,8 +60,8 @@ export default function LoginPage() {
 
       setAuthSession(data.token, data.user);
 
-      // Check for user-specified safe destination query param (?redirect or ?next)
-      const requestedNext = searchParams.get('redirect') || searchParams.get('next');
+      // Check for user-specified safe destination query param (?returnUrl, ?redirect, or ?next)
+      const requestedNext = searchParams.get('returnUrl') || searchParams.get('redirect') || searchParams.get('next');
       const safeNext = getSafeRedirect(requestedNext);
       const destination = safeNext || data.redirectUrl || '/dashboard';
 
@@ -81,7 +81,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = (role: 'CLIENT' | 'DEVELOPER' | 'SUPPORT' | 'ADMIN' | 'CEO' | 'MD') => {
+  const handleQuickLogin = (role: 'CLIENT' | 'DEVELOPER') => {
     setErrorMessage(null);
     if (role === 'CLIENT') {
       setEmail('client001@apexretail.io');
@@ -91,22 +91,6 @@ export default function LoginPage() {
       setEmail('rahul@nexus.dev');
       setPassword('DevPlatform2026!Secure');
       addToast('info', 'Verified Developer Selected', 'Credentials populated for Rahul Kumar.');
-    } else if (role === 'SUPPORT') {
-      setEmail('support@nexus.dev');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'Support Selected', 'Credentials populated for Platform Support.');
-    } else if (role === 'ADMIN') {
-      setEmail('admin@nexus.dev');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'Platform Admin Selected', 'Credentials populated for Administrator.');
-    } else if (role === 'CEO') {
-      setEmail('shivaa1906@gmail.com');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'CEO Shiva Selected', 'Credentials populated for Chief Executive.');
-    } else if (role === 'MD') {
-      setEmail('md@example.invalid');
-      setPassword('DevPlatform2026!Secure');
-      addToast('info', 'MD Sample Selected', 'Credentials populated for Managing Director.');
     }
   };
 
@@ -129,7 +113,7 @@ export default function LoginPage() {
             </div>
           </Link>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            Sign In
+            Login to your account
           </h1>
           <p className="text-xs sm:text-sm text-muted max-w-sm mx-auto">
             Access your verified developer workspace or client management portal.
@@ -238,7 +222,7 @@ export default function LoginPage() {
                   1-Click Fill
                 </span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => handleQuickLogin('CLIENT')}
@@ -247,10 +231,10 @@ export default function LoginPage() {
                   <div className="flex items-center space-x-1.5">
                     <span className="h-2 w-2 rounded-full bg-status-info" />
                     <span className="text-xs font-semibold text-foreground group-hover:text-accent">
-                      Client #001
+                      Client
                     </span>
                   </div>
-                  <span className="text-[10px] text-muted truncate w-full">Apex Retail</span>
+                  <span className="text-[10px] text-muted truncate w-full">Client #001</span>
                 </button>
                 <button
                   type="button"
@@ -264,58 +248,6 @@ export default function LoginPage() {
                     </span>
                   </div>
                   <span className="text-[10px] text-muted truncate w-full">Rahul Kumar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('SUPPORT')}
-                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
-                >
-                  <div className="flex items-center space-x-1.5">
-                    <span className="h-2 w-2 rounded-full bg-status-warning" />
-                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
-                      Support
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-muted truncate w-full">Staff Agent</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('ADMIN')}
-                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
-                >
-                  <div className="flex items-center space-x-1.5">
-                    <span className="h-2 w-2 rounded-full bg-electric-purple" />
-                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
-                      Admin
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-muted truncate w-full">Platform Ops</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('CEO')}
-                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
-                >
-                  <div className="flex items-center space-x-1.5">
-                    <span className="h-2 w-2 rounded-full bg-accent" />
-                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
-                      CEO Shiva
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-muted truncate w-full">M. Shiva Gopi</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickLogin('MD')}
-                  className="flex flex-col items-start p-2 rounded-lg border border-border bg-surface-elevated hover:border-accent hover:bg-accent/5 transition-all text-left group"
-                >
-                  <div className="flex items-center space-x-1.5">
-                    <span className="h-2 w-2 rounded-full bg-electric-purple" />
-                    <span className="text-xs font-semibold text-foreground group-hover:text-accent">
-                      MD Sample
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-muted truncate w-full">Leadership</span>
                 </button>
               </div>
             </div>

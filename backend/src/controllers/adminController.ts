@@ -248,6 +248,153 @@ export class AdminController {
   }
 
   /**
+   * List executive accounts (CEO, MD, ADMIN)
+   */
+  static async listExecutives(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const result = await query(
+        `SELECT id, uid, public_uid, email, phone, role, status, is_suspended, permissions, created_at, last_login_at
+         FROM users
+         WHERE role IN ('CEO', 'MD', 'ADMIN')
+         ORDER BY CASE role WHEN 'CEO' THEN 1 WHEN 'MD' THEN 2 ELSE 3 END, created_at ASC`
+      );
+      res.json({ executives: result.rows });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Update permissions for an executive user (CEO ONLY)
+   */
+  static async updateExecutivePermissions(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { userId } = req.params;
+    const { permissions } = req.body;
+
+    if (!Array.isArray(permissions)) {
+      res.status(400).json({ error: 'Permissions must be an array of strings' });
+      return;
+    }
+
+    try {
+      const updatedUser = await withTransaction(async (client) => {
+        const targetRes = await client.query('SELECT id, email, role, permissions FROM users WHERE id = $1', [userId]);
+        if (targetRes.rows.length === 0) {
+          throw new Error('User not found');
+        }
+
+        const target = targetRes.rows[0];
+        if (target.email === 'shivaa1906@gmail.com' || target.role === ROLES.CEO) {
+          throw new Error('Primary CEO superadmin permissions are immutable');
+        }
+
+        const updateRes = await client.query(
+          `UPDATE users SET permissions = $1::jsonb, updated_at = NOW() WHERE id = $2 RETURNING id, uid, email, role, permissions, status`,
+          [JSON.stringify(permissions), userId]
+        );
+
+        await AuditLogger.logStrict(
+          {
+            actorUserId: req.user!.userId,
+            action: 'EXECUTIVE_PERMISSIONS_UPDATED',
+            entityType: 'USER',
+            entityId: userId,
+            metadata: {
+              targetEmail: target.email,
+              targetRole: target.role,
+              previousPermissions: target.permissions,
+              newPermissions: permissions,
+            },
+          },
+          client
+        );
+
+        return updateRes.rows[0];
+      });
+
+      res.json({
+        success: true,
+        message: 'Executive permissions updated successfully',
+        user: updatedUser,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Assign or transition user role (CEO ONLY)
+   */
+  static async assignUserRole(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    const validRoles = [ROLES.ADMIN, ROLES.MD, ROLES.SUPPORT, ROLES.DEVELOPER, ROLES.CLIENT];
+    if (!validRoles.includes(role)) {
+      res.status(400).json({ error: `Invalid role specified. Allowed target roles: ${validRoles.join(', ')}` });
+      return;
+    }
+
+    try {
+      const updatedUser = await withTransaction(async (client) => {
+        const targetRes = await client.query('SELECT id, email, role, permissions FROM users WHERE id = $1', [userId]);
+        if (targetRes.rows.length === 0) {
+          throw new Error('User not found');
+        }
+
+        const target = targetRes.rows[0];
+        if (target.email === 'shivaa1906@gmail.com' || target.role === ROLES.CEO) {
+          throw new Error('Primary CEO account role is permanent and cannot be modified');
+        }
+
+        let newPermissions = target.permissions;
+        if (role === ROLES.MD && (!target.permissions || target.permissions.length === 0)) {
+          newPermissions = [
+            'developers:read', 'developers:write',
+            'projects:read', 'projects:write',
+            'clients:read', 'claims:read', 'claims:write',
+            'inquiries:read', 'inquiries:write',
+            'analytics:read', 'audit_logs:read',
+            'payments:read', 'ledger:read',
+            'support:read', 'support:tickets:read', 'support:tickets:write',
+            'community:read', 'community:write'
+          ];
+        }
+
+        const updateRes = await client.query(
+          `UPDATE users SET role = $1, permissions = $2::jsonb, updated_at = NOW() WHERE id = $3 RETURNING id, uid, email, role, permissions, status`,
+          [role, JSON.stringify(newPermissions || []), userId]
+        );
+
+        await AuditLogger.logStrict(
+          {
+            actorUserId: req.user!.userId,
+            action: 'USER_ROLE_ASSIGNED',
+            entityType: 'USER',
+            entityId: userId,
+            metadata: {
+              targetEmail: target.email,
+              previousRole: target.role,
+              newRole: role,
+            },
+          },
+          client
+        );
+
+        return updateRes.rows[0];
+      });
+
+      res.json({
+        success: true,
+        message: `User role successfully transitioned to ${role}`,
+        user: updatedUser,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+
+  /**
    * Suspend any platform user account
    */
   static async suspendUser(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -255,7 +402,26 @@ export class AdminController {
     const { reason } = req.body || {};
 
     try {
+      let forbiddenError: string | null = null;
       await withTransaction(async (client) => {
+        const checkRes = await client.query('SELECT id, email, role FROM users WHERE id = $1', [userId]);
+        if (checkRes.rows.length === 0) {
+          throw new Error('User not found');
+        }
+        const target = checkRes.rows[0];
+
+        // CEO Self-Protection Safeguard: Primary CEO cannot be suspended
+        if (target.email === 'shivaa1906@gmail.com' || target.role === ROLES.CEO) {
+          forbiddenError = 'Primary CEO account is protected and cannot be suspended.';
+          return;
+        }
+
+        // Executive Suspension Guard: Only CEO can suspend executive accounts (MD or ADMIN)
+        if (['MD', 'ADMIN'].includes(target.role) && req.user!.role !== ROLES.CEO) {
+          forbiddenError = 'Only the Chief Executive Officer can suspend executive accounts.';
+          return;
+        }
+
         const userRes = await client.query(
           `UPDATE users 
            SET status = 'SUSPENDED', is_suspended = TRUE, suspended_at = NOW(), suspension_reason = $1, updated_at = NOW() 
@@ -263,10 +429,6 @@ export class AdminController {
            RETURNING id, email, role, status`,
           [reason || 'Administrative suspension', userId]
         );
-
-        if (userRes.rows.length === 0) {
-          throw new Error('User not found');
-        }
 
         const user = userRes.rows[0];
 
@@ -278,14 +440,22 @@ export class AdminController {
           );
         }
 
-        await AuditLogger.log({
-          actorUserId: req.user!.userId,
-          action: 'USER_SUSPENDED',
-          entityType: 'USER',
-          entityId: userId,
-          metadata: { email: user.email, role: user.role, reason },
-        });
+        await AuditLogger.logStrict(
+          {
+            actorUserId: req.user!.userId,
+            action: 'USER_SUSPENDED',
+            entityType: 'USER',
+            entityId: userId,
+            metadata: { email: user.email, role: user.role, reason },
+          },
+          client
+        );
       });
+
+      if (forbiddenError) {
+        res.status(403).json({ error: forbiddenError });
+        return;
+      }
 
       res.json({ success: true, message: 'User account has been suspended.' });
     } catch (err: any) {
@@ -300,7 +470,20 @@ export class AdminController {
     const { userId } = req.params;
 
     try {
+      let forbiddenError: string | null = null;
       await withTransaction(async (client) => {
+        const checkRes = await client.query('SELECT id, email, role FROM users WHERE id = $1', [userId]);
+        if (checkRes.rows.length === 0) {
+          throw new Error('User not found');
+        }
+        const target = checkRes.rows[0];
+
+        // Executive Guard: Only CEO can unsuspend executive accounts
+        if (['MD', 'ADMIN', 'CEO'].includes(target.role) && req.user!.role !== ROLES.CEO) {
+          forbiddenError = 'Only the Chief Executive Officer can modify executive accounts.';
+          return;
+        }
+
         const userRes = await client.query(
           `UPDATE users 
            SET status = 'ACTIVE', is_suspended = FALSE, suspended_at = NULL, suspension_reason = NULL, updated_at = NOW() 
@@ -308,10 +491,6 @@ export class AdminController {
            RETURNING id, email, role, status`,
           [userId]
         );
-
-        if (userRes.rows.length === 0) {
-          throw new Error('User not found');
-        }
 
         const user = userRes.rows[0];
 
@@ -323,14 +502,22 @@ export class AdminController {
           );
         }
 
-        await AuditLogger.log({
-          actorUserId: req.user!.userId,
-          action: 'USER_UNSUSPENDED',
-          entityType: 'USER',
-          entityId: userId,
-          metadata: { email: user.email, role: user.role },
-        });
+        await AuditLogger.logStrict(
+          {
+            actorUserId: req.user!.userId,
+            action: 'USER_UNSUSPENDED',
+            entityType: 'USER',
+            entityId: userId,
+            metadata: { email: user.email, role: user.role },
+          },
+          client
+        );
       });
+
+      if (forbiddenError) {
+        res.status(403).json({ error: forbiddenError });
+        return;
+      }
 
       res.json({ success: true, message: 'User account has been reactivated.' });
     } catch (err: any) {
@@ -345,7 +532,26 @@ export class AdminController {
     const { userId } = req.params;
 
     try {
+      let forbiddenError: string | null = null;
       await withTransaction(async (client) => {
+        const checkRes = await client.query('SELECT id, email, role FROM users WHERE id = $1', [userId]);
+        if (checkRes.rows.length === 0) {
+          throw new Error('User not found');
+        }
+        const target = checkRes.rows[0];
+
+        // CEO Self-Protection Safeguard: Primary CEO cannot be disabled
+        if (target.email === 'shivaa1906@gmail.com' || target.role === ROLES.CEO) {
+          forbiddenError = 'Primary CEO account is protected and cannot be disabled.';
+          return;
+        }
+
+        // Executive Disable Guard: Only CEO can disable executive accounts
+        if (['MD', 'ADMIN'].includes(target.role) && req.user!.role !== ROLES.CEO) {
+          forbiddenError = 'Only the Chief Executive Officer can disable executive accounts.';
+          return;
+        }
+
         const userRes = await client.query(
           `UPDATE users 
            SET status = 'DISABLED', updated_at = NOW() 
@@ -354,18 +560,22 @@ export class AdminController {
           [userId]
         );
 
-        if (userRes.rows.length === 0) {
-          throw new Error('User not found');
-        }
-
-        await AuditLogger.log({
-          actorUserId: req.user!.userId,
-          action: 'USER_DISABLED',
-          entityType: 'USER',
-          entityId: userId,
-          metadata: { email: userRes.rows[0].email },
-        });
+        await AuditLogger.logStrict(
+          {
+            actorUserId: req.user!.userId,
+            action: 'USER_DISABLED',
+            entityType: 'USER',
+            entityId: userId,
+            metadata: { email: userRes.rows[0].email },
+          },
+          client
+        );
       });
+
+      if (forbiddenError) {
+        res.status(403).json({ error: forbiddenError });
+        return;
+      }
 
       res.json({ success: true, message: 'User account has been disabled.' });
     } catch (err: any) {
@@ -815,20 +1025,59 @@ export class AdminController {
   }
 
   /**
+   * List inquiries across all clients and developers
+   */
+  static async listInquiries(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const inquiriesRes = await query(
+        `SELECT i.id, i.client_id, i.developer_id, i.client_tag, i.subject, i.preview, i.message,
+                i.status, i.created_at, i.updated_at,
+                d.username as developer_username, d.display_name as developer_name,
+                c.client_number, c.company_name
+         FROM inquiries i
+         JOIN developers d ON i.developer_id = d.id
+         LEFT JOIN clients c ON i.client_id = c.id
+         ORDER BY i.created_at DESC`
+      );
+      res.json({ inquiries: inquiriesRes.rows });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  /**
    * Platform analytics
    */
   static async getAnalytics(_req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const devCount = await query(`SELECT COUNT(*)::int as count FROM developers WHERE verification_status = 'VERIFIED'`);
+      const devCount = await query(
+        `SELECT COUNT(*)::int as count
+         FROM developers d
+         JOIN users u ON d.user_id = u.id
+         WHERE d.verification_status = 'VERIFIED' AND u.is_suspended = FALSE AND u.status = 'ACTIVE'`
+      );
       const clientCount = await query(`SELECT COUNT(*)::int as count FROM clients`);
       const projCount = await query(`SELECT status, COUNT(*)::int as count FROM projects GROUP BY status`);
-      const creditTotal = await query(`SELECT SUM(balance)::int as total FROM credit_accounts`);
+      const creditTotal = await query(`SELECT COALESCE(SUM(balance), 0)::int as total FROM credit_accounts`);
       const paymentTotal = await query(`SELECT COALESCE(SUM(amount), 0)::int as total FROM payments WHERE status = 'SUCCESS'`);
+      const totalProjectsRes = await query(`SELECT COUNT(*)::int as total FROM projects`);
+      const totalClaimsRes = await query(`SELECT COUNT(*)::int as total FROM project_claims`);
+      const totalInquiriesRes = await query(`SELECT COUNT(*)::int as total FROM inquiries`);
+      const supportTicketsRes = await query(`SELECT COUNT(*)::int as total FROM support_tickets`);
+
+      const totalProjects = totalProjectsRes.rows[0]?.total || 0;
+      const totalClaims = totalClaimsRes.rows[0]?.total || 0;
+      const avgClaims = totalProjects > 0 ? (totalClaims / totalProjects).toFixed(1) : '0.0';
 
       res.json({
         analytics: {
           verifiedDevelopers: devCount.rows[0]?.count || 0,
           clients: clientCount.rows[0]?.count || 0,
+          totalProjects,
+          totalClaims,
+          avgClaimsPerProject: avgClaims,
+          totalInquiries: totalInquiriesRes.rows[0]?.total || 0,
+          totalSupportTickets: supportTicketsRes.rows[0]?.total || 0,
           projectsByStatus: projCount.rows,
           totalCreditsInCirculation: creditTotal.rows[0]?.total || 0,
           totalRevenueInr: paymentTotal.rows[0]?.total || 0,

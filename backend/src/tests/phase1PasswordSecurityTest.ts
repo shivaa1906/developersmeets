@@ -626,7 +626,9 @@ async function runTestSuite() {
           if (msg.type === 'auth_success' && msg.user?.userId === dataA.user.id) {
             resolve(true);
           }
-        } catch {}
+        } catch {
+          /* ignore non-json frames */
+        }
       });
       authWs.on('error', () => resolve(false));
       setTimeout(() => resolve(false), 2500);

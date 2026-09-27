@@ -9,6 +9,7 @@ export interface User {
   email: string;
   phone?: string;
   role: UserRole;
+  permissions?: string[];
   status: UserStatus;
   email_verified?: boolean;
   is_suspended?: boolean;

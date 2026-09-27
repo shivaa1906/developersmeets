@@ -6,11 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
-import { Sliders, Shield } from 'lucide-react';
+import { Sliders, Shield, AlertTriangle } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { ThemeSettingsCard } from '@/components/ui/theme-selector';
+import { useAuth } from '@/hooks/use-auth';
+import Link from 'next/link';
 
 export default function AdminSettingsPage() {
+  const { user, isCEO, isLoading } = useAuth();
   const { addToast } = useToast();
   const [creditPrice, setCreditPrice] = React.useState('50');
   const [claimCost, setClaimCost] = React.useState('1');
@@ -30,6 +33,35 @@ export default function AdminSettingsPage() {
       );
     }, 600);
   };
+
+  if (!isLoading && !isCEO) {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <Card className="border-status-danger/40 bg-status-danger/5">
+          <CardHeader>
+            <div className="flex items-center space-x-2 text-status-danger">
+              <AlertTriangle className="h-5 w-5" />
+              <CardTitle className="text-base">Access Denied (403 Forbidden)</CardTitle>
+            </div>
+            <CardDescription className="text-status-danger/80">
+              Platform Business Rules and Global System Configuration are strictly restricted to the Chief Executive Officer (CEO).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted">
+              Your current authenticated role is <span className="font-mono font-bold text-foreground">{user?.role || 'UNAUTHORIZED'}</span>.
+              Managing Directors and staff members are not authorized to view or edit platform executive settings.
+            </p>
+            <div className="pt-2">
+              <Link href="/admin/dashboard">
+                <Button variant="secondary" size="sm">Return to Admin Overview</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">

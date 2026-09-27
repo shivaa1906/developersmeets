@@ -3,7 +3,7 @@ import { AdminController } from '../controllers/adminController.js';
 import { SupportController } from '../controllers/supportController.js';
 import { CreditController } from '../controllers/creditController.js';
 import { authenticateJwt } from '../middlewares/authMiddleware.js';
-import { requireRole, requireCreditManagement } from '../middlewares/rbacMiddleware.js';
+import { requireRole, requireCreditManagement, requireCeoOnly } from '../middlewares/rbacMiddleware.js';
 import { ROLES } from '../config/constants.js';
 
 const router = Router();
@@ -38,6 +38,14 @@ router.get('/clients', AdminController.listClients);
 // Claims monitoring
 router.get('/claims', AdminController.listAllClaims);
 
+// Inquiries oversight
+router.get('/inquiries', AdminController.listInquiries);
+
+// Executive account governance (CEO ONLY)
+router.get('/executives', AdminController.listExecutives);
+router.patch('/users/:userId/permissions', requireCeoOnly, AdminController.updateExecutivePermissions);
+router.post('/users/:userId/assign-role', requireCeoOnly, AdminController.assignUserRole);
+
 // Users & financial ledger
 router.get('/users', AdminController.listAllUsers);
 router.post('/users/:userId/suspend', AdminController.suspendUser);
@@ -54,7 +62,7 @@ router.get('/support/staff', SupportController.listStaff);
 router.post('/support/staff', SupportController.addStaff);
 router.post('/support/staff/invite', SupportController.inviteStaff);
 router.patch('/support/staff/:staffId/status', SupportController.updateStaffStatus);
-router.patch('/support/staff/:staffId/permissions', SupportController.updateStaffPermissions);
+router.patch('/support/staff/:staffId/permissions', requireRole(ROLES.CEO, ROLES.ADMIN), SupportController.updateStaffPermissions);
 router.post('/support/staff/:staffId/suspend', SupportController.suspendStaff);
 router.post('/support/staff/:staffId/remove', SupportController.removeStaffAccess);
 router.post('/support/staff/:staffId/reassign-tickets', SupportController.reassignStaffTickets);
@@ -70,8 +78,8 @@ router.get('/analytics', AdminController.getAnalytics);
 router.get('/audit-logs', AdminController.listAuditLogs);
 
 // System Settings & Financial Manual Adjustments (CEO ONLY - Prohibited to MD)
-router.get('/settings', AdminController.getSettings);
-router.patch('/settings', requireRole(ROLES.CEO), AdminController.updateSettings);
+router.get('/settings', requireCeoOnly, AdminController.getSettings);
+router.patch('/settings', requireCeoOnly, AdminController.updateSettings);
 
 // Credit Management (CEO & ADMIN ONLY - Prohibited to MD and SUPPORT)
 router.post('/credits/adjust', requireCreditManagement, AdminController.adjustCredits);

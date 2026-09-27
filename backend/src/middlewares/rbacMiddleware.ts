@@ -32,6 +32,66 @@ export function requireRole(...allowedRoles: UserRole[]) {
 }
 
 /**
+ * Enforces that only the Chief Executive Officer (CEO) can access the endpoint.
+ * All other roles (including MD and ADMIN) are denied (403 Forbidden).
+ */
+export function requireCeoOnly(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.user) {
+    res.status(401).json({ error: 'Authentication required. No session found.' });
+    return;
+  }
+
+  if (req.user.role !== ROLES.CEO) {
+    res.status(403).json({
+      error: 'Forbidden: this executive operation is strictly restricted to the Chief Executive Officer (CEO).',
+    });
+    return;
+  }
+
+  next();
+}
+
+/**
+ * Enforces that the authenticated user possesses all specified permissions.
+ * CEO role and superadmin wildcard ('*') automatically pass.
+ */
+export function requirePermission(...requiredPermissions: string[]) {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required. No session found.' });
+      return;
+    }
+
+    // CEO superadmin bypass
+    if (req.user.role === ROLES.CEO) {
+      next();
+      return;
+    }
+
+    const userPerms = req.user.permissions || [];
+    if (userPerms.includes('*')) {
+      next();
+      return;
+    }
+
+    for (const perm of requiredPermissions) {
+      if (!userPerms.includes(perm)) {
+        res.status(403).json({
+          error: `Forbidden: role '${req.user.role}' lacks required permission '${perm}'.`,
+        });
+        return;
+      }
+    }
+
+    next();
+  };
+}
+
+/**
  * Enforces that only authorized administrative roles can manage credits.
  * ADMIN and CEO are authorized.
  * MD and SUPPORT must not automatically receive credit-management authority.

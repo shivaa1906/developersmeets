@@ -25,6 +25,7 @@ export interface AuthSessionUser {
   verificationStatus?: string;
   profileImage?: string;
   avatarUrl?: string;
+  permissions?: string[];
 }
 
 interface AuthContextType {
@@ -115,9 +116,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const isCEO = user?.role === 'CEO';
-  const isAdmin = user?.role === 'ADMIN' || isCEO;
-  const isMD = user?.role === 'MD' || isCEO;
-  const isSupport = user?.role === 'SUPPORT' || isAdmin;
+  const isAdmin = user?.role === 'ADMIN';
+  const isMD = user?.role === 'MD';
+  const isSupport = user?.role === 'SUPPORT';
   const isDeveloper = user?.role === 'DEVELOPER';
   const isClient = user?.role === 'CLIENT';
   const isExecutive = isCEO || isMD || isAdmin;

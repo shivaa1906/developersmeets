@@ -44,7 +44,7 @@ export class ProjectService {
   static async getOrCreateExecutiveDeveloperId(
     userId: string,
     role: string,
-    email?: string
+    _email?: string
   ): Promise<string> {
     const existing = await query(
       `SELECT id, verification_status FROM developers WHERE user_id = $1`,
@@ -1186,7 +1186,7 @@ export class ProjectService {
   static async getPublicProjectBySlug(slugOrId: string) {
     const projRes = await query(
       `SELECT p.id, p.project_number, p.slug, p.title, p.description, p.category,
-              p.timeline, p.required_technologies, p.attachments, p.status, p.created_at,
+              p.timeline, p.required_technologies, p.status, p.created_at,
               d.id as dev_id, d.username as dev_username, d.display_name as dev_name,
               d.role_title as dev_title, COALESCE(d.profile_photo, d.profile_image, d.avatar_url) as dev_avatar
        FROM projects p

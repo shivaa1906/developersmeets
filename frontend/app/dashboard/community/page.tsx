@@ -42,17 +42,11 @@ export default function DashboardCommunityPage() {
       if (res.channels && res.channels.length > 0) {
         setChannels(res.channels);
       }
-    } catch (_err) {
-      // Fallback channels
-      setChannels([
-        { id: '1', name: '#general', slug: 'general' },
-        { id: '2', name: '#announcements', slug: 'announcements' },
-        { id: '3', name: '#frontend', slug: 'frontend' },
-        { id: '4', name: '#backend', slug: 'backend' },
-        { id: '5', name: '#ai-ml', slug: 'ai-ml' },
-      ]);
+    } catch (err: any) {
+      setChannels([]);
+      addToast('error', 'Channel Retrieval Error', err.message || 'Unable to load community channels.');
     }
-  }, []);
+  }, [addToast]);
 
   const fetchPosts = React.useCallback(async (slug: string) => {
     try {

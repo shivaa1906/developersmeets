@@ -36,7 +36,7 @@ export default function CompanyPage() {
             <CardHeader>
               <div className="flex items-center space-x-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/20 text-accent font-bold text-lg">
-                  RL
+                  SG
                 </div>
                 <div>
                   <CardTitle>{leadership.ceo.name}</CardTitle>
@@ -67,7 +67,7 @@ export default function CompanyPage() {
             <CardHeader>
               <div className="flex items-center space-x-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-electric-purple/20 text-electric-purple font-bold text-lg">
-                  SG
+                  RL
                 </div>
                 <div>
                   <CardTitle>{leadership.md.name}</CardTitle>
