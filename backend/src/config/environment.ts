@@ -27,4 +27,9 @@ export const env = {
   ARGON2_TIME_COST: parseInt(process.env.ARGON2_TIME_COST || '3', 10),
   ARGON2_PARALLELISM: parseInt(process.env.ARGON2_PARALLELISM || '4', 10),
   ARGON2_HASH_LENGTH: parseInt(process.env.ARGON2_HASH_LENGTH || '32', 10),
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
+  GOOGLE_OAUTH_REDIRECT_URI:
+    process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback',
 };
+

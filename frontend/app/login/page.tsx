@@ -42,7 +42,44 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [rememberMe, setRememberMe] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      const errorMap: Record<string, string> = {
+        cancelled: 'Google sign-in was cancelled.',
+        state_expired: 'Your Google sign-in session expired. Please try again.',
+        invalid_state: 'Your Google sign-in session expired. Please try again.',
+        missing_code: 'Authentication code was missing. Please try again.',
+        exchange_failed: 'Failed to complete sign-in with Google. Please try again.',
+        invalid_token: 'Google identity verification failed. Please try again.',
+        account_exists_conflict:
+          'An account already exists with this email. Please sign in using your existing account.',
+        account_suspended:
+          'Your account has been suspended by administration. Please contact platform support.',
+        account_disabled:
+          'Your account has been disabled. Please contact platform support.',
+        unverified_email:
+          'Your Google email address is not verified by Google. Please verify your Google account.',
+        oauth_unavailable: 'Google sign-in is temporarily unavailable.',
+      };
+      const msg = errorMap[errorParam] || 'Google sign-in failed. Please try again.';
+      setErrorMessage(msg);
+      addToast('error', 'Google Authentication', msg);
+    }
+  }, [searchParams, addToast]);
+
+  const handleGoogleLogin = () => {
+    if (isGoogleLoading) return;
+    setIsGoogleLoading(true);
+    setErrorMessage(null);
+    const requestedNext = searchParams.get('returnUrl') || searchParams.get('redirect') || searchParams.get('next');
+    const safeNext = getSafeRedirect(requestedNext);
+    const queryParam = safeNext ? `?returnUrl=${encodeURIComponent(safeNext)}` : '';
+    window.location.href = `/api/auth/google${queryParam}`;
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,6 +167,49 @@ export default function LoginPage() {
                 <span className="leading-relaxed font-medium">{errorMessage}</span>
               </div>
             )}
+
+            {/* Google OAuth Authentication */}
+            <div className="space-y-4 mb-5">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full h-11 border-border bg-surface-elevated/40 hover:bg-surface-elevated hover:border-accent/40 text-foreground font-semibold text-sm flex items-center justify-center space-x-2.5 transition-all shadow-sm group"
+                onClick={handleGoogleLogin}
+                isLoading={isGoogleLoading}
+              >
+                <svg className="h-4 w-4 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.66-5.17 3.66-9.12z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.13C3.25 21.36 7.33 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.57H1.26C.46 8.16 0 9.98 0 12s.46 3.84 1.26 5.43l4.02-3.14z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.25 2.64 1.26 6.57l4.02 3.14c.95-2.83 3.6-4.96 6.72-4.96z"
+                  />
+                </svg>
+                <span>Continue with Google</span>
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-surface px-3 text-muted uppercase tracking-wider font-mono text-[10px]">
+                    Or continue with email
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <form onSubmit={handleLogin} className="space-y-4">
               {/* Email Input with Mail Icon */}

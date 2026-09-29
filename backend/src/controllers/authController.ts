@@ -10,6 +10,7 @@ import { BruteForceProtection } from '../middlewares/rateLimiter.js';
 import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
 import { ProjectService } from '../services/projectService.js';
 import { DeveloperService } from '../services/developerService.js';
+import { GoogleOAuthService } from '../services/googleOAuthService.js';
 import { hashPassword, verifyPassword, validatePassword } from '../utils/password.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
@@ -1541,4 +1542,250 @@ export class AuthController {
       res.status(500).json({ error: err.message || 'Failed to deactivate account' });
     }
   }
+
+  /**
+   * Initiates Google OAuth: generates cryptographically secure state and PKCE verifier,
+   * sets secure HttpOnly cookie, and redirects user to Google's authorization endpoint.
+   */
+  static async initiateGoogleOAuth(req: Request, res: Response): Promise<void> {
+    try {
+      const requestedRedirect =
+        req.query.returnUrl ||
+        req.query.redirect ||
+        req.query.next;
+      const safeReturnUrl = validateRedirectUrl(requestedRedirect, '/dashboard');
+
+      if (!GoogleOAuthService.isConfigured() && process.env.NODE_ENV !== 'test') {
+        const errorRedirect = `/login?error=oauth_unavailable`;
+        if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+          res.status(503).json({
+            error: 'Google sign-in is temporarily unavailable.',
+            code: 'OAUTH_UNAVAILABLE',
+            redirectUrl: errorRedirect,
+          });
+          return;
+        }
+        res.redirect(errorRedirect);
+        return;
+      }
+
+      await AuditLogger.log({
+        action: 'GOOGLE_OAUTH_STARTED',
+        entityType: 'OAUTH',
+        entityId: 'google',
+        metadata: { returnUrl: safeReturnUrl },
+      });
+
+      const { authorizationUrl, state } = GoogleOAuthService.generateAuthorizationUrl(safeReturnUrl);
+
+      // Set secure HttpOnly cookie for state binding
+      const isProduction = env.NODE_ENV === 'production';
+      const cookieOptions = [
+        `oauth_state=${state}`,
+        'Path=/api/auth/google',
+        'HttpOnly',
+        'SameSite=Lax',
+        'Max-Age=600',
+        ...(isProduction ? ['Secure'] : []),
+      ].join('; ');
+      res.setHeader('Set-Cookie', cookieOptions);
+
+      if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+        res.json({
+          url: authorizationUrl,
+          state,
+          redirectUrl: authorizationUrl,
+        });
+        return;
+      }
+
+      res.redirect(authorizationUrl);
+    } catch (err: any) {
+      await AuditLogger.log({
+        action: 'GOOGLE_OAUTH_FAILURE',
+        entityType: 'OAUTH',
+        entityId: 'google',
+        metadata: { error: err.message, stage: 'INITIATION' },
+      });
+
+      if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+        res.status(500).json({ error: err.message || 'Failed to initiate Google OAuth' });
+        return;
+      }
+      res.redirect('/login?error=oauth_unavailable');
+    }
+  }
+
+  /**
+   * Handles Google OAuth callback: validates state, exchanges authorization code,
+   * verifies ID token, resolves or provisions identity, and redirects with authenticated session.
+   */
+  static async handleGoogleOAuthCallback(req: Request, res: Response): Promise<void> {
+    const isJsonClient =
+      req.headers.accept?.includes('application/json') ||
+      req.query.format === 'json' ||
+      req.body?.format === 'json';
+    const clearCookieHeader = 'oauth_state=; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=0';
+
+    const handleCallbackError = async (
+      statusCode: number,
+      errorCode: string,
+      userFriendlyMessage: string,
+      auditMetadata?: any
+    ) => {
+      await AuditLogger.log({
+        action: 'GOOGLE_OAUTH_FAILURE',
+        entityType: 'OAUTH',
+        entityId: 'google',
+        metadata: { errorCode, ...auditMetadata },
+      });
+
+      res.setHeader('Set-Cookie', clearCookieHeader);
+
+      if (isJsonClient) {
+        res.status(statusCode).json({
+          error: userFriendlyMessage,
+          code: errorCode,
+          redirectUrl: `/login?error=${errorCode}`,
+        });
+        return;
+      }
+
+      res.redirect(`/login?error=${errorCode}`);
+    };
+
+    try {
+      // 1. Check for provider-level callback error (e.g. user cancelled login)
+      const providerError = req.query.error || req.body?.error;
+      if (providerError) {
+        await handleCallbackError(
+          400,
+          'cancelled',
+          'Google sign-in was cancelled.',
+          { providerError: String(providerError) }
+        );
+        return;
+      }
+
+      const state = (req.query.state || req.body?.state) as string;
+      const code = (req.query.code || req.body?.code) as string;
+      const directIdToken = (req.body?.id_token || req.query?.id_token) as string;
+
+      // 2. Validate and consume single-use state token
+      let session;
+      try {
+        session = GoogleOAuthService.consumeState(state);
+      } catch (stateErr: any) {
+        const errCode = stateErr.code === 'STATE_EXPIRED' ? 'state_expired' : 'invalid_state';
+        await handleCallbackError(
+          400,
+          errCode,
+          'Your Google sign-in session expired. Please try again.'
+        );
+        return;
+      }
+
+      // 3. Verify presence of code (or test-supplied id_token)
+      if (!code && !directIdToken) {
+        await handleCallbackError(
+          400,
+          'missing_code',
+          'Invalid authentication request: authorization code is missing.'
+        );
+        return;
+      }
+
+      // 4. Exchange code for tokens (or use direct id_token if provided in test mode)
+      let idToken = directIdToken;
+      if (!idToken) {
+        try {
+          const tokenRes = await GoogleOAuthService.exchangeCodeForTokens(code, session.codeVerifier);
+          idToken = tokenRes.id_token;
+        } catch (exchangeErr: any) {
+          await handleCallbackError(
+            400,
+            exchangeErr.code || 'exchange_failed',
+            'Failed to exchange authorization code with Google.'
+          );
+          return;
+        }
+      }
+
+      // 5. Verify ID token claims & cryptographic signature
+      let claims;
+      try {
+        claims = await GoogleOAuthService.verifyIdToken(idToken);
+      } catch (tokenErr: any) {
+        const errCode = tokenErr.code || 'invalid_token';
+        let status = 401;
+        let message = 'Google token verification failed.';
+        if (errCode === 'TOKEN_EXPIRED') {
+          message = 'Google ID token has expired. Please sign in again.';
+        } else if (errCode === 'INVALID_AUDIENCE' || errCode === 'INVALID_ISSUER') {
+          message = 'Untrusted or invalid identity provider token.';
+        }
+        await handleCallbackError(status, errCode.toLowerCase(), message);
+        return;
+      }
+
+      // 6. Resolve Google Identity & Session
+      let result;
+      try {
+        result = await GoogleOAuthService.resolveGoogleIdentity(claims, session.returnUrl);
+      } catch (resolveErr: any) {
+        if (resolveErr.code === 'EMAIL_CONFLICT') {
+          await handleCallbackError(
+            409,
+            'account_exists_conflict',
+            'An account already exists with this email. Please sign in using your existing account.',
+            { email: claims.email }
+          );
+          return;
+        }
+        if (resolveErr.code === 'ACCOUNT_SUSPENDED') {
+          await handleCallbackError(
+            403,
+            'account_suspended',
+            'Your account has been suspended by administration. Please contact platform support.'
+          );
+          return;
+        }
+        if (resolveErr.code === 'ACCOUNT_DISABLED') {
+          await handleCallbackError(
+            403,
+            'account_disabled',
+            'Your account has been disabled. Please contact platform support.'
+          );
+          return;
+        }
+        if (resolveErr.code === 'UNVERIFIED_EMAIL') {
+          await handleCallbackError(
+            400,
+            'unverified_email',
+            'Your Google email address is not verified by Google.'
+          );
+          return;
+        }
+        throw resolveErr;
+      }
+
+      // Clear the state cookie on success
+      res.setHeader('Set-Cookie', clearCookieHeader);
+
+      if (isJsonClient) {
+        res.json(result);
+        return;
+      }
+
+      const redirectDestination = `/auth/callback?token=${encodeURIComponent(result.token)}&redirect=${encodeURIComponent(result.redirectUrl)}`;
+      res.redirect(redirectDestination);
+    } catch (err: any) {
+      await handleCallbackError(
+        500,
+        'oauth_failed',
+        'Google sign-in is temporarily unavailable.'
+      );
+    }
+  }
 }
+

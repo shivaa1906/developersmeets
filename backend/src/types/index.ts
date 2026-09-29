@@ -27,7 +27,7 @@ export interface DbUser {
   public_uid: string;
   email: string;
   phone?: string;
-  password_hash: string;
+  password_hash?: string | null;
   role: UserRole;
   permissions?: string[];
   status: UserStatus;
@@ -42,3 +42,18 @@ export interface DbUser {
   created_at: Date;
   updated_at: Date;
 }
+
+export interface OAuthAccount {
+  id: string;
+  user_id: string;
+  provider: string;
+  provider_subject: string;
+  provider_email?: string | null;
+  provider_email_verified?: boolean;
+  provider_display_name?: string | null;
+  provider_avatar_url?: string | null;
+  created_at: Date;
+  updated_at: Date;
+  last_used_at: Date;
+}
+
