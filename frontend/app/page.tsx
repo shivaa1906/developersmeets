@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { siteConfig } from '@/config/site';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { HeroScene } from '@/components/3d/hero-scene';
+import { DeveloperWorkspace } from '@/components/developer-core/developer-workspace';
+import { EngineeringGridBackground } from '@/components/developer-core/engineering-grid-background';
 import { TiltCard } from '@/components/3d/tilt-card';
 import { MarqueeTicker } from '@/components/landing/marquee-ticker';
 import {
@@ -24,10 +25,10 @@ import {
   Database,
   Users,
   Award,
-  BarChart3,
   GitBranch,
   Shield,
   FileCode2,
+  Radio,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -36,113 +37,98 @@ export default function HomePage() {
   return (
     <div className="flex flex-col space-y-24 sm:space-y-32 pb-24 overflow-hidden">
       {/* ─────────────────────────────────────────────────────────────
-          1. ENTERPRISE 3D HERO SECTION (NO BACKGROUND GRID, NO COLOR ANIMATIONS)
+          1. PREMIUM FUTURISTIC ENGINEERING HERO SECTION
          ───────────────────────────────────────────────────────────── */}
-      <section className="relative min-h-[88vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-16">
-        {/* Subtle, pristine ambient lighting (Zero grid lines, zero color cycling) */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[650px] h-[320px] bg-emerald-500/10 dark:bg-emerald-500/12 blur-[130px] rounded-full pointer-events-none -z-10" />
+      <section className="relative min-h-[92vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-16">
+        {/* Deep Black / Deep Green Background with Interactive Engineering Grid */}
+        <EngineeringGridBackground />
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 w-full">
           {/* Executive Category Pill */}
-          <div className="flex justify-center mb-8">
-            <div className="inline-flex items-center space-x-2.5 rounded-full border border-border/80 dark:border-emerald-500/30 bg-surface/90 dark:bg-[#101613]/90 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-foreground shadow-sm">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
+          <div className="flex justify-start mb-6">
+            <div className="inline-flex items-center space-x-2.5 rounded-full border border-border/80 dark:border-emerald-500/30 bg-[#090d0b]/80 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-foreground shadow-sm">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-mono uppercase tracking-wider text-[11px] text-muted-foreground">
-                ENTERPRISE SOFTWARE COMPANY & VERIFIED DEVELOPER GUILD
+                NEXUS DEV // AUTONOMOUS ENGINEERING &amp; DEVELOPER OPERATING SYSTEM
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-            {/* Left Column: Authoritative Static Typography & Action Group */}
-            <div className="lg:col-span-7 flex flex-col items-center lg:items-start text-center lg:text-left space-y-6">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.12]">
-                Production Software Engineering & Verified Developer Operating System
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+            {/* Left Column (approx 45%): Hero Typography & Engineering CTA */}
+            <div className="lg:col-span-5 flex flex-col items-start text-left space-y-6">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] select-none">
+                <span className="text-white block font-sans">ZERO-BIAS</span>
+                <span className="text-white block font-sans">PROJECT MATCHING.</span>
+                <span className="mt-2 block bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 bg-clip-text text-transparent font-sans">
+                  GUARANTEED
+                </span>
+                <span className="block bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 bg-clip-text text-transparent font-sans">
+                  DELIVERY.
+                </span>
               </h1>
 
-              <p className="text-base sm:text-lg text-muted leading-relaxed max-w-2xl font-normal">
-                Nexus delivers mission-critical web applications, AI automation platforms, and distributed systems for global enterprises. Commission verified engineering talent, eliminate contractor risk with automated escrow ledgers, and ship on time with guaranteed SLAs.
+              <p className="text-base sm:text-lg text-slate-300 leading-relaxed font-normal max-w-xl">
+                Developer-powered technology company building mission-critical digital products. Verified talent, anonymous project claims, credit ledgers, and seamless execution.
               </p>
 
               {/* Action Buttons */}
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
-                <Link href="/start-project">
+              <div className="flex flex-wrap items-center gap-4 pt-2 w-full">
+                <Link href="/start-project" className="group">
                   <Button
                     size="lg"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-600/20 border-0 transition-all hover:-translate-y-0.5"
-                    rightIcon={<ArrowRight className="h-4 w-4" />}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-lg shadow-emerald-500/20 border-0 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-emerald-500/40"
+                    rightIcon={<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />}
                   >
-                    Start an Enterprise Project
+                    START A PROJECT
                   </Button>
                 </Link>
+
                 <Link href="/projects">
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-border hover:border-emerald-500/40 bg-surface hover:bg-surface-elevated transition-all"
+                    className="border-border/80 hover:border-emerald-500/50 bg-[#0c120f]/80 hover:bg-[#121915] text-slate-200 hover:text-white backdrop-blur-md transition-all duration-200"
                   >
-                    Explore Shipped Systems
+                    EXPLORE SHIPPED WORK
                   </Button>
                 </Link>
-                <Link href="/join-developer">
+
+                <Link href="/join-developer" className="pt-1">
                   <Button
                     size="lg"
                     variant="ghost"
-                    className="text-muted hover:text-foreground font-mono text-xs"
+                    className="text-muted-foreground hover:text-emerald-400 font-mono text-xs px-2"
                   >
                     Join Developer Network →
                   </Button>
                 </Link>
               </div>
 
-              {/* Corporate Compliance & Trust Badges (HD Icons) */}
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 pt-4 text-xs font-mono text-muted">
-                <div className="flex items-center space-x-2">
-                  <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-500/10 text-emerald-500">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  </div>
-                  <span>100% KYC & Code Vetted</span>
+              {/* Secondary Technical Badges */}
+              <div className="pt-4 border-t border-border/40 w-full flex flex-wrap gap-2 text-[10px] font-mono text-muted-foreground">
+                <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-[#090d0b]/80 border border-border/40">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span>SYSTEM ONLINE</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-500/10 text-emerald-500">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                  </div>
-                  <span>Bank-Grade Escrow Ledger</span>
+                <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-[#090d0b]/80 border border-border/40">
+                  <Zap className="h-3 w-3 text-emerald-400" />
+                  <span>BUILD READY</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-500/10 text-emerald-500">
-                    <Zap className="h-3.5 w-3.5" />
-                  </div>
-                  <span>Automated Refund Guarantee</span>
+                <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-[#090d0b]/80 border border-border/40">
+                  <ShieldCheck className="h-3 w-3 text-emerald-400" />
+                  <span>ESCROW SECURED</span>
+                </div>
+                <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-[#090d0b]/80 border border-border/40">
+                  <Users className="h-3 w-3 text-emerald-400" />
+                  <span>VERIFIED ENGINEERS</span>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: Three.js 4K 3D Spatial Centerpiece */}
-            <div className="lg:col-span-5 relative w-full flex items-center justify-center">
-              <div className="w-full max-w-[480px] h-[440px] sm:h-[500px] relative rounded-3xl border border-border/80 dark:border-emerald-500/20 bg-surface/50 dark:bg-[#0c120f]/60 backdrop-blur-xl shadow-xl overflow-hidden p-2">
-                {/* 3D WebGL Canvas Component */}
-                <HeroScene />
-
-                {/* HD Corner Telemetry Badges */}
-                <div className="absolute top-4 left-4 z-20 pointer-events-none">
-                  <div className="flex items-center space-x-2 rounded-lg bg-surface/95 dark:bg-[#121815]/95 border border-border/80 dark:border-emerald-500/30 px-3 py-1.5 shadow-md">
-                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                    <span className="font-mono text-[11px] text-foreground font-semibold">
-                      WebGL 3D Core Active
-                    </span>
-                  </div>
-                </div>
-
-                <div className="absolute bottom-4 right-4 z-20 pointer-events-none">
-                  <div className="flex items-center space-x-2 rounded-lg bg-surface/95 dark:bg-[#121815]/95 border border-border/80 dark:border-emerald-500/30 px-3 py-1.5 shadow-md">
-                    <Code2 className="h-3.5 w-3.5 text-emerald-500" />
-                    <span className="font-mono text-[11px] text-muted-foreground font-medium">
-                      Move cursor to inspect in 3D
-                    </span>
-                  </div>
-                </div>
-              </div>
+            {/* Right Column (approx 55%): Interactive "Nexus Developer Core" Workspace */}
+            <div className="lg:col-span-7 relative w-full flex items-center justify-center">
+              <DeveloperWorkspace />
             </div>
           </div>
 
@@ -253,7 +239,7 @@ export default function HomePage() {
                 High-Concurrency DB Pools
               </span>
               <span className="text-xs font-mono px-3 py-1 rounded-md bg-surface-elevated dark:bg-black/50 text-foreground border border-border/60">
-                Edge Caching & CDN
+                Edge Caching &amp; CDN
               </span>
             </div>
           </TiltCard>
@@ -273,7 +259,7 @@ export default function HomePage() {
                 </span>
               </div>
               <h3 className="text-xl font-bold text-foreground">
-                AI Agents & Autonomous Systems
+                AI Agents &amp; Autonomous Systems
               </h3>
               <p className="mt-2 text-xs text-muted leading-relaxed">
                 Autonomous LLM agent pipelines, function-calling workflows, vector embeddings, and n8n integrations that automate complex workflows with 99.9% uptime.
@@ -283,11 +269,11 @@ export default function HomePage() {
             <div className="mt-6 pt-4 border-t border-border/60 flex flex-col space-y-2">
               <div className="flex items-center space-x-2 text-xs text-foreground">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                <span>Multi-turn streaming chat & tools</span>
+                <span>Multi-turn streaming chat &amp; tools</span>
               </div>
               <div className="flex items-center space-x-2 text-xs text-foreground">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                <span>Automated ETL & data cleaning</span>
+                <span>Automated ETL &amp; data cleaning</span>
               </div>
             </div>
           </TiltCard>
@@ -307,7 +293,7 @@ export default function HomePage() {
                 </span>
               </div>
               <h3 className="text-xl font-bold text-foreground">
-                Anonymous Escrow & Credit Claims
+                Anonymous Escrow &amp; Credit Claims
               </h3>
               <p className="mt-2 text-xs text-muted leading-relaxed">
                 Clients evaluate Developer #01, #02, #03 based purely on technical merit and architecture. Credit claims prevent spam, and unselected bids trigger automated atomic refunds.
@@ -344,7 +330,7 @@ export default function HomePage() {
                   <Users className="h-5 w-5" />
                 </div>
                 <span className="text-[11px] font-mono text-muted bg-surface-elevated dark:bg-black/40 px-3 py-1 rounded border border-border/60">
-                  KYC & VETTING
+                  KYC &amp; VETTING
                 </span>
               </div>
               <h3 className="text-xl font-bold text-foreground">
@@ -357,12 +343,12 @@ export default function HomePage() {
 
             <div className="mt-6 grid grid-cols-2 gap-3 pt-4 border-t border-border/60">
               <div className="p-3 rounded-lg bg-surface-elevated dark:bg-black/50 border border-border/60">
-                <div className="font-mono text-xs font-bold text-emerald-500">Tier 1: Identity & KYC</div>
-                <div className="text-[11px] text-muted mt-0.5">Government ID & fraud checks</div>
+                <div className="font-mono text-xs font-bold text-emerald-500">Tier 1: Identity &amp; KYC</div>
+                <div className="text-[11px] text-muted mt-0.5">Government ID &amp; fraud checks</div>
               </div>
               <div className="p-3 rounded-lg bg-surface-elevated dark:bg-black/50 border border-border/60">
                 <div className="font-mono text-xs font-bold text-emerald-500">Tier 2: Code Screening</div>
-                <div className="text-[11px] text-muted mt-0.5">Algorithmic & system design</div>
+                <div className="text-[11px] text-muted mt-0.5">Algorithmic &amp; system design</div>
               </div>
               <div className="p-3 rounded-lg bg-surface-elevated dark:bg-black/50 border border-border/60">
                 <div className="font-mono text-xs font-bold text-emerald-500">Tier 3: Repo Deep Dive</div>
@@ -405,7 +391,7 @@ export default function HomePage() {
                   <FileCode2 className="h-4 w-4" />
                 </div>
               </div>
-              <h3 className="text-lg font-bold text-foreground">Discovery & Specs</h3>
+              <h3 className="text-lg font-bold text-foreground">Discovery &amp; Specs</h3>
               <p className="mt-2 text-xs text-muted leading-relaxed">
                 Client submits project requirements. The system generates PRJ identifier, sets budget thresholds, and prepares technical milestones.
               </p>
@@ -518,7 +504,7 @@ export default function HomePage() {
               <div>
                 <span className="text-xs font-mono text-slate-300">FinTech Escrow Engine</span>
                 <h4 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
-                  Nexus Ledger & Credit Gateway
+                  Nexus Ledger &amp; Credit Gateway
                 </h4>
               </div>
             </div>
@@ -670,7 +656,7 @@ export default function HomePage() {
               {leadership.md.bio} Technical execution, developer team operations, client milestone visibility, and analytics.
             </p>
             <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
-              <span>OPERATIONS & ARCHITECTURE</span>
+              <span>OPERATIONS &amp; ARCHITECTURE</span>
               <span className="text-emerald-500 font-semibold">VERIFIED</span>
             </div>
           </TiltCard>
@@ -684,7 +670,7 @@ export default function HomePage() {
         <div className="rounded-3xl border border-border/80 dark:border-border/60 bg-[#0d110f] text-white p-8 md:p-14 text-center relative overflow-hidden shadow-xl">
           <div className="inline-flex items-center space-x-2 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-4 py-1.5 text-xs font-mono text-emerald-300 mb-6">
             <Shield className="h-3.5 w-3.5 text-emerald-400" />
-            <span>ENTERPRISE GRADE SLA & VERIFIED ESCROW</span>
+            <span>ENTERPRISE GRADE SLA &amp; VERIFIED ESCROW</span>
           </div>
 
           <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight max-w-3xl mx-auto leading-tight">
