@@ -62,6 +62,8 @@ CREATE TRIGGER trg_prevent_audit_log_tampering
     EXECUTE FUNCTION prevent_audit_log_tampering();
 
 -- 4. Default permissions for CEO and MD
+ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions jsonb DEFAULT '[]'::jsonb;
+
 UPDATE users
 SET permissions = '["*"]'::jsonb
 WHERE role = 'CEO' AND (permissions IS NULL OR permissions = '[]'::jsonb);

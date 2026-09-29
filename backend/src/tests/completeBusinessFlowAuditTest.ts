@@ -806,6 +806,9 @@ export async function runCompleteBusinessFlowAudit(): Promise<{
     // -------------------------------------------------------------------------
     // STEP 17: CLIENT CREATES SUPPORT TICKET
     // -------------------------------------------------------------------------
+    // Ensure clean state for SUP-2026-0001
+    await query(`DELETE FROM support_tickets WHERE ticket_number = 'SUP-2026-0001'`);
+
     const ticket = await SupportService.createTicket(
       client001Id,
       client001UserId,
@@ -834,6 +837,11 @@ export async function runCompleteBusinessFlowAudit(): Promise<{
     // -------------------------------------------------------------------------
     // Fetch support agent account or admin
     const supportAgentUserId = adminUserId;
+    await query(`
+      INSERT INTO support_staff (user_id, support_level, status, permissions)
+      VALUES ($1, 'SUPPORT_LEAD', 'AVAILABLE', '["SUPPORT_VIEW_TICKETS", "SUPPORT_VIEW_ALL_TICKETS", "SUPPORT_REPLY_TICKETS", "SUPPORT_CHANGE_STATUS", "SUPPORT_CREATE_BRIDGE", "SUPPORT_RESOLVE_TICKETS", "SUPPORT_CLOSE_TICKETS"]'::jsonb)
+      ON CONFLICT (user_id) DO UPDATE SET status = 'AVAILABLE', permissions = '["SUPPORT_VIEW_TICKETS", "SUPPORT_VIEW_ALL_TICKETS", "SUPPORT_REPLY_TICKETS", "SUPPORT_CHANGE_STATUS", "SUPPORT_CREATE_BRIDGE", "SUPPORT_RESOLVE_TICKETS", "SUPPORT_CLOSE_TICKETS"]'::jsonb
+    `, [supportAgentUserId]);
     await SupportService.assignTicket(ticket.id, supportAgentUserId);
 
     const bridgeData = await SupportService.getBridge(ticket.bridgeId, {

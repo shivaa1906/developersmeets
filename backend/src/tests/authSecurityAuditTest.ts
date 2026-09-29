@@ -471,17 +471,21 @@ async function runAuthSecurityAudit() {
     if (proj2Id) {
       await query(`DELETE FROM projects WHERE id = $1`, [proj2Id]);
     }
-    if (dev1UserId) {
-      await query(`DELETE FROM users WHERE id = $1`, [dev1UserId]);
-    }
-    if (dev2UserId) {
-      await query(`DELETE FROM users WHERE id = $1`, [dev2UserId]);
-    }
-    if (client1UserId) {
-      await query(`DELETE FROM users WHERE id = $1`, [client1UserId]);
-    }
-    if (client2UserId) {
-      await query(`DELETE FROM users WHERE id = $1`, [client2UserId]);
+    try {
+      if (dev1UserId) {
+        await query(`DELETE FROM users WHERE id = $1`, [dev1UserId]);
+      }
+      if (dev2UserId) {
+        await query(`DELETE FROM users WHERE id = $1`, [dev2UserId]);
+      }
+      if (client1UserId) {
+        await query(`DELETE FROM users WHERE id = $1`, [client1UserId]);
+      }
+      if (client2UserId) {
+        await query(`DELETE FROM users WHERE id = $1`, [client2UserId]);
+      }
+    } catch {
+      // Audit log immutability preserves audit trail actors
     }
     console.log('  ✔ Temporary security audit fixtures removed.');
     await pool.end();

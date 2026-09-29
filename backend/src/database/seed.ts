@@ -66,12 +66,21 @@ export async function seedSystemBootstrap(client: any, defaultPasswordHash: stri
   );
   const ceoDevId = ceoDev.rows[0].id;
 
-  await client.query(
-    `INSERT INTO credit_accounts (developer_id, user_id, balance)
-     VALUES ($1, $2, 20)
-     ON CONFLICT (developer_id) DO UPDATE SET balance = 20`,
+  const existingCeoAcc = await client.query(
+    `SELECT id FROM credit_accounts WHERE developer_id = $1 OR user_id = $2`,
     [ceoDevId, ceoUserId]
   );
+  if (existingCeoAcc.rows.length === 0) {
+    await client.query(
+      `INSERT INTO credit_accounts (developer_id, user_id, balance) VALUES ($1, $2, 20)`,
+      [ceoDevId, ceoUserId]
+    );
+  } else {
+    await client.query(
+      `UPDATE credit_accounts SET developer_id = $1, user_id = $2, balance = 20 WHERE id = $3`,
+      [ceoDevId, ceoUserId, existingCeoAcc.rows[0].id]
+    );
+  }
 
   // 2. Skills Catalog
   const skillList = [
@@ -179,12 +188,21 @@ export async function seedDevelopmentData(client: any, defaultPasswordHash: stri
   );
   const mdDevId = mdDev.rows[0].id;
 
-  await client.query(
-    `INSERT INTO credit_accounts (developer_id, user_id, balance)
-     VALUES ($1, $2, 20)
-     ON CONFLICT (developer_id) DO UPDATE SET balance = 20`,
+  const existingMdAcc = await client.query(
+    `SELECT id FROM credit_accounts WHERE developer_id = $1 OR user_id = $2`,
     [mdDevId, mdUserId]
   );
+  if (existingMdAcc.rows.length === 0) {
+    await client.query(
+      `INSERT INTO credit_accounts (developer_id, user_id, balance) VALUES ($1, $2, 20)`,
+      [mdDevId, mdUserId]
+    );
+  } else {
+    await client.query(
+      `UPDATE credit_accounts SET developer_id = $1, user_id = $2, balance = 20 WHERE id = $3`,
+      [mdDevId, mdUserId, existingMdAcc.rows[0].id]
+    );
+  }
 
   // 2. Verified Sample Developer (Rahul Kumar)
   const dev1User = await client.query(

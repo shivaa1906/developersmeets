@@ -662,7 +662,13 @@ export class SupportService {
 
     const ticket = tRes.rows[0];
 
-    const isLeadership = ['CEO', 'MD', 'ADMIN'].includes(user.role);
+    let isLeadership = ['CEO', 'MD', 'ADMIN'].includes(user.role);
+    if (!isLeadership && user.userId) {
+      const dbUser = await query('SELECT role FROM users WHERE id = $1', [user.userId]);
+      if (dbUser.rows.length > 0 && ['CEO', 'MD', 'ADMIN'].includes(dbUser.rows[0].role)) {
+        isLeadership = true;
+      }
+    }
 
     // Resolve client ID server-side
     let resolvedClientId = user.clientId;

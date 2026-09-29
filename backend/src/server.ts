@@ -94,19 +94,32 @@ app.use('/api/analytics', analyticsRoutes);
 app.use(errorHandler);
 
 const httpServer = http.createServer(app);
+httpServer.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    console.warn(`[Backend Service Notice]: Port ${env.PORT} already in use or test harness active.`);
+  } else {
+    console.error('[Backend Server Error]:', err);
+  }
+});
 realtimeServer.init(httpServer);
 
-if (process.env.NODE_ENV !== 'test') {
+const isTestHarness =
+  process.env.NODE_ENV === 'test' ||
+  process.argv.some((arg) => arg.toLowerCase().includes('test'));
+
+if (!isTestHarness && !httpServer.listening) {
   runMigrations()
     .catch((err) => {
       console.warn('[Startup Migration Warning]:', err?.message || err);
     })
     .finally(() => {
-      httpServer.listen(env.PORT, () => {
-        console.log(`[Backend Service] Listening on port ${env.PORT} (${env.NODE_ENV})`);
-        console.log(`[WebSocket Service] Initialized on ws://localhost:${env.PORT}/ws`);
-        console.log(`[Governance] CEO: ${LEADERSHIP.CEO.NAME} | MD: ${LEADERSHIP.MD.NAME}`);
-      });
+      if (!httpServer.listening) {
+        httpServer.listen(env.PORT, () => {
+          console.log(`[Backend Service] Listening on port ${env.PORT} (${env.NODE_ENV})`);
+          console.log(`[WebSocket Service] Initialized on ws://localhost:${env.PORT}/ws`);
+          console.log(`[Governance] CEO: ${LEADERSHIP.CEO.NAME} | MD: ${LEADERSHIP.MD.NAME}`);
+        });
+      }
     });
 }
 

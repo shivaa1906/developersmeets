@@ -44,6 +44,11 @@ export class RealtimeServer {
     }
 
     this.wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+    this.wss.on('error', (err: any) => {
+      if (err?.code !== 'EADDRINUSE') {
+        console.error('[WebSocketServer Error]:', err);
+      }
+    });
 
     this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
       const extWs = ws as ExtendedWebSocket;

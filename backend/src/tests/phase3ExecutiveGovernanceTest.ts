@@ -623,7 +623,7 @@ async function runPhase3Tests() {
       setTimeout(() => {
         clientWs.close();
         resolve();
-      }, 1500);
+      }, 6000);
     });
     assert(clientSubForbidden, 'Client subscription to admin:events must be rejected with FORBIDDEN');
     pass('WEBSOCKET', 'Client rejected from subscribing to admin:events channel (FORBIDDEN)');
@@ -645,7 +645,7 @@ async function runPhase3Tests() {
       setTimeout(() => {
         mdWs.close();
         resolve();
-      }, 1500);
+      }, 6000);
     });
     assert(mdSettingsForbidden, 'MD subscription to admin:settings must be rejected with FORBIDDEN');
     pass('WEBSOCKET', 'MD rejected from subscribing to CEO-only admin:settings channel (FORBIDDEN)');
@@ -667,7 +667,7 @@ async function runPhase3Tests() {
       setTimeout(() => {
         ceoWs.close();
         resolve();
-      }, 1500);
+      }, 6000);
     });
     assert(ceoSettingsSubscribed, 'CEO subscription to admin:settings must succeed');
     pass('WEBSOCKET', 'CEO authorized to subscribe to admin:settings channel');

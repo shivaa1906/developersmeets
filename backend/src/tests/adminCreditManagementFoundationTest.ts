@@ -88,6 +88,7 @@ async function runTest() {
     assert(Boolean(adminToken), 'Admin user authenticated successfully');
 
     // CEO (M. Shiva Gopi)
+    await query(`UPDATE users SET role = 'CEO', permissions = '["*"]'::jsonb WHERE email = 'shiva@nexus.dev'`);
     const ceoLoginRes = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -97,6 +98,7 @@ async function runTest() {
     assert(Boolean(ceoToken), 'CEO user authenticated successfully');
 
     // MD (Ritesh Lingamallu)
+    await query(`UPDATE users SET role = 'MD', permissions = '["developers:read", "projects:read"]'::jsonb WHERE email = 'ritesh@nexus.dev'`);
     const mdLoginRes = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -137,6 +139,7 @@ async function runTest() {
     const dev1Uid = dev1Data.user.uid;
     await query(`UPDATE developers SET verification_status = 'VERIFIED' WHERE id = $1`, [dev1DeveloperId]);
     await query(`UPDATE users SET status = 'ACTIVE', email_verified = TRUE WHERE id = $1`, [dev1UserId]);
+    await query(`UPDATE credit_accounts SET balance = 0 WHERE developer_id = $1 OR user_id = $2`, [dev1DeveloperId, dev1UserId]);
 
     const dev1LoginRes = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
