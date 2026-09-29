@@ -35,6 +35,15 @@ const config: Config = {
           blue: 'rgb(var(--electric-blue) / <alpha-value>)',
           purple: 'rgb(var(--electric-purple) / <alpha-value>)',
         },
+        klydex: {
+          emerald: '#2C8C68',
+          forest: '#0B332B',
+          mint: '#E4F1E9',
+          lightBg: '#F6F6F4',
+          darkBg: '#0A0E0C',
+          darkCard: '#121815',
+          darkBorder: '#1F2924',
+        },
         status: {
           success: '#059669',
           warning: '#D97706',
@@ -50,6 +59,21 @@ const config: Config = {
         'accent-glow': '0 0 25px -5px rgba(var(--accent-glow), 0.25)',
         'surface-card': 'var(--card-shadow)',
         'subtle-border': 'inset 0 0 0 1px rgb(var(--border))',
+        'klydex-emerald': '0 0 35px -5px rgba(44, 140, 104, 0.35)',
+      },
+      keyframes: {
+        marquee: {
+          '0%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        'pulse-slow': {
+          '0%, 100%': { opacity: '0.4', transform: 'scale(1)' },
+          '50%': { opacity: '0.8', transform: 'scale(1.05)' },
+        },
+      },
+      animation: {
+        marquee: 'marquee 35s linear infinite',
+        'pulse-slow': 'pulse-slow 6s ease-in-out infinite',
       },
     },
   },

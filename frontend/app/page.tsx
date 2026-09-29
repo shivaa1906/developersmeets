@@ -1,319 +1,690 @@
+import React from 'react';
 import Link from 'next/link';
 import { siteConfig } from '@/config/site';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Workflow,
-  Coins,
-  ShieldCheck,
-  CheckCircle2,
-  Sparkles,
-  ArrowRight,
-} from 'lucide-react';
+import { HeroScene } from '@/components/3d/hero-scene';
+import { TiltCard } from '@/components/3d/tilt-card';
+import { MarqueeTicker } from '@/components/landing/marquee-ticker';
 import { CinematicQuotes } from '@/components/landing/typewriter-quotes';
+import {
+  ArrowRight,
+  Sparkles,
+  ShieldCheck,
+  Cpu,
+  Layers,
+  Globe,
+  Lock,
+  Workflow,
+  Zap,
+  CheckCircle2,
+  Code2,
+  Terminal,
+  ExternalLink,
+  ChevronRight,
+  Server,
+  Database,
+  Users,
+  Award,
+} from 'lucide-react';
 
 export default function HomePage() {
   const leadership = siteConfig.company.leadership;
 
-  const sampleTechnologies = [
-    'Next.js 14',
-    'TypeScript',
-    'PostgreSQL',
-    'Python AI/ML',
-    'Docker',
-    'Tailwind CSS',
-    'Supabase',
-    'Three.js',
-    'GraphQL',
-    'Rust',
-    'Kubernetes',
-    'AWS Cloud',
-  ];
-
   return (
-    <div className="flex flex-col space-y-24 pb-20">
-      {/* 🎬 HERO SECTION WITH CRYSTAL-CLEAR BACKGROUND VIDEO */}
-      <section className="relative min-h-[92vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-20">
-        {/* Full-bleed Crystal-Clear Background Video */}
-        <div className="absolute inset-0 w-full h-full -z-10 overflow-hidden pointer-events-none select-none bg-black">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            poster="/videos/hero-developer-poster.jpg"
-            className="w-full h-full object-cover object-center filter brightness-105 contrast-110 opacity-100"
+    <div className="flex flex-col space-y-24 sm:space-y-32 pb-24 overflow-hidden">
+      {/* ─────────────────────────────────────────────────────────────
+          1. 3D HERO SECTION (VIDEO REMOVED — INTERACTIVE 3D WEBGL HERO)
+         ───────────────────────────────────────────────────────────── */}
+      <section className="relative min-h-[92vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-16">
+        {/* Subtle architectural grid pattern */}
+        <div className="absolute inset-0 bg-grid-subtle pointer-events-none -z-20 opacity-70" />
+
+        {/* Ambient emerald radial mesh gradients */}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-emerald-500/10 dark:bg-emerald-500/15 blur-[120px] rounded-full pointer-events-none -z-10" />
+        <div className="absolute bottom-10 right-10 w-[400px] h-[300px] bg-teal-500/10 dark:bg-teal-500/10 blur-[100px] rounded-full pointer-events-none -z-10" />
+
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 w-full">
+          {/* Top Live Availability Badge (Klydex style) */}
+          <div className="flex justify-center mb-6">
+            <div className="inline-flex items-center space-x-2.5 rounded-full border border-emerald-500/30 dark:border-emerald-400/25 bg-emerald-500/10 dark:bg-emerald-950/40 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 shadow-sm shadow-emerald-500/10 transition-all hover:border-emerald-500/50">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-mono uppercase tracking-wider text-[11px]">
+                AVAILABLE FOR NEW PROJECTS // TOP 1% VERIFIED GUILD
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            {/* Left Column: Hero Typography & CTA */}
+            <div className="lg:col-span-7 flex flex-col items-center lg:items-start text-center lg:text-left space-y-6">
+              <div className="w-full">
+                <CinematicQuotes className="text-left" />
+              </div>
+
+              <p className="text-base sm:text-lg md:text-xl text-muted leading-relaxed max-w-2xl font-normal">
+                Nexus is a developer-powered technology company engineering mission-critical web applications, AI automation systems, and distributed platforms with anonymous credit escrow and guaranteed delivery.
+              </p>
+
+              {/* Primary Action Button Cluster */}
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
+                <Link href="/start-project">
+                  <Button
+                    size="lg"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-600/25 border-0 hover:shadow-emerald-500/40 transition-all hover:-translate-y-0.5"
+                    rightIcon={<ArrowRight className="h-4 w-4" />}
+                  >
+                    Start a Project
+                  </Button>
+                </Link>
+                <Link href="/projects">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="border-border hover:border-emerald-500/50 bg-surface/80 hover:bg-surface-elevated backdrop-blur-sm transition-all"
+                  >
+                    Explore Shipped Work
+                  </Button>
+                </Link>
+                <Link href="/join-developer">
+                  <Button
+                    size="lg"
+                    variant="ghost"
+                    className="text-muted hover:text-emerald-600 dark:hover:text-emerald-400 font-mono text-xs"
+                  >
+                    Join Developer Guild →
+                  </Button>
+                </Link>
+              </div>
+
+              {/* Verified Trust Badges */}
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 pt-4 text-xs font-mono text-muted">
+                <div className="flex items-center space-x-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <span>100% Verified Engineers</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                  <span>Zero-Bias Escrow Ledger</span>
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <Zap className="h-4 w-4 text-emerald-500" />
+                  <span>Instant Credit Refunds</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: 3D Interactive Three.js Polyhedron Canvas */}
+            <div className="lg:col-span-5 relative w-full flex items-center justify-center">
+              <div className="w-full max-w-[500px] h-[440px] sm:h-[520px] relative rounded-3xl border border-emerald-500/20 dark:border-emerald-400/20 bg-gradient-to-b from-surface/60 to-surface-elevated/40 dark:from-emerald-950/20 dark:to-black/40 backdrop-blur-xl shadow-2xl overflow-hidden p-2">
+                {/* 3D WebGL Canvas Component */}
+                <HeroScene />
+
+                {/* Floating 3D Micro-Badges */}
+                <div className="absolute top-4 left-4 z-20 pointer-events-none">
+                  <div className="flex items-center space-x-2 rounded-lg bg-surface/90 dark:bg-black/80 border border-border/80 dark:border-emerald-500/30 px-3 py-1.5 shadow-lg backdrop-blur-md">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="font-mono text-[11px] text-foreground font-semibold">
+                      WebGL 3D Core Active
+                    </span>
+                  </div>
+                </div>
+
+                <div className="absolute bottom-4 right-4 z-20 pointer-events-none">
+                  <div className="flex items-center space-x-2 rounded-lg bg-surface/90 dark:bg-black/80 border border-border/80 dark:border-emerald-500/30 px-3 py-1.5 shadow-lg backdrop-blur-md">
+                    <Code2 className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="font-mono text-[11px] text-muted-foreground font-medium">
+                      Drag / Move cursor to tilt
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4-Item Live Metric Strip (3D Tilt Cards) */}
+          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
+            <TiltCard maxTilt={8} className="p-5 rounded-xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg">
+              <div className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">150+</div>
+              <div className="text-xs text-foreground font-semibold mt-1 uppercase tracking-wider">Shipped Systems</div>
+              <div className="text-[11px] text-muted mt-0.5">Production-grade deployments</div>
+            </TiltCard>
+
+            <TiltCard maxTilt={8} className="p-5 rounded-xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg">
+              <div className="text-3xl font-extrabold text-foreground font-mono">100%</div>
+              <div className="text-xs text-foreground font-semibold mt-1 uppercase tracking-wider">Verified Talent</div>
+              <div className="text-[11px] text-muted mt-0.5">Strict KYC & tech screening</div>
+            </TiltCard>
+
+            <TiltCard maxTilt={8} className="p-5 rounded-xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg">
+              <div className="text-3xl font-extrabold text-emerald-500 font-mono">₹0</div>
+              <div className="text-xs text-foreground font-semibold mt-1 uppercase tracking-wider">Unselected Risk</div>
+              <div className="text-[11px] text-muted mt-0.5">100% automated credit refunds</div>
+            </TiltCard>
+
+            <TiltCard maxTilt={8} className="p-5 rounded-xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg">
+              <div className="text-3xl font-extrabold text-teal-500 dark:text-teal-400 font-mono">99.8%</div>
+              <div className="text-xs text-foreground font-semibold mt-1 uppercase tracking-wider">Satisfaction</div>
+              <div className="text-[11px] text-muted mt-0.5">Milestone verified delivery</div>
+            </TiltCard>
+          </div>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          2. MARQUEE TECH TICKER (KLYDEX INFINITE HORIZONTAL STRIP)
+         ───────────────────────────────────────────────────────────── */}
+      <section className="w-full">
+        <MarqueeTicker />
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          3. BENTO GRID OF CAPABILITIES & PROTOCOL (KLYDEX STYLE)
+         ───────────────────────────────────────────────────────────── */}
+      <section id="capabilities" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-24">
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <Badge variant="outline" className="mb-3 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-mono uppercase tracking-wider text-[11px]">
+            [ CAPABILITIES & PROTOCOL ]
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
+            High-Performance Engineering Built for Global Scale
+          </h2>
+          <p className="mt-3 text-sm sm:text-base text-muted">
+            From modern responsive web applications to autonomous AI workflows and cryptographic credit escrow ledgers.
+          </p>
+        </div>
+
+        {/* Bento Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-12 gap-6">
+          {/* Card 1: Web Platforms & Distributed Systems (Large 8-col) */}
+          <TiltCard
+            maxTilt={6}
+            className="lg:col-span-8 p-8 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl flex flex-col justify-between"
           >
-            <source src="/videos/hero-developer.mp4" type="video/mp4" />
-          </video>
-          {/* Subtle dark contrast scrim: eliminates any white washing while keeping text & buttons razor sharp */}
-          <div className="absolute inset-0 bg-black/35 pointer-events-none" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/65 pointer-events-none" />
-          {/* Bottom edge transition into next section */}
-          <div className="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-background to-transparent pointer-events-none" />
-        </div>
-
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 text-center flex flex-col items-center justify-center">
-          <div className="inline-flex items-center space-x-2 rounded-full border border-cyan-400/40 bg-black/60 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-cyan-300 mb-6 shadow-lg shadow-cyan-950/20">
-            <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-            <span className="font-mono uppercase tracking-wider text-[11px]">Developer Company Operating System 2.0</span>
-          </div>
-
-          {/* Autolooping Quotes with Infosys-style Optical Blur & Focus */}
-          <CinematicQuotes />
-
-          <p className="mt-6 text-base sm:text-lg md:text-xl text-slate-100 max-w-2xl mx-auto font-medium leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
-            Developer-powered technology company building mission-critical digital products. Verified talent, anonymous project claims, credit ledgers, and seamless execution.
-          </p>
-
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <Link href="/projects">
-              <Button size="lg" className="bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg shadow-blue-500/25 border-0 font-semibold" rightIcon={<ArrowRight className="h-4 w-4" />}>
-                Explore Projects
-              </Button>
-            </Link>
-            <Link href="/join-developer">
-              <Button size="lg" className="bg-black/60 hover:bg-black/80 text-white border border-white/20 shadow-lg backdrop-blur-md transition-all hover:border-cyan-400/50">
-                Join Developer Network
-              </Button>
-            </Link>
-            <Link href="/start-project">
-              <Button size="lg" className="bg-black/40 hover:bg-black/70 text-slate-200 hover:text-white border border-white/20 shadow-lg backdrop-blur-md transition-all hover:border-white/40">
-                Start a Project
-              </Button>
-            </Link>
-          </div>
-
-          {/* Quick metric stats in dark frosted glass cards */}
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto border-t border-white/15 pt-10 text-left w-full">
-            <div className="p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 shadow-xl transition-all hover:border-cyan-400/50 hover:bg-black/70">
-              <div className="text-2xl sm:text-3xl font-bold text-cyan-400 font-mono">100%</div>
-              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Verified Developers</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">Strict KYC & tech screening</div>
-            </div>
-            <div className="p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 shadow-xl transition-all hover:border-cyan-400/50 hover:bg-black/70">
-              <div className="text-2xl sm:text-3xl font-bold text-white font-mono">₹50 / Cr</div>
-              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Configurable Claims</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">Pay only to submit verified bids</div>
-            </div>
-            <div className="p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 shadow-xl transition-all hover:border-cyan-400/50 hover:bg-black/70">
-              <div className="text-2xl sm:text-3xl font-bold text-purple-400 font-mono">Atomic</div>
-              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Automatic Refunds</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">Zero credit risk if unselected</div>
-            </div>
-            <div className="p-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/15 shadow-xl transition-all hover:border-cyan-400/50 hover:bg-black/70">
-              <div className="text-2xl sm:text-3xl font-bold text-emerald-400 font-mono">Private</div>
-              <div className="text-xs text-slate-300 mt-1 uppercase tracking-wider font-semibold">Anonymous Bridge</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">Zero bias client-dev matching</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. THE PROTOCOL & ARCHITECTURE */}
-      <section id="protocol" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          <div className="space-y-6">
-            <Badge variant="default">The Architecture</Badge>
-            <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Software Company + Developer Network + Client Ecosystem
-            </h2>
-            <p className="text-sm text-muted leading-relaxed">
-              We reimagined how digital products are commissioned, claimed, and delivered. By isolating client and developer identities during selection, matching technical proficiencies through strict eligibility filters, and escrowing project claims via credit ledgers, we eliminate bias and assure technical delivery.
-            </p>
-            <div className="space-y-3 pt-2">
-              <div className="flex items-start space-x-3">
-                <CheckCircle2 className="h-5 w-5 text-accent shrink-0 mt-0.5" />
-                <p className="text-xs text-muted leading-relaxed">
-                  <strong className="text-foreground">Anonymous Selection:</strong> Clients interact with Developer #01, #02, #03 without premature bias until selection.
-                </p>
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase">
+                  01 // FULL-STACK ARCHITECTURE
+                </span>
+                <span className="text-[11px] font-mono text-muted bg-surface-elevated dark:bg-black/50 px-2.5 py-1 rounded border border-border/50">
+                  NEXT.JS 14 + REACT
+                </span>
               </div>
-              <div className="flex items-start space-x-3">
-                <CheckCircle2 className="h-5 w-5 text-accent shrink-0 mt-0.5" />
-                <p className="text-xs text-muted leading-relaxed">
-                  <strong className="text-foreground">Guaranteed Fair Refunds:</strong> Developers not selected immediately receive full automated credit ledger refunds.
-                </p>
+              <h3 className="text-2xl font-bold text-foreground">
+                Enterprise Web Platforms & Microservices
+              </h3>
+              <p className="mt-3 text-sm text-muted leading-relaxed max-w-2xl">
+                We engineer scalable, SEO-optimized web applications with modern Next.js 14 App Router, TypeScript, server components, and sub-100ms API response latency. Designed to support millions of concurrent users without breaking.
+              </p>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-border/60 flex flex-wrap gap-3">
+              <span className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                Server-Side Rendering
+              </span>
+              <span className="text-xs font-mono px-3 py-1 rounded-full bg-surface-elevated dark:bg-black/60 text-muted-foreground border border-border/60">
+                Real-Time WebSockets
+              </span>
+              <span className="text-xs font-mono px-3 py-1 rounded-full bg-surface-elevated dark:bg-black/60 text-muted-foreground border border-border/60">
+                High-Concurrency DB Pools
+              </span>
+              <span className="text-xs font-mono px-3 py-1 rounded-full bg-surface-elevated dark:bg-black/60 text-muted-foreground border border-border/60">
+                Edge Caching
+              </span>
+            </div>
+          </TiltCard>
+
+          {/* Card 2: AI Agents & Automation (4-col) */}
+          <TiltCard
+            maxTilt={6}
+            className="lg:col-span-4 p-8 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase">
+                  02 // INTELLIGENCE
+                </span>
+                <Cpu className="h-5 w-5 text-emerald-500" />
               </div>
-              <div className="flex items-start space-x-3">
-                <CheckCircle2 className="h-5 w-5 text-accent shrink-0 mt-0.5" />
-                <p className="text-xs text-muted leading-relaxed">
-                  <strong className="text-foreground">Public Attribution:</strong> Completed projects showcase verified developers, driving portfolio reputation.
-                </p>
+              <h3 className="text-xl font-bold text-foreground">
+                AI Agents & Workflow Automation
+              </h3>
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                Autonomous LLM agent pipelines, function-calling workflows, vector embeddings, and n8n integrations that automate tedious manual operations with 99.9% uptime.
+              </p>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-border/60 flex flex-col space-y-2">
+              <div className="flex items-center space-x-2 text-xs text-foreground">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span>Multi-turn streaming chat & tools</span>
+              </div>
+              <div className="flex items-center space-x-2 text-xs text-foreground">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span>Automated ETL & data cleaning</span>
               </div>
             </div>
-          </div>
+          </TiltCard>
 
-          <div className="rounded-xl border border-border bg-surface p-6 shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
-              <div className="flex items-center space-x-2">
-                <span className="h-3 w-3 rounded-full bg-status-danger/70" />
-                <span className="h-3 w-3 rounded-full bg-status-warning/70" />
-                <span className="h-3 w-3 rounded-full bg-status-success/70" />
+          {/* Card 3: Anonymous Escrow Protocol (Large 6-col with interactive transaction ledger) */}
+          <TiltCard
+            maxTilt={6}
+            className="lg:col-span-6 p-8 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase">
+                  03 // CORE PROTOCOL
+                </span>
+                <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  PATENTED LEDGER
+                </span>
               </div>
-              <span className="text-[11px] font-mono text-muted">transaction-ledger.ts</span>
+              <h3 className="text-xl font-bold text-foreground">
+                Anonymous Escrow & Credit Claims
+              </h3>
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                Clients evaluate Developer #01, #02, #03 based purely on technical merit and architecture. Credit claims prevent spam, and unselected bids trigger automated atomic refunds.
+              </p>
             </div>
-            <pre className="text-xs font-mono text-slate-200 overflow-x-auto p-4 bg-slate-900 rounded-lg leading-relaxed border border-slate-800 shadow-inner">
-              <code>{`// Core Business Transaction
-await db.$transaction(async (tx) => {
-  // 1. Lock developer credit account
-  const account = await tx.creditAccounts.lock(devId);
-  // 2. Consume 1 claim credit
+
+            {/* Interactive Transaction Ledger Snippet */}
+            <div className="mt-6 rounded-xl border border-border/80 dark:border-emerald-500/30 bg-[#070b09] p-4 text-xs font-mono text-slate-200 overflow-x-auto shadow-inner">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 text-[10px] text-muted-foreground">
+                <span>transaction-ledger.ts</span>
+                <span className="text-emerald-400">STATUS: RECONCILED</span>
+              </div>
+              <pre className="text-[11px] text-emerald-400/90 leading-relaxed">
+{`await db.$transaction(async (tx) => {
+  // 1. Lock developer claim credit
   await tx.credits.deduct({ devId, amount: 1 });
-  // 3. Create anonymous bridge (Client #001 ↔ Developer #01)
-  await tx.conversations.createAnonymousBridge({
-    project: "PRJ-2026-0001",
-    clientTag: "Client #001",
-    devTag: "Developer #01"
-  });
-  // 4. On non-selection: atomic refund +1 credit
-});`}</code>
-            </pre>
-          </div>
+  // 2. Open anonymous bridge
+  await tx.bridge.open({ client: "Client #001", dev: "Dev #01" });
+  // 3. On unselected: 100% instant refund
+  await tx.refund.ensureZeroRisk({ devId });
+});`}
+              </pre>
+            </div>
+          </TiltCard>
+
+          {/* Card 4: Top 1% Developer Guild (6-col) */}
+          <TiltCard
+            maxTilt={6}
+            className="lg:col-span-6 p-8 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase">
+                  04 // VERIFICATION MATRIX
+                </span>
+                <Users className="h-5 w-5 text-emerald-500" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground">
+                Strict 4-Tier Developer Verification
+              </h3>
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                Every engineer in the Nexus guild passes through live coding challenges, identity verification, past delivery audits, and peer architecture reviews before being allowed to claim projects.
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3 pt-4 border-t border-border/60">
+              <div className="p-3 rounded-lg bg-surface-elevated dark:bg-black/50 border border-border/60">
+                <div className="font-mono text-xs font-bold text-emerald-500">Tier 1: Identity & KYC</div>
+                <div className="text-[11px] text-muted mt-0.5">Government ID & fraud checks</div>
+              </div>
+              <div className="p-3 rounded-lg bg-surface-elevated dark:bg-black/50 border border-border/60">
+                <div className="font-mono text-xs font-bold text-emerald-500">Tier 2: Code Screening</div>
+                <div className="text-[11px] text-muted mt-0.5">Algorithmic & system design</div>
+              </div>
+              <div className="p-3 rounded-lg bg-surface-elevated dark:bg-black/50 border border-border/60">
+                <div className="font-mono text-xs font-bold text-emerald-500">Tier 3: Repo Deep Dive</div>
+                <div className="text-[11px] text-muted mt-0.5">Production git history audits</div>
+              </div>
+              <div className="p-3 rounded-lg bg-surface-elevated dark:bg-black/50 border border-border/60">
+                <div className="font-mono text-xs font-bold text-emerald-500">Tier 4: Live Peer Review</div>
+                <div className="text-[11px] text-muted mt-0.5">Final executive guild pass</div>
+              </div>
+            </div>
+          </TiltCard>
         </div>
       </section>
 
-      {/* 3. INDUSTRIAL TECHNOLOGIES */}
-      <section id="technologies" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center scroll-mt-20">
-        <Badge variant="outline" className="mb-4">
-          Tech Stack
-        </Badge>
-        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-          Built With Modern Industrial Technologies
-        </h2>
-        <div className="mt-8 flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">
-          {sampleTechnologies.map((tech) => (
-            <span
-              key={tech}
-              className="rounded-lg border border-border bg-surface px-4 py-2 text-xs font-mono text-foreground hover:border-accent/40 transition-colors"
-            >
-              {tech}
-            </span>
-          ))}
-        </div>
-      </section>
-
-      {/* 4. ECOSYSTEM PIPELINE */}
-      <section id="pipeline" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-20">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <Badge variant="default" className="mb-3">
-            Ecosystem Pipeline
+      {/* ─────────────────────────────────────────────────────────────
+          4. 4-STEP EXECUTION PROCESS (KLYDEX 01-04 TIMELINE)
+         ───────────────────────────────────────────────────────────── */}
+      <section id="process" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-24">
+        <div className="text-center max-w-2xl mx-auto mb-16">
+          <Badge variant="outline" className="mb-3 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-mono uppercase tracking-wider text-[11px]">
+            [ HOW WE EXECUTE ]
           </Badge>
-          <h2 className="text-3xl font-bold text-foreground">How The Platform Works</h2>
-          <p className="mt-2 text-xs text-muted">
-            From client submission to developer claim, anonymous proposal comparison, and verified public delivery.
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
+            The 4-Step Engineering Pipeline
+          </h2>
+          <p className="mt-3 text-sm text-muted">
+            Predictable, transparent, and deterministic. From scope blueprint to production delivery.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card hoverEffect>
-            <CardHeader>
-              <div className="h-10 w-10 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-accent mb-2">
-                <Workflow className="h-5 w-5" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Step 1 */}
+          <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex flex-col justify-between">
+            <div>
+              <div className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-4">
+                01 //
               </div>
-              <CardTitle>1. Submission & Review</CardTitle>
-              <CardDescription>
-                Client posts requirements. Platform generates PRJ-2026-0001 & Client #001. Admin reviews and approves for marketplace.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+              <h3 className="text-lg font-bold text-foreground">Discovery & Specs</h3>
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                Client submits project requirements. The system generates PRJ identifier, sets budget thresholds, and prepares technical milestones.
+              </p>
+            </div>
+            <div className="mt-6 pt-4 border-t border-border/60 font-mono text-[11px] text-muted-foreground">
+              MILESTONE SPECIFICATION
+            </div>
+          </TiltCard>
 
-          <Card hoverEffect>
-            <CardHeader>
-              <div className="h-10 w-10 rounded-lg bg-electric-purple/10 border border-electric-purple/30 flex items-center justify-center text-electric-purple mb-2">
-                <Coins className="h-5 w-5" />
+          {/* Step 2 */}
+          <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex flex-col justify-between">
+            <div>
+              <div className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-4">
+                02 //
               </div>
-              <CardTitle>2. Credit Claim & Anonymity</CardTitle>
-              <CardDescription>
-                Verified developers claim slots using credits. Private anonymous chats open. Proposals submitted without personal bias.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+              <h3 className="text-lg font-bold text-foreground">Anonymous Claim</h3>
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                Verified developers claim project slots using credits. Private anonymous bridges open to review architectural plans without bias.
+              </p>
+            </div>
+            <div className="mt-6 pt-4 border-t border-border/60 font-mono text-[11px] text-muted-foreground">
+              ESCROW CREDIT LOCK
+            </div>
+          </TiltCard>
 
-          <Card hoverEffect>
-            <CardHeader>
-              <div className="h-10 w-10 rounded-lg bg-status-success/10 border border-status-success/30 flex items-center justify-center text-status-success mb-2">
-                <ShieldCheck className="h-5 w-5" />
+          {/* Step 3 */}
+          <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex flex-col justify-between">
+            <div>
+              <div className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-4">
+                03 //
               </div>
-              <CardTitle>3. Selection & Delivery</CardTitle>
-              <CardDescription>
-                Client selects lead developer. Unselected developers get 100% credit refunds automatically. Project workspace commences.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+              <h3 className="text-lg font-bold text-foreground">Agile Sprints</h3>
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                Client selects lead developer. Unselected developers instantly receive full automated refunds. Development commences with CI/CD.
+              </p>
+            </div>
+            <div className="mt-6 pt-4 border-t border-border/60 font-mono text-[11px] text-muted-foreground">
+              BI-WEEKLY DEMO BUILDS
+            </div>
+          </TiltCard>
+
+          {/* Step 4 */}
+          <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex flex-col justify-between">
+            <div>
+              <div className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-4">
+                04 //
+              </div>
+              <h3 className="text-lg font-bold text-foreground">Production Launch</h3>
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                Final security audit, automated tests pass, zero-downtime deployment, public developer attribution, and escrow release.
+              </p>
+            </div>
+            <div className="mt-6 pt-4 border-t border-border/60 font-mono text-[11px] text-muted-foreground">
+              ZERO-DOWNTIME GO-LIVE
+            </div>
+          </TiltCard>
         </div>
       </section>
 
-      {/* 5. EXECUTIVE GOVERNANCE & LEADERSHIP */}
-      <section id="leadership" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 border-t border-border pt-16 scroll-mt-20">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <Badge variant="outline" className="mb-3">
-            Governance
+      {/* ─────────────────────────────────────────────────────────────
+          5. FEATURED 3D PROJECTS SHOWCASE (SHIPPED SYSTEMS)
+         ───────────────────────────────────────────────────────────── */}
+      <section id="projects" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-24">
+        <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6">
+          <div>
+            <Badge variant="outline" className="mb-3 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-mono uppercase tracking-wider text-[11px]">
+              [ PRODUCTION WORK ]
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
+              Featured Flagship Deployments
+            </h2>
+            <p className="mt-2 text-sm text-muted max-w-xl">
+              Real platforms built and shipped through the Nexus developer network with verified attribution.
+            </p>
+          </div>
+          <Link href="/projects">
+            <Button variant="outline" className="border-border hover:border-emerald-500/50" rightIcon={<ArrowRight className="h-4 w-4" />}>
+              View All Projects
+            </Button>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Project 1 */}
+          <TiltCard maxTilt={8} className="rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl overflow-hidden group">
+            <div className="h-44 bg-gradient-to-br from-emerald-950/80 via-emerald-900/40 to-black p-6 flex flex-col justify-between border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] text-emerald-400 bg-black/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                  PRJ-2026-001
+                </span>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300">
+                  SHIPPED
+                </span>
+              </div>
+              <div>
+                <span className="text-xs font-mono text-slate-300">FinTech Escrow Engine</span>
+                <h4 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
+                  Nexus Ledger & Credit Gateway
+                </h4>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-muted leading-relaxed">
+                High-throughput distributed ledger handling concurrent claim locks, atomic refunds, and cryptographic identity anonymization.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  PostgreSQL 16
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  TypeScript
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  Prisma ORM
+                </span>
+              </div>
+            </div>
+          </TiltCard>
+
+          {/* Project 2 */}
+          <TiltCard maxTilt={8} className="rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl overflow-hidden group">
+            <div className="h-44 bg-gradient-to-br from-teal-950/80 via-teal-900/40 to-black p-6 flex flex-col justify-between border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] text-teal-400 bg-black/60 px-2 py-0.5 rounded border border-teal-500/30">
+                  PRJ-2026-002
+                </span>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300">
+                  SHIPPED
+                </span>
+              </div>
+              <div>
+                <span className="text-xs font-mono text-slate-300">AI Automation Suite</span>
+                <h4 className="text-lg font-bold text-white group-hover:text-teal-300 transition-colors">
+                  Autonomous Multi-Agent Copilot
+                </h4>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-muted leading-relaxed">
+                Real-time streaming agentic assistant with autonomous tool calling, vector database retrieval, and background execution queues.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  Python AI
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  LangGraph
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  FastAPI
+                </span>
+              </div>
+            </div>
+          </TiltCard>
+
+          {/* Project 3 */}
+          <TiltCard maxTilt={8} className="rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl overflow-hidden group">
+            <div className="h-44 bg-gradient-to-br from-slate-900 via-emerald-950/40 to-black p-6 flex flex-col justify-between border-b border-border/60">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] text-emerald-400 bg-black/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                  PRJ-2026-003
+                </span>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300">
+                  SHIPPED
+                </span>
+              </div>
+              <div>
+                <span className="text-xs font-mono text-slate-300">3D Interactive Platform</span>
+                <h4 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
+                  WebGL Logistics Command Hub
+                </h4>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-muted leading-relaxed">
+                Global real-time telemetry dashboard with interactive 3D globe visualization, container route tracking, and automated dispatch alerts.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  Three.js
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  WebSockets
+                </span>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                  Docker
+                </span>
+              </div>
+            </div>
+          </TiltCard>
+        </div>
+      </section>
+
+      {/* ─────────────────────────────────────────────────────────────
+          6. EXECUTIVE GOVERNANCE & LEADERSHIP (KLYDEX CARDS)
+         ───────────────────────────────────────────────────────────── */}
+      <section id="leadership" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 border-t border-border/80 pt-20 scroll-mt-24">
+        <div className="text-center max-w-2xl mx-auto mb-16">
+          <Badge variant="outline" className="mb-3 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-mono uppercase tracking-wider text-[11px]">
+            [ GOVERNANCE & OVERSIGHT ]
           </Badge>
-          <h2 className="text-3xl font-bold text-foreground">Company Leadership</h2>
-          <p className="mt-2 text-xs text-muted">
-            Direct executive oversight across developer verification, project claims, and platform integrity.
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
+            Company Leadership
+          </h2>
+          <p className="mt-3 text-sm text-muted">
+            Direct executive governance ensuring developer screening, credit ledger stability, and high-standard delivery.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {/* CEO */}
-          <Card className="border-accent/30 bg-surface-elevated">
-            <CardHeader>
-              <div className="flex items-center space-x-3 mb-2">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/20 text-accent font-bold text-base">
-                  RL
-                </div>
-                <div>
-                  <CardTitle>{leadership.ceo.name}</CardTitle>
-                  <p className="text-xs font-semibold text-accent">{leadership.ceo.title}</p>
-                </div>
+          {/* CEO Card */}
+          <TiltCard maxTilt={6} className="p-8 rounded-2xl border border-border/80 dark:border-emerald-500/25 bg-surface dark:bg-[#121815] shadow-xl">
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-lg font-mono">
+                SG
               </div>
-              <CardDescription className="text-xs leading-relaxed text-muted pt-2">
-                {leadership.ceo.bio} Full administrative control, user governance, payment management, and community moderation.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+              <div>
+                <h3 className="text-xl font-bold text-foreground">{leadership.ceo.name}</h3>
+                <p className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                  {leadership.ceo.title} ({leadership.ceo.role})
+                </p>
+              </div>
+            </div>
+            <p className="text-xs leading-relaxed text-muted pt-2">
+              {leadership.ceo.bio} Direct administrative control, user governance, payment management, and community moderation.
+            </p>
+            <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
+              <span>ADMINISTRATIVE GOVERNANCE</span>
+              <span className="text-emerald-500 font-semibold">VERIFIED</span>
+            </div>
+          </TiltCard>
 
-          {/* MD */}
-          <Card className="border-electric-purple/30 bg-surface-elevated">
-            <CardHeader>
-              <div className="flex items-center space-x-3 mb-2">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-electric-purple/20 text-electric-purple font-bold text-base">
-                  SG
-                </div>
-                <div>
-                  <CardTitle>{leadership.md.name}</CardTitle>
-                  <p className="text-xs font-semibold text-electric-purple">{leadership.md.title}</p>
-                </div>
+          {/* MD Card */}
+          <TiltCard maxTilt={6} className="p-8 rounded-2xl border border-border/80 dark:border-emerald-500/25 bg-surface dark:bg-[#121815] shadow-xl">
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-600 dark:text-teal-400 font-bold text-lg font-mono">
+                RL
               </div>
-              <CardDescription className="text-xs leading-relaxed text-muted pt-2">
-                {leadership.md.bio} Technical execution, developer team operations, client milestone visibility, and analytics.
-              </CardDescription>
-            </CardHeader>
-          </Card>
+              <div>
+                <h3 className="text-xl font-bold text-foreground">{leadership.md.name}</h3>
+                <p className="text-xs font-mono font-semibold text-teal-600 dark:text-teal-400">
+                  {leadership.md.title} ({leadership.md.role})
+                </p>
+              </div>
+            </div>
+            <p className="text-xs leading-relaxed text-muted pt-2">
+              {leadership.md.bio} Technical execution, developer team operations, client milestone visibility, and analytics.
+            </p>
+            <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
+              <span>OPERATIONS & ARCHITECTURE</span>
+              <span className="text-teal-500 font-semibold">VERIFIED</span>
+            </div>
+          </TiltCard>
         </div>
       </section>
 
-      {/* 6. CALL TO ACTION */}
-      <section id="cta" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-20">
-        <div className="rounded-2xl border border-accent/30 bg-gradient-to-b from-surface-elevated via-surface to-surface-elevated p-8 md:p-12 text-center relative overflow-hidden shadow-surface-card">
-          <div className="absolute top-0 right-0 w-72 h-72 bg-accent/10 blur-[90px] rounded-full pointer-events-none" />
-          <h2 className="text-3xl font-extrabold text-foreground sm:text-4xl">
-            Ready to Build The Future?
+      {/* ─────────────────────────────────────────────────────────────
+          7. HIGH-CONVERSION BOTTOM CALL TO ACTION (KLYDEX STYLE)
+         ───────────────────────────────────────────────────────────── */}
+      <section id="cta" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-24">
+        <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-b from-[#101914] via-[#0b130f] to-[#070c09] text-white p-8 md:p-14 text-center relative overflow-hidden shadow-2xl">
+          {/* Radial ambient glow */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/15 blur-[100px] rounded-full pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-teal-500/10 blur-[100px] rounded-full pointer-events-none" />
+
+          <div className="inline-flex items-center space-x-2 rounded-full border border-emerald-500/30 bg-emerald-950/60 px-4 py-1.5 text-xs font-mono text-emerald-300 mb-6">
+            <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+            <span>COMMISSION YOUR NEXT SYSTEM WITH ZERO RISK</span>
+          </div>
+
+          <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight max-w-3xl mx-auto leading-tight">
+            Ready to Build Your Next Breakthrough System?
           </h2>
-          <p className="mt-3 text-sm text-muted max-w-xl mx-auto">
+
+          <p className="mt-4 text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
             Whether you are an enterprise client commissioning mission-critical software or a top-tier engineer seeking verified credit-backed projects.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link href="/join-developer">
-              <Button size="lg">Join as Verified Developer</Button>
-            </Link>
+
+          <div className="mt-10 flex flex-wrap justify-center gap-4">
             <Link href="/start-project">
-              <Button variant="secondary" size="lg">
-                Submit a Client Project
+              <Button
+                size="lg"
+                className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-lg shadow-emerald-500/25 border-0 hover:shadow-emerald-400/40 transition-all hover:-translate-y-0.5"
+                rightIcon={<ArrowRight className="h-4 w-4" />}
+              >
+                Submit a Project
               </Button>
             </Link>
+            <Link href="/join-developer">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white/20 hover:border-emerald-400/60 bg-white/5 hover:bg-white/10 text-white backdrop-blur-md transition-all"
+              >
+                Join as Verified Developer
+              </Button>
+            </Link>
+          </div>
+
+          <div className="mt-12 flex flex-wrap justify-center gap-8 text-xs font-mono text-slate-400 border-t border-white/10 pt-8">
+            <div className="flex items-center space-x-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              <span>100% KYC Verified Engineers</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Zap className="h-4 w-4 text-emerald-400" />
+              <span>Zero Credit Risk on Non-Selection</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Lock className="h-4 w-4 text-emerald-400" />
+              <span>Bank-Grade Ledger Security</span>
+            </div>
           </div>
         </div>
       </section>

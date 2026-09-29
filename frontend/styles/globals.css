@@ -3,59 +3,59 @@
 @tailwind utilities;
 
 :root {
-  /* Bright / Light Theme Tokens */
-  --background: 255 255 255;
+  /* Klydex Inspired Light Theme Tokens (Architectural Clean Paper & Emerald) */
+  --background: 246 246 244;
   --surface: 255 255 255;
-  --surface-elevated: 248 250 252;
-  --surface-highlight: 241 245 249;
-  --border: 226 232 240;
-  --foreground: 15 23 42;
-  --muted: 100 116 139;
-  --muted-foreground: 148 163 184;
-  --accent: 2 132 199;
+  --surface-elevated: 250 250 249;
+  --surface-highlight: 241 245 243;
+  --border: 228 230 226;
+  --foreground: 19 23 22;
+  --muted: 107 114 111;
+  --muted-foreground: 140 148 145;
+  --accent: 44 140 104; /* #2C8C68 Klydex Emerald */
   --accent-foreground: 255 255 255;
-  --accent-glow: 2 132 199;
-  --electric-cyan: 2 132 199;
+  --accent-glow: 44 140 104;
+  --electric-cyan: 44 140 104;
   --electric-blue: 37 99 235;
-  --electric-purple: 124 58 237;
+  --electric-purple: 16 185 129;
 
-  --grid-color: rgba(15, 23, 42, 0.04);
+  --grid-color: rgba(19, 23, 22, 0.04);
   --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: #E2E8F0;
-  --scrollbar-track: #F8FAFC;
-  --scrollbar-thumb: #CBD5E1;
-  --scrollbar-thumb-hover: #94A3B8;
-  --selection-bg: rgba(2, 132, 199, 0.2);
-  --selection-color: #0F172A;
-  --card-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06);
+  --glass-border: #E4E6E2;
+  --scrollbar-track: #F6F6F4;
+  --scrollbar-thumb: #CBD5CD;
+  --scrollbar-thumb-hover: #94A39B;
+  --selection-bg: rgba(44, 140, 104, 0.2);
+  --selection-color: #0F1714;
+  --card-shadow: 0 4px 20px -2px rgba(19, 23, 22, 0.06);
 }
 
 .dark {
-  /* Dark Theme Tokens (Futuristic industrial dark mode) */
-  --background: 5 5 5;
-  --surface: 10 10 10;
-  --surface-elevated: 15 15 15;
-  --surface-highlight: 22 22 22;
-  --border: 33 33 33;
-  --foreground: 250 250 250;
-  --muted: 136 136 136;
-  --muted-foreground: 160 160 160;
-  --accent: 0 240 255;
-  --accent-foreground: 5 5 5;
-  --accent-glow: 0 240 255;
-  --electric-cyan: 0 240 255;
-  --electric-blue: 0 102 255;
-  --electric-purple: 112 0 255;
+  /* Klydex Inspired Dark Theme Tokens (Deep Obsidian Forest & Emerald Glow) */
+  --background: 10 14 12; /* #0A0E0C */
+  --surface: 18 24 21; /* #121815 */
+  --surface-elevated: 23 31 27; /* #171F1B */
+  --surface-highlight: 29 39 34;
+  --border: 34 46 40; /* #222E28 */
+  --foreground: 243 247 245;
+  --muted: 140 158 150;
+  --muted-foreground: 168 184 176;
+  --accent: 52 211 153; /* #34D399 Crisp Emerald */
+  --accent-foreground: 6 34 24;
+  --accent-glow: 44 140 104;
+  --electric-cyan: 52 211 153;
+  --electric-blue: 44 140 104;
+  --electric-purple: 16 185 129;
 
-  --grid-color: rgba(255, 255, 255, 0.03);
-  --glass-bg: rgba(10, 10, 10, 0.85);
-  --glass-border: #222222;
-  --scrollbar-track: #0A0A0A;
-  --scrollbar-thumb: #262626;
-  --scrollbar-thumb-hover: #383838;
-  --selection-bg: rgba(0, 240, 255, 0.3);
+  --grid-color: rgba(255, 255, 255, 0.035);
+  --glass-bg: rgba(14, 20, 17, 0.85);
+  --glass-border: #222E28;
+  --scrollbar-track: #0A0E0C;
+  --scrollbar-thumb: #233129;
+  --scrollbar-thumb-hover: #34483D;
+  --selection-bg: rgba(52, 211, 153, 0.3);
   --selection-color: #FAFAFA;
-  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.7);
+  --card-shadow: 0 4px 25px -2px rgba(0, 0, 0, 0.65);
 }
 
 * {
@@ -88,7 +88,7 @@ body {
   color: var(--selection-color);
 }
 
-/* Subtle futuristic grid pattern utility */
+/* Subtle architectural grid pattern utility */
 .bg-grid-subtle {
   background-size: 40px 40px;
   background-image: 
@@ -102,6 +102,19 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
+}
+
+/* 3D Transform Utilities */
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
 }
 
 /* Custom minimal scrollbar */
