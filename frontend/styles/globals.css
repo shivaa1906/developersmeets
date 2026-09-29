@@ -3,59 +3,57 @@
 @tailwind utilities;
 
 :root {
-  /* Klydex Inspired Light Theme Tokens (Architectural Clean Paper & Emerald) */
-  --background: 246 246 244;
+  /* Pristine Light Theme Tokens (Ultra-Clean Corporate Porcelain & Architectural Slate) */
+  --background: 248 249 250;
   --surface: 255 255 255;
-  --surface-elevated: 250 250 249;
-  --surface-highlight: 241 245 243;
-  --border: 228 230 226;
-  --foreground: 19 23 22;
-  --muted: 107 114 111;
-  --muted-foreground: 140 148 145;
-  --accent: 44 140 104; /* #2C8C68 Klydex Emerald */
+  --surface-elevated: 255 255 255;
+  --surface-highlight: 243 244 246;
+  --border: 229 231 235;
+  --foreground: 17 24 39;
+  --muted: 107 114 128;
+  --muted-foreground: 156 163 175;
+  --accent: 37 99 235; /* Crisp Corporate Blue */
   --accent-foreground: 255 255 255;
-  --accent-glow: 44 140 104;
-  --electric-cyan: 44 140 104;
+  --accent-glow: 37 99 235;
+  --electric-cyan: 14 165 233;
   --electric-blue: 37 99 235;
-  --electric-purple: 16 185 129;
+  --electric-purple: 99 102 241;
 
-  --grid-color: rgba(19, 23, 22, 0.04);
-  --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-border: #E4E6E2;
-  --scrollbar-track: #F6F6F4;
-  --scrollbar-thumb: #CBD5CD;
-  --scrollbar-thumb-hover: #94A39B;
-  --selection-bg: rgba(44, 140, 104, 0.2);
-  --selection-color: #0F1714;
-  --card-shadow: 0 4px 20px -2px rgba(19, 23, 22, 0.06);
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-border: #E5E7EB;
+  --scrollbar-track: #F9FAFB;
+  --scrollbar-thumb: #D1D5DB;
+  --scrollbar-thumb-hover: #9CA3AF;
+  --selection-bg: rgba(37, 99, 235, 0.15);
+  --selection-color: #111827;
+  --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
 }
 
 .dark {
-  /* Klydex Inspired Dark Theme Tokens (Deep Obsidian Forest & Emerald Glow) */
-  --background: 10 14 12; /* #0A0E0C */
-  --surface: 18 24 21; /* #121815 */
-  --surface-elevated: 23 31 27; /* #171F1B */
-  --surface-highlight: 29 39 34;
-  --border: 34 46 40; /* #222E28 */
-  --foreground: 243 247 245;
-  --muted: 140 158 150;
-  --muted-foreground: 168 184 176;
-  --accent: 52 211 153; /* #34D399 Crisp Emerald */
-  --accent-foreground: 6 34 24;
-  --accent-glow: 44 140 104;
+  /* Pristine Dark Theme Tokens (Deep Obsidian Studio & High-Definition Emerald Accent) */
+  --background: 8 10 12; /* #080A0C */
+  --surface: 14 17 20; /* #0E1114 */
+  --surface-elevated: 19 23 27; /* #13171B */
+  --surface-highlight: 26 31 36;
+  --border: 30 36 43; /* #1E242B */
+  --foreground: 249 250 251;
+  --muted: 156 163 175;
+  --muted-foreground: 107 114 128;
+  --accent: 52 211 153; /* Pure Crisp Emerald */
+  --accent-foreground: 6 24 18;
+  --accent-glow: 52 211 153;
   --electric-cyan: 52 211 153;
-  --electric-blue: 44 140 104;
-  --electric-purple: 16 185 129;
+  --electric-blue: 37 99 235;
+  --electric-purple: 99 102 241;
 
-  --grid-color: rgba(255, 255, 255, 0.035);
-  --glass-bg: rgba(14, 20, 17, 0.85);
-  --glass-border: #222E28;
-  --scrollbar-track: #0A0E0C;
-  --scrollbar-thumb: #233129;
-  --scrollbar-thumb-hover: #34483D;
-  --selection-bg: rgba(52, 211, 153, 0.3);
-  --selection-color: #FAFAFA;
-  --card-shadow: 0 4px 25px -2px rgba(0, 0, 0, 0.65);
+  --glass-bg: rgba(14, 17, 20, 0.88);
+  --glass-border: #1E242B;
+  --scrollbar-track: #080A0C;
+  --scrollbar-thumb: #1E242B;
+  --scrollbar-thumb-hover: #2D3748;
+  --selection-bg: rgba(52, 211, 153, 0.25);
+  --selection-color: #FFFFFF;
+  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -65,6 +63,9 @@
 
 html {
   background-color: rgb(var(--background));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 html.light {
@@ -81,6 +82,8 @@ body {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   min-height: 100vh;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::selection {
@@ -88,19 +91,11 @@ body {
   color: var(--selection-color);
 }
 
-/* Subtle architectural grid pattern utility */
-.bg-grid-subtle {
-  background-size: 40px 40px;
-  background-image: 
-    linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
-}
-
 /* Glass panel */
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
 }
 
@@ -119,8 +114,8 @@ body {
 
 /* Custom minimal scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: var(--scrollbar-track);

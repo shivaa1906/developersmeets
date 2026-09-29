@@ -1,19 +1,22 @@
-'use client';
-
 import React from 'react';
 import Link from 'next/link';
 import { siteConfig } from '@/config/site';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ComputerScene } from '@/components/3d/computer-scene';
-import { Mini3DIcon } from '@/components/3d/mini-3d-icon';
+import { HeroScene } from '@/components/3d/hero-scene';
 import { TiltCard } from '@/components/3d/tilt-card';
 import { MarqueeTicker } from '@/components/landing/marquee-ticker';
-import { CinematicQuotes } from '@/components/landing/typewriter-quotes';
 import {
   ArrowRight,
   ShieldCheck,
+  Cpu,
+  Layers,
+  Globe,
+  Lock,
+  Workflow,
+  Zap,
   CheckCircle2,
+  Code2,
   Terminal,
   ExternalLink,
   ChevronRight,
@@ -21,241 +24,259 @@ import {
   Database,
   Users,
   Award,
-  Globe2,
-  Cpu,
-  Lock,
-  Layers,
-  Sparkles,
-  Zap,
+  BarChart3,
+  GitBranch,
+  Shield,
+  FileCode2,
 } from 'lucide-react';
 
 export default function HomePage() {
   const leadership = siteConfig.company.leadership;
 
   return (
-    <div className="flex flex-col space-y-24 sm:space-y-36 pb-28 overflow-hidden">
+    <div className="flex flex-col space-y-24 sm:space-y-32 pb-24 overflow-hidden">
       {/* ─────────────────────────────────────────────────────────────
-          1. 3D HERO SECTION (NO BOX // FREE-FLOATING 3D COMPUTER)
+          1. ENTERPRISE 3D HERO SECTION (NO BACKGROUND GRID, NO COLOR ANIMATIONS)
          ───────────────────────────────────────────────────────────── */}
-      <section className="relative min-h-[92vh] flex flex-col justify-center items-center overflow-visible pt-28 pb-16">
-        {/* Crisp 4K Architectural Grid Background */}
-        <div className="absolute inset-0 bg-grid-subtle pointer-events-none -z-20 opacity-60" />
-
-        {/* Soft Ambient Light Halo (Stripe/Apple Style) */}
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 w-[720px] h-[400px] bg-emerald-500/10 dark:bg-emerald-500/15 blur-[140px] rounded-full pointer-events-none -z-10" />
-        <div className="absolute top-1/3 right-10 w-[420px] h-[360px] bg-teal-500/10 dark:bg-teal-500/15 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <section className="relative min-h-[88vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-16">
+        {/* Subtle, pristine ambient lighting (Zero grid lines, zero color cycling) */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[650px] h-[320px] bg-emerald-500/10 dark:bg-emerald-500/12 blur-[130px] rounded-full pointer-events-none -z-10" />
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 w-full">
-          {/* Top Live Availability Badge (Clean Enterprise MNC Pill) */}
-          <div className="flex justify-center lg:justify-start mb-6">
-            <div className="inline-flex items-center space-x-2.5 rounded-full border border-emerald-500/30 dark:border-emerald-400/25 bg-surface/80 dark:bg-emerald-950/30 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 shadow-sm shadow-emerald-900/10 transition-all hover:border-emerald-500/50">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-mono uppercase tracking-wider text-[11px]">
-                NEXUS DEV OS 2.4 // TOP 1% VERIFIED ENGINEERING GUILD
+          {/* Executive Category Pill */}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex items-center space-x-2.5 rounded-full border border-border/80 dark:border-emerald-500/30 bg-surface/90 dark:bg-[#101613]/90 backdrop-blur-md px-4 py-1.5 text-xs font-semibold text-foreground shadow-sm">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="font-mono uppercase tracking-wider text-[11px] text-muted-foreground">
+                ENTERPRISE SOFTWARE COMPANY & VERIFIED DEVELOPER GUILD
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            {/* Left Column: Human-Designed 4K MNC Typography & CTAs */}
-            <div className="lg:col-span-6 flex flex-col items-center lg:items-start text-center lg:text-left space-y-6">
-              <div className="w-full">
-                <CinematicQuotes className="text-left" />
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+            {/* Left Column: Authoritative Static Typography & Action Group */}
+            <div className="lg:col-span-7 flex flex-col items-center lg:items-start text-center lg:text-left space-y-6">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.12]">
+                Production Software Engineering & Verified Developer Operating System
+              </h1>
 
-              <p className="text-base sm:text-lg md:text-xl text-muted leading-relaxed max-w-2xl font-normal">
-                Nexus is a developer-powered technology company engineering mission-critical web applications, AI automation systems, and distributed platforms with anonymous credit escrow and guaranteed delivery.
+              <p className="text-base sm:text-lg text-muted leading-relaxed max-w-2xl font-normal">
+                Nexus delivers mission-critical web applications, AI automation platforms, and distributed systems for global enterprises. Commission verified engineering talent, eliminate contractor risk with automated escrow ledgers, and ship on time with guaranteed SLAs.
               </p>
 
-              {/* Primary Action Button Cluster */}
+              {/* Action Buttons */}
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
                 <Link href="/start-project">
                   <Button
                     size="lg"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-600/25 border-0 hover:shadow-emerald-500/40 transition-all hover:-translate-y-0.5"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-lg shadow-emerald-600/20 border-0 transition-all hover:-translate-y-0.5"
                     rightIcon={<ArrowRight className="h-4 w-4" />}
                   >
-                    Start a Project
+                    Start an Enterprise Project
                   </Button>
                 </Link>
                 <Link href="/projects">
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-border hover:border-emerald-500/50 bg-surface/80 hover:bg-surface-elevated backdrop-blur-sm transition-all"
+                    className="border-border hover:border-emerald-500/40 bg-surface hover:bg-surface-elevated transition-all"
                   >
-                    Explore Shipped Work
+                    Explore Shipped Systems
                   </Button>
                 </Link>
                 <Link href="/join-developer">
                   <Button
                     size="lg"
                     variant="ghost"
-                    className="text-muted hover:text-emerald-600 dark:hover:text-emerald-400 font-mono text-xs"
+                    className="text-muted hover:text-foreground font-mono text-xs"
                   >
-                    Join Developer Guild →
+                    Join Developer Network →
                   </Button>
                 </Link>
               </div>
 
-              {/* 4K HD Vector Trust Seals */}
+              {/* Corporate Compliance & Trust Badges (HD Icons) */}
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 pt-4 text-xs font-mono text-muted">
                 <div className="flex items-center space-x-2">
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                  <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-500/10 text-emerald-500">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                   </div>
-                  <span className="text-foreground font-medium">100% KYC Verified</span>
+                  <span>100% KYC & Code Vetted</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                  <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-500/10 text-emerald-500">
                     <ShieldCheck className="h-3.5 w-3.5" />
                   </div>
-                  <span className="text-foreground font-medium">Zero-Bias Escrow</span>
+                  <span>Bank-Grade Escrow Ledger</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                  <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-500/10 text-emerald-500">
                     <Zap className="h-3.5 w-3.5" />
                   </div>
-                  <span className="text-foreground font-medium">Instant Refunds</span>
+                  <span>Automated Refund Guarantee</span>
                 </div>
               </div>
             </div>
 
-            {/* 
-              Right Column: 3D COMPUTER WORKSTATION
-              IMPORTANT: NOT IN A BOX! Freely floating in open space with dynamic mouse parallax!
-            */}
-            <div className="lg:col-span-6 relative w-full flex items-center justify-center overflow-visible pointer-events-auto">
-              <ComputerScene />
+            {/* Right Column: Three.js 4K 3D Spatial Centerpiece */}
+            <div className="lg:col-span-5 relative w-full flex items-center justify-center">
+              <div className="w-full max-w-[480px] h-[440px] sm:h-[500px] relative rounded-3xl border border-border/80 dark:border-emerald-500/20 bg-surface/50 dark:bg-[#0c120f]/60 backdrop-blur-xl shadow-xl overflow-hidden p-2">
+                {/* 3D WebGL Canvas Component */}
+                <HeroScene />
+
+                {/* HD Corner Telemetry Badges */}
+                <div className="absolute top-4 left-4 z-20 pointer-events-none">
+                  <div className="flex items-center space-x-2 rounded-lg bg-surface/95 dark:bg-[#121815]/95 border border-border/80 dark:border-emerald-500/30 px-3 py-1.5 shadow-md">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="font-mono text-[11px] text-foreground font-semibold">
+                      WebGL 3D Core Active
+                    </span>
+                  </div>
+                </div>
+
+                <div className="absolute bottom-4 right-4 z-20 pointer-events-none">
+                  <div className="flex items-center space-x-2 rounded-lg bg-surface/95 dark:bg-[#121815]/95 border border-border/80 dark:border-emerald-500/30 px-3 py-1.5 shadow-md">
+                    <Code2 className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="font-mono text-[11px] text-muted-foreground font-medium">
+                      Move cursor to inspect in 3D
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* 4-Item Live Metric Strip Powered by Interactive Three.js 3D Icons */}
+          {/* 4-Item Live Corporate Metric Strip (3D Tilt Cards with HD Icons) */}
           <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
-            <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex items-center space-x-4">
-              <Mini3DIcon type="cube" size={54} color={0x34d399} />
-              <div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-foreground font-mono">150+</div>
-                <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider">Shipped Systems</div>
-                <div className="text-[11px] text-muted">Production deployments</div>
+            <TiltCard maxTilt={6} className="p-5 rounded-xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-2xl sm:text-3xl font-extrabold text-foreground font-mono">150+</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <Layers className="h-4 w-4" />
+                </div>
               </div>
+              <div className="text-xs text-foreground font-semibold uppercase tracking-wider">Shipped Systems</div>
+              <div className="text-[11px] text-muted mt-0.5">Production-grade enterprise builds</div>
             </TiltCard>
 
-            <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex items-center space-x-4">
-              <Mini3DIcon type="shield" size={54} color={0x2dd4bf} />
-              <div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-foreground font-mono">100%</div>
-                <div className="text-xs text-teal-600 dark:text-teal-400 font-semibold uppercase tracking-wider">Verified Talent</div>
-                <div className="text-[11px] text-muted">Strict KYC & tech pass</div>
+            <TiltCard maxTilt={6} className="p-5 rounded-xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-2xl sm:text-3xl font-extrabold text-foreground font-mono">100%</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <Users className="h-4 w-4" />
+                </div>
               </div>
+              <div className="text-xs text-foreground font-semibold uppercase tracking-wider">Verified Engineers</div>
+              <div className="text-[11px] text-muted mt-0.5">Multi-stage technical screening</div>
             </TiltCard>
 
-            <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex items-center space-x-4">
-              <Mini3DIcon type="database" size={54} color={0x10b981} />
-              <div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-foreground font-mono">₹0</div>
-                <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider">Unselected Risk</div>
-                <div className="text-[11px] text-muted">100% automatic refunds</div>
+            <TiltCard maxTilt={6} className="p-5 rounded-xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-2xl sm:text-3xl font-extrabold text-foreground font-mono">₹0</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
               </div>
+              <div className="text-xs text-foreground font-semibold uppercase tracking-wider">Unselected Bid Risk</div>
+              <div className="text-[11px] text-muted mt-0.5">Automated credit ledger refunds</div>
             </TiltCard>
 
-            <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex items-center space-x-4">
-              <Mini3DIcon type="quantum" size={54} color={0x059669} />
-              <div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-foreground font-mono">99.8%</div>
-                <div className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider">Signoff Rate</div>
-                <div className="text-[11px] text-muted">Milestone approved</div>
+            <TiltCard maxTilt={6} className="p-5 rounded-xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-2xl sm:text-3xl font-extrabold text-foreground font-mono">99.8%</span>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <Award className="h-4 w-4" />
+                </div>
               </div>
+              <div className="text-xs text-foreground font-semibold uppercase tracking-wider">SLA Milestone Rate</div>
+              <div className="text-[11px] text-muted mt-0.5">Client sign-off on delivery</div>
             </TiltCard>
           </div>
         </div>
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          2. ENTERPRISE TECH MARQUEE (INFINITE SMOOTH STREAM)
+          2. CORPORATE TECHNOLOGY MARQUEE STRIP
          ───────────────────────────────────────────────────────────── */}
       <section className="w-full">
         <MarqueeTicker />
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          3. BENTO GRID OF CAPABILITIES & PROTOCOL (WITH 3D ICONS)
+          3. CORE ENTERPRISE DISCIPLINES (BENTO GRID WITH HD ICONS)
          ───────────────────────────────────────────────────────────── */}
       <section id="capabilities" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-24">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <Badge variant="outline" className="mb-3 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-mono uppercase tracking-wider text-[11px]">
+          <Badge variant="outline" className="mb-3 font-mono uppercase tracking-wider text-[11px]">
             [ ENTERPRISE CAPABILITIES ]
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-            High-Performance Engineering Built for Global Scale
+            High-Performance Engineering Built for Critical Scale
           </h2>
           <p className="mt-3 text-sm sm:text-base text-muted">
-            From modern responsive web applications to autonomous AI workflows and cryptographic credit escrow ledgers.
+            End-to-end technology execution from high-throughput distributed architectures to autonomous agent pipelines.
           </p>
         </div>
 
         {/* Bento Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-12 gap-6">
-          {/* Card 1: Web Platforms & Microservices (Large 8-col) */}
+          {/* Card 1: Enterprise Web Platforms & Microservices (Large 8-col) */}
           <TiltCard
-            maxTilt={6}
-            className="lg:col-span-8 p-8 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl flex flex-col justify-between"
+            maxTilt={5}
+            className="lg:col-span-8 p-8 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-3">
-                  <Mini3DIcon type="layers" size={50} color={0x34d399} />
-                  <div>
-                    <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase">
-                      01 // FULL-STACK ARCHITECTURE
-                    </span>
-                    <h3 className="text-2xl font-bold text-foreground">
-                      Enterprise Web Platforms & Microservices
-                    </h3>
-                  </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                  <Globe className="h-5 w-5" />
                 </div>
-                <span className="text-[11px] font-mono text-muted bg-surface-elevated dark:bg-black/50 px-2.5 py-1 rounded border border-border/50">
-                  NEXT.JS 14
+                <span className="text-[11px] font-mono text-muted bg-surface-elevated dark:bg-black/40 px-3 py-1 rounded border border-border/60">
+                  NEXT.JS 14 + REACT
                 </span>
               </div>
-              <p className="mt-2 text-sm text-muted leading-relaxed max-w-2xl">
-                We engineer scalable, SEO-optimized web applications with modern Next.js 14 App Router, TypeScript, server components, and sub-100ms API response latency. Designed to support millions of concurrent users without breaking.
+              <h3 className="text-2xl font-bold text-foreground">
+                Enterprise Web Platforms & Microservices
+              </h3>
+              <p className="mt-3 text-sm text-muted leading-relaxed max-w-2xl">
+                We engineer scalable, SEO-optimized web applications with Next.js 14 App Router, TypeScript, server components, and sub-100ms API response latency. Designed to support millions of concurrent users with rock-solid stability.
               </p>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-border/60 flex flex-wrap gap-3">
-              <span className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            <div className="mt-8 pt-6 border-t border-border/60 flex flex-wrap gap-2.5">
+              <span className="text-xs font-mono px-3 py-1 rounded-md bg-surface-elevated dark:bg-black/50 text-foreground border border-border/60">
                 Server-Side Rendering
               </span>
-              <span className="text-xs font-mono px-3 py-1 rounded-full bg-surface-elevated dark:bg-black/60 text-muted-foreground border border-border/60">
+              <span className="text-xs font-mono px-3 py-1 rounded-md bg-surface-elevated dark:bg-black/50 text-foreground border border-border/60">
                 Real-Time WebSockets
               </span>
-              <span className="text-xs font-mono px-3 py-1 rounded-full bg-surface-elevated dark:bg-black/60 text-muted-foreground border border-border/60">
+              <span className="text-xs font-mono px-3 py-1 rounded-md bg-surface-elevated dark:bg-black/50 text-foreground border border-border/60">
                 High-Concurrency DB Pools
               </span>
-              <span className="text-xs font-mono px-3 py-1 rounded-full bg-surface-elevated dark:bg-black/60 text-muted-foreground border border-border/60">
-                Edge Caching
+              <span className="text-xs font-mono px-3 py-1 rounded-md bg-surface-elevated dark:bg-black/50 text-foreground border border-border/60">
+                Edge Caching & CDN
               </span>
             </div>
           </TiltCard>
 
           {/* Card 2: AI Agents & Automation (4-col) */}
           <TiltCard
-            maxTilt={6}
-            className="lg:col-span-4 p-8 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl flex flex-col justify-between"
+            maxTilt={5}
+            className="lg:col-span-4 p-8 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md flex flex-col justify-between"
           >
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase">
-                  02 // INTELLIGENCE
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                  <Cpu className="h-5 w-5" />
+                </div>
+                <span className="text-[11px] font-mono text-muted bg-surface-elevated dark:bg-black/40 px-3 py-1 rounded border border-border/60">
+                  AI / LLM
                 </span>
-                <Mini3DIcon type="quantum" size={46} color={0x2dd4bf} />
               </div>
               <h3 className="text-xl font-bold text-foreground">
-                AI Agents & Workflows
+                AI Agents & Autonomous Systems
               </h3>
               <p className="mt-2 text-xs text-muted leading-relaxed">
-                Autonomous LLM agent pipelines, function-calling workflows, vector embeddings, and n8n integrations that automate operations with 99.9% uptime.
+                Autonomous LLM agent pipelines, function-calling workflows, vector embeddings, and n8n integrations that automate complex workflows with 99.9% uptime.
               </p>
             </div>
 
@@ -271,20 +292,17 @@ export default function HomePage() {
             </div>
           </TiltCard>
 
-          {/* Card 3: Anonymous Escrow Protocol (Large 6-col with interactive transaction ledger) */}
+          {/* Card 3: Cryptographic Escrow & Financial Ledgers (6-col) */}
           <TiltCard
-            maxTilt={6}
-            className="lg:col-span-6 p-8 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl flex flex-col justify-between"
+            maxTilt={5}
+            className="lg:col-span-6 p-8 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md flex flex-col justify-between"
           >
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Mini3DIcon type="database" size={44} color={0x10b981} />
-                  <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase">
-                    03 // CORE PROTOCOL
-                  </span>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                  <ShieldCheck className="h-5 w-5" />
                 </div>
-                <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20">
                   PATENTED LEDGER
                 </span>
               </div>
@@ -296,8 +314,8 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* Interactive Transaction Ledger Snippet */}
-            <div className="mt-6 rounded-xl border border-border/80 dark:border-emerald-500/30 bg-[#070b09] p-4 text-xs font-mono text-slate-200 overflow-x-auto shadow-inner">
+            {/* Clean Transaction Ledger Code Window */}
+            <div className="mt-6 rounded-xl border border-border/80 dark:border-border/60 bg-[#070b09] p-4 text-xs font-mono text-slate-200 overflow-x-auto shadow-inner">
               <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-2 text-[10px] text-muted-foreground">
                 <span>transaction-ledger.ts</span>
                 <span className="text-emerald-400">STATUS: RECONCILED</span>
@@ -315,20 +333,19 @@ export default function HomePage() {
             </div>
           </TiltCard>
 
-          {/* Card 4: Top 1% Developer Guild (6-col) */}
+          {/* Card 4: Top 1% Developer Guild & 4-Tier Screening (6-col) */}
           <TiltCard
-            maxTilt={6}
-            className="lg:col-span-6 p-8 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl flex flex-col justify-between"
+            maxTilt={5}
+            className="lg:col-span-6 p-8 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md flex flex-col justify-between"
           >
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Mini3DIcon type="shield" size={44} color={0x34d399} />
-                  <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold tracking-widest uppercase">
-                    04 // VERIFICATION MATRIX
-                  </span>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+                  <Users className="h-5 w-5" />
                 </div>
-                <Users className="h-5 w-5 text-emerald-500" />
+                <span className="text-[11px] font-mono text-muted bg-surface-elevated dark:bg-black/40 px-3 py-1 rounded border border-border/60">
+                  KYC & VETTING
+                </span>
               </div>
               <h3 className="text-xl font-bold text-foreground">
                 Strict 4-Tier Developer Verification
@@ -361,15 +378,15 @@ export default function HomePage() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          4. 4-STEP EXECUTION PROCESS (KLYDEX 01-04 TIMELINE)
+          4. 4-PHASE DETERMINISTIC DELIVERY LIFECYCLE
          ───────────────────────────────────────────────────────────── */}
       <section id="process" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-24">
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <Badge variant="outline" className="mb-3 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-mono uppercase tracking-wider text-[11px]">
-            [ HOW WE EXECUTE ]
+          <Badge variant="outline" className="mb-3 font-mono uppercase tracking-wider text-[11px]">
+            [ DELIVERY LIFECYCLE ]
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-            The 4-Step Engineering Pipeline
+            The 4-Phase Engineering Pipeline
           </h2>
           <p className="mt-3 text-sm text-muted">
             Predictable, transparent, and deterministic. From scope blueprint to production delivery.
@@ -377,11 +394,16 @@ export default function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Step 1 */}
-          <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex flex-col justify-between">
+          {/* Phase 1 */}
+          <TiltCard maxTilt={6} className="p-6 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md flex flex-col justify-between">
             <div>
-              <div className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-4">
-                01 //
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-mono text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                  01 //
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <FileCode2 className="h-4 w-4" />
+                </div>
               </div>
               <h3 className="text-lg font-bold text-foreground">Discovery & Specs</h3>
               <p className="mt-2 text-xs text-muted leading-relaxed">
@@ -389,15 +411,20 @@ export default function HomePage() {
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-border/60 font-mono text-[11px] text-muted-foreground">
-              MILESTONE SPECIFICATION
+              TECHNICAL BLUEPRINT
             </div>
           </TiltCard>
 
-          {/* Step 2 */}
-          <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex flex-col justify-between">
+          {/* Phase 2 */}
+          <TiltCard maxTilt={6} className="p-6 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md flex flex-col justify-between">
             <div>
-              <div className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-4">
-                02 //
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-mono text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                  02 //
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <Lock className="h-4 w-4" />
+                </div>
               </div>
               <h3 className="text-lg font-bold text-foreground">Anonymous Claim</h3>
               <p className="mt-2 text-xs text-muted leading-relaxed">
@@ -409,11 +436,16 @@ export default function HomePage() {
             </div>
           </TiltCard>
 
-          {/* Step 3 */}
-          <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex flex-col justify-between">
+          {/* Phase 3 */}
+          <TiltCard maxTilt={6} className="p-6 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md flex flex-col justify-between">
             <div>
-              <div className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-4">
-                03 //
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-mono text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                  03 //
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <Workflow className="h-4 w-4" />
+                </div>
               </div>
               <h3 className="text-lg font-bold text-foreground">Agile Sprints</h3>
               <p className="mt-2 text-xs text-muted leading-relaxed">
@@ -421,17 +453,22 @@ export default function HomePage() {
               </p>
             </div>
             <div className="mt-6 pt-4 border-t border-border/60 font-mono text-[11px] text-muted-foreground">
-              BI-WEEKLY DEMO BUILDS
+              BI-WEEKLY DEMO GATES
             </div>
           </TiltCard>
 
-          {/* Step 4 */}
-          <TiltCard maxTilt={8} className="p-6 rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-lg flex flex-col justify-between">
+          {/* Phase 4 */}
+          <TiltCard maxTilt={6} className="p-6 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md flex flex-col justify-between">
             <div>
-              <div className="font-mono text-2xl font-bold text-emerald-600 dark:text-emerald-400 mb-4">
-                04 //
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-mono text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                  04 //
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+                  <Server className="h-4 w-4" />
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-foreground">Production Launch</h3>
+              <h3 className="text-lg font-bold text-foreground">Production Release</h3>
               <p className="mt-2 text-xs text-muted leading-relaxed">
                 Final security audit, automated tests pass, zero-downtime deployment, public developer attribution, and escrow release.
               </p>
@@ -444,23 +481,23 @@ export default function HomePage() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          5. FEATURED 3D PROJECTS SHOWCASE (SHIPPED SYSTEMS)
+          5. FLAGSHIP PRODUCTION SYSTEMS SHOWCASE
          ───────────────────────────────────────────────────────────── */}
       <section id="projects" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-24">
         <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6">
           <div>
-            <Badge variant="outline" className="mb-3 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-mono uppercase tracking-wider text-[11px]">
+            <Badge variant="outline" className="mb-3 font-mono uppercase tracking-wider text-[11px]">
               [ PRODUCTION WORK ]
             </Badge>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-              Featured Flagship Deployments
+              Featured Enterprise Deployments
             </h2>
             <p className="mt-2 text-sm text-muted max-w-xl">
               Real platforms built and shipped through the Nexus developer network with verified attribution.
             </p>
           </div>
           <Link href="/projects">
-            <Button variant="outline" className="border-border hover:border-emerald-500/50" rightIcon={<ArrowRight className="h-4 w-4" />}>
+            <Button variant="outline" className="border-border hover:border-emerald-500/40" rightIcon={<ArrowRight className="h-4 w-4" />}>
               View All Projects
             </Button>
           </Link>
@@ -468,13 +505,13 @@ export default function HomePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Project 1 */}
-          <TiltCard maxTilt={8} className="rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl overflow-hidden group">
-            <div className="h-44 bg-gradient-to-br from-emerald-950/80 via-emerald-900/40 to-black p-6 flex flex-col justify-between border-b border-border/60">
+          <TiltCard maxTilt={6} className="rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md overflow-hidden group">
+            <div className="h-44 bg-gradient-to-br from-slate-900 to-black p-6 flex flex-col justify-between border-b border-border/60">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px] text-emerald-400 bg-black/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                <span className="font-mono text-[11px] text-emerald-400 bg-black/70 px-2 py-0.5 rounded border border-emerald-500/30">
                   PRJ-2026-001
                 </span>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400">
                   SHIPPED
                 </span>
               </div>
@@ -490,13 +527,13 @@ export default function HomePage() {
                 High-throughput distributed ledger handling concurrent claim locks, atomic refunds, and cryptographic identity anonymization.
               </p>
               <div className="flex flex-wrap gap-2 pt-2">
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   PostgreSQL 16
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   TypeScript
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   Prisma ORM
                 </span>
               </div>
@@ -504,19 +541,19 @@ export default function HomePage() {
           </TiltCard>
 
           {/* Project 2 */}
-          <TiltCard maxTilt={8} className="rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl overflow-hidden group">
-            <div className="h-44 bg-gradient-to-br from-teal-950/80 via-teal-900/40 to-black p-6 flex flex-col justify-between border-b border-border/60">
+          <TiltCard maxTilt={6} className="rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md overflow-hidden group">
+            <div className="h-44 bg-gradient-to-br from-slate-900 to-black p-6 flex flex-col justify-between border-b border-border/60">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px] text-teal-400 bg-black/60 px-2 py-0.5 rounded border border-teal-500/30">
+                <span className="font-mono text-[11px] text-emerald-400 bg-black/70 px-2 py-0.5 rounded border border-emerald-500/30">
                   PRJ-2026-002
                 </span>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400">
                   SHIPPED
                 </span>
               </div>
               <div>
                 <span className="text-xs font-mono text-slate-300">AI Automation Suite</span>
-                <h4 className="text-lg font-bold text-white group-hover:text-teal-300 transition-colors">
+                <h4 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors">
                   Autonomous Multi-Agent Copilot
                 </h4>
               </div>
@@ -526,13 +563,13 @@ export default function HomePage() {
                 Real-time streaming agentic assistant with autonomous tool calling, vector database retrieval, and background execution queues.
               </p>
               <div className="flex flex-wrap gap-2 pt-2">
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   Python AI
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   LangGraph
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   FastAPI
                 </span>
               </div>
@@ -540,13 +577,13 @@ export default function HomePage() {
           </TiltCard>
 
           {/* Project 3 */}
-          <TiltCard maxTilt={8} className="rounded-2xl border border-border/80 dark:border-emerald-500/20 bg-surface dark:bg-[#121815] shadow-xl overflow-hidden group">
-            <div className="h-44 bg-gradient-to-br from-slate-900 via-emerald-950/40 to-black p-6 flex flex-col justify-between border-b border-border/60">
+          <TiltCard maxTilt={6} className="rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md overflow-hidden group">
+            <div className="h-44 bg-gradient-to-br from-slate-900 to-black p-6 flex flex-col justify-between border-b border-border/60">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px] text-emerald-400 bg-black/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                <span className="font-mono text-[11px] text-emerald-400 bg-black/70 px-2 py-0.5 rounded border border-emerald-500/30">
                   PRJ-2026-003
                 </span>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400">
                   SHIPPED
                 </span>
               </div>
@@ -562,13 +599,13 @@ export default function HomePage() {
                 Global real-time telemetry dashboard with interactive 3D globe visualization, container route tracking, and automated dispatch alerts.
               </p>
               <div className="flex flex-wrap gap-2 pt-2">
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   Three.js
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   WebSockets
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/40 text-foreground border border-border/40">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-elevated dark:bg-black/50 text-foreground border border-border/40">
                   Docker
                 </span>
               </div>
@@ -578,26 +615,26 @@ export default function HomePage() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          6. EXECUTIVE GOVERNANCE & LEADERSHIP (MNC CARDS)
+          6. CORPORATE GOVERNANCE & EXECUTIVE LEADERSHIP
          ───────────────────────────────────────────────────────────── */}
       <section id="leadership" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 border-t border-border/80 pt-20 scroll-mt-24">
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <Badge variant="outline" className="mb-3 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-mono uppercase tracking-wider text-[11px]">
-            [ GOVERNANCE & OVERSIGHT ]
+          <Badge variant="outline" className="mb-3 font-mono uppercase tracking-wider text-[11px]">
+            [ CORPORATE GOVERNANCE ]
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
             Executive Leadership
           </h2>
           <p className="mt-3 text-sm text-muted">
-            Direct executive governance ensuring developer screening, credit ledger stability, and high-standard delivery.
+            Direct executive oversight ensuring developer verification, credit ledger stability, and enterprise SLAs.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {/* CEO Card */}
-          <TiltCard maxTilt={6} className="p-8 rounded-2xl border border-border/80 dark:border-emerald-500/25 bg-surface dark:bg-[#121815] shadow-xl">
+          <TiltCard maxTilt={5} className="p-8 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md">
             <div className="flex items-center space-x-4 mb-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-lg font-mono">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-lg font-mono">
                 SG
               </div>
               <div>
@@ -611,20 +648,20 @@ export default function HomePage() {
               {leadership.ceo.bio} Direct administrative control, user governance, payment management, and community moderation.
             </p>
             <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
-              <span>ADMINISTRATIVE GOVERNANCE</span>
+              <span>EXECUTIVE GOVERNANCE</span>
               <span className="text-emerald-500 font-semibold">VERIFIED</span>
             </div>
           </TiltCard>
 
           {/* MD Card */}
-          <TiltCard maxTilt={6} className="p-8 rounded-2xl border border-border/80 dark:border-emerald-500/25 bg-surface dark:bg-[#121815] shadow-xl">
+          <TiltCard maxTilt={5} className="p-8 rounded-2xl border border-border/80 dark:border-border/60 bg-surface dark:bg-[#101613] shadow-md">
             <div className="flex items-center space-x-4 mb-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-600 dark:text-teal-400 font-bold text-lg font-mono">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-lg font-mono">
                 RL
               </div>
               <div>
                 <h3 className="text-xl font-bold text-foreground">{leadership.md.name}</h3>
-                <p className="text-xs font-mono font-semibold text-teal-600 dark:text-teal-400">
+                <p className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
                   {leadership.md.title} ({leadership.md.role})
                 </p>
               </div>
@@ -634,42 +671,38 @@ export default function HomePage() {
             </p>
             <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between text-[11px] font-mono text-muted-foreground">
               <span>OPERATIONS & ARCHITECTURE</span>
-              <span className="text-teal-500 font-semibold">VERIFIED</span>
+              <span className="text-emerald-500 font-semibold">VERIFIED</span>
             </div>
           </TiltCard>
         </div>
       </section>
 
       {/* ─────────────────────────────────────────────────────────────
-          7. HIGH-CONVERSION BOTTOM CALL TO ACTION (MNC STYLE)
+          7. INSTITUTIONAL ENTERPRISE ENGAGEMENT CALL TO ACTION
          ───────────────────────────────────────────────────────────── */}
       <section id="cta" className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 scroll-mt-24">
-        <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-b from-[#101914] via-[#0b130f] to-[#070c09] text-white p-8 md:p-14 text-center relative overflow-hidden shadow-2xl">
-          {/* Radial ambient glow */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/15 blur-[100px] rounded-full pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-teal-500/10 blur-[100px] rounded-full pointer-events-none" />
-
-          <div className="inline-flex items-center space-x-2 rounded-full border border-emerald-500/30 bg-emerald-950/60 px-4 py-1.5 text-xs font-mono text-emerald-300 mb-6">
-            <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-            <span>COMMISSION YOUR NEXT SYSTEM WITH ZERO RISK</span>
+        <div className="rounded-3xl border border-border/80 dark:border-border/60 bg-[#0d110f] text-white p-8 md:p-14 text-center relative overflow-hidden shadow-xl">
+          <div className="inline-flex items-center space-x-2 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-4 py-1.5 text-xs font-mono text-emerald-300 mb-6">
+            <Shield className="h-3.5 w-3.5 text-emerald-400" />
+            <span>ENTERPRISE GRADE SLA & VERIFIED ESCROW</span>
           </div>
 
           <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight max-w-3xl mx-auto leading-tight">
-            Ready to Build Your Next Breakthrough System?
+            Ready to Build Your Next Mission-Critical Platform?
           </h2>
 
           <p className="mt-4 text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            Whether you are an enterprise client commissioning mission-critical software or a top-tier engineer seeking verified credit-backed projects.
+            Partner with top-tier verified engineers or commission bespoke enterprise software systems with cryptographic credit protection.
           </p>
 
           <div className="mt-10 flex flex-wrap justify-center gap-4">
             <Link href="/start-project">
               <Button
                 size="lg"
-                className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-lg shadow-emerald-500/25 border-0 hover:shadow-emerald-400/40 transition-all hover:-translate-y-0.5"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-600/25 border-0 transition-all hover:-translate-y-0.5"
                 rightIcon={<ArrowRight className="h-4 w-4" />}
               >
-                Submit a Project
+                Submit Project Specification
               </Button>
             </Link>
             <Link href="/join-developer">
@@ -678,7 +711,7 @@ export default function HomePage() {
                 variant="outline"
                 className="border-white/20 hover:border-emerald-400/60 bg-white/5 hover:bg-white/10 text-white backdrop-blur-md transition-all"
               >
-                Join as Verified Developer
+                Join Developer Guild
               </Button>
             </Link>
           </div>
@@ -690,11 +723,11 @@ export default function HomePage() {
             </div>
             <div className="flex items-center space-x-2">
               <Zap className="h-4 w-4 text-emerald-400" />
-              <span>Zero Credit Risk on Non-Selection</span>
+              <span>Zero Bid Risk on Non-Selection</span>
             </div>
             <div className="flex items-center space-x-2">
               <Lock className="h-4 w-4 text-emerald-400" />
-              <span>Bank-Grade Ledger Security</span>
+              <span>ACID-Compliant Ledger Security</span>
             </div>
           </div>
         </div>
