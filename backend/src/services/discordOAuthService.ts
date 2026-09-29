@@ -9,25 +9,23 @@ import { generateUserUid } from '../utils/uidGenerator.js';
 import { validateRedirectUrl, getDefaultRedirectForRole } from '../controllers/authController.js';
 import { ProjectService } from './projectService.js';
 
-export interface GoogleIdentityClaims {
-  sub: string;
-  email: string;
-  email_verified: boolean;
-  name?: string;
-  picture?: string;
-  aud?: string;
-  iss?: string;
-  exp?: number;
+export interface DiscordIdentityClaims {
+  id: string; // Stable Discord snowflake user ID
+  username: string;
+  global_name?: string;
+  email?: string;
+  verified?: boolean;
+  avatarUrl?: string;
 }
 
-export interface OAuthStateSession {
+export interface DiscordOAuthStateSession {
   state: string;
   codeVerifier: string;
   returnUrl: string;
   createdAt: number;
 }
 
-export interface GoogleOAuthResult {
+export interface DiscordOAuthResult {
   token: string;
   user: {
     id: string;
@@ -47,57 +45,57 @@ export interface GoogleOAuthResult {
   isNewUser: boolean;
 }
 
-// In-memory sliding window cache for OAuth state sessions (10-minute TTL)
-const stateStore = new Map<string, OAuthStateSession>();
+// In-memory sliding window cache for Discord OAuth state sessions (10-minute TTL)
+const discordStateStore = new Map<string, DiscordOAuthStateSession>();
 
 // Cleanup expired state sessions every 5 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [key, session] of stateStore.entries()) {
+  for (const [key, session] of discordStateStore.entries()) {
     if (now - session.createdAt > 10 * 60 * 1000) {
-      stateStore.delete(key);
+      discordStateStore.delete(key);
     }
   }
 }, 5 * 60 * 1000).unref();
 
-// Test-only verifier hook for automated test suites
-let testTokenVerifier: ((idToken: string) => Promise<GoogleIdentityClaims>) | null = null;
-let testTokenExchanger: ((code: string, codeVerifier: string) => Promise<{ id_token: string; access_token?: string }>) | null = null;
+// Test-only hooks for automated test suites (strictly isolated to NODE_ENV === 'test')
+let testDiscordTokenExchanger: ((code: string, codeVerifier: string) => Promise<{ access_token: string }>) | null = null;
+let testDiscordIdentityVerifier: ((accessToken: string) => Promise<DiscordIdentityClaims>) | null = null;
 
-export class GoogleOAuthService {
-  /**
-   * Set isolated token verifier for automated test environments
-   */
-  static setTestTokenVerifier(fn: ((idToken: string) => Promise<GoogleIdentityClaims>) | null) {
-    if (process.env.NODE_ENV !== 'test') {
-      throw new Error('Test token verifier is strictly restricted to test environments.');
-    }
-    testTokenVerifier = fn;
-  }
-
+export class DiscordOAuthService {
   /**
    * Set isolated token exchanger for automated test environments
    */
-  static setTestTokenExchanger(fn: ((code: string, codeVerifier: string) => Promise<{ id_token: string; access_token?: string }>) | null) {
+  static setTestTokenExchanger(fn: ((code: string, codeVerifier: string) => Promise<{ access_token: string }>) | null) {
     if (process.env.NODE_ENV !== 'test') {
       throw new Error('Test token exchanger is strictly restricted to test environments.');
     }
-    testTokenExchanger = fn;
+    testDiscordTokenExchanger = fn;
   }
 
   /**
-   * Validates whether Google OAuth credentials are configured
+   * Set isolated identity verifier for automated test environments
+   */
+  static setTestIdentityVerifier(fn: ((accessToken: string) => Promise<DiscordIdentityClaims>) | null) {
+    if (process.env.NODE_ENV !== 'test') {
+      throw new Error('Test identity verifier is strictly restricted to test environments.');
+    }
+    testDiscordIdentityVerifier = fn;
+  }
+
+  /**
+   * Validates whether Discord OAuth credentials are configured
    */
   static isConfigured(): boolean {
     return Boolean(
-      env.GOOGLE_CLIENT_ID &&
-      env.GOOGLE_CLIENT_SECRET &&
-      env.GOOGLE_OAUTH_REDIRECT_URI
+      env.DISCORD_CLIENT_ID &&
+      env.DISCORD_CLIENT_SECRET &&
+      env.DISCORD_OAUTH_REDIRECT_URI
     );
   }
 
   /**
-   * Initiates Google OAuth: generates cryptographically secure state and PKCE verifier/challenge
+   * Initiates Discord OAuth: generates cryptographically secure state and PKCE verifier/challenge
    */
   static generateAuthorizationUrl(returnUrl?: string): {
     authorizationUrl: string;
@@ -105,7 +103,7 @@ export class GoogleOAuthService {
     codeVerifier: string;
   } {
     if (!this.isConfigured() && process.env.NODE_ENV !== 'test') {
-      throw new Error('Google OAuth is not configured on this server.');
+      throw new Error('Discord OAuth is not configured on this server.');
     }
 
     // 1. Generate state with 32 bytes (256 bits) of CSPRNG entropy
@@ -121,29 +119,28 @@ export class GoogleOAuthService {
     const safeReturnUrl = validateRedirectUrl(returnUrl, '/dashboard');
 
     // 5. Store state session in memory
-    stateStore.set(state, {
+    discordStateStore.set(state, {
       state,
       codeVerifier,
       returnUrl: safeReturnUrl,
       createdAt: Date.now(),
     });
 
-    // 6. Build Google OAuth authorization URL
-    const googleAuthEndpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
+    // 6. Build Discord OAuth authorization URL
+    const discordAuthEndpoint = 'https://discord.com/oauth2/authorize';
     const params = new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID,
-      redirect_uri: env.GOOGLE_OAUTH_REDIRECT_URI,
+      client_id: env.DISCORD_CLIENT_ID,
+      redirect_uri: env.DISCORD_OAUTH_REDIRECT_URI,
       response_type: 'code',
-      scope: 'openid email profile',
+      scope: 'identify email',
       state,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
-      access_type: 'online',
-      prompt: 'select_account',
+      prompt: 'consent',
     });
 
     return {
-      authorizationUrl: `${googleAuthEndpoint}?${params.toString()}`,
+      authorizationUrl: `${discordAuthEndpoint}?${params.toString()}`,
       state,
       codeVerifier,
     };
@@ -152,59 +149,59 @@ export class GoogleOAuthService {
   /**
    * Validates and single-use consumes OAuth state token
    */
-  static consumeState(state: string | undefined): OAuthStateSession {
+  static consumeState(state: string | undefined): DiscordOAuthStateSession {
     if (!state || typeof state !== 'string') {
       const err: any = new Error('OAuth state is required.');
       err.code = 'INVALID_STATE';
       throw err;
     }
 
-    const session = stateStore.get(state);
+    const session = discordStateStore.get(state);
     if (!session) {
-      const err: any = new Error('Your Google sign-in session expired or is invalid. Please try again.');
+      const err: any = new Error('Your Discord sign-in session expired or is invalid. Please try again.');
       err.code = 'INVALID_STATE';
       throw err;
     }
 
     // Check expiration (10 minutes)
     if (Date.now() - session.createdAt > 10 * 60 * 1000) {
-      stateStore.delete(state);
-      const err: any = new Error('Your Google sign-in session expired. Please try again.');
+      discordStateStore.delete(state);
+      const err: any = new Error('Your Discord sign-in session expired. Please try again.');
       err.code = 'STATE_EXPIRED';
       throw err;
     }
 
     // Single-use: immediately delete state to prevent replay attacks
-    stateStore.delete(state);
+    discordStateStore.delete(state);
 
     return session;
   }
 
   /**
-   * Exchanges authorization code with Google's token endpoint
+   * Exchanges authorization code with Discord API token endpoint
    */
   static async exchangeCodeForTokens(
     code: string,
     codeVerifier: string
-  ): Promise<{ id_token: string; access_token?: string }> {
+  ): Promise<{ access_token: string }> {
     if (!code) {
       const err: any = new Error('Authorization code is required.');
       err.code = 'MISSING_CODE';
       throw err;
     }
 
-    if (testTokenExchanger) {
-      return await testTokenExchanger(code, codeVerifier);
+    if (testDiscordTokenExchanger) {
+      return await testDiscordTokenExchanger(code, codeVerifier);
     }
 
-    const tokenEndpoint = 'https://oauth2.googleapis.com/token';
+    const tokenEndpoint = 'https://discord.com/api/v10/oauth2/token';
     const bodyParams = new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
+      client_id: env.DISCORD_CLIENT_ID,
+      client_secret: env.DISCORD_CLIENT_SECRET,
+      grant_type: 'authorization_code',
       code,
       code_verifier: codeVerifier,
-      grant_type: 'authorization_code',
-      redirect_uri: env.GOOGLE_OAUTH_REDIRECT_URI,
+      redirect_uri: env.DISCORD_OAUTH_REDIRECT_URI,
     });
 
     const response = await fetch(tokenEndpoint, {
@@ -224,142 +221,102 @@ export class GoogleOAuthService {
       } catch {
         // ignore JSON parse errors
       }
-      const err: any = new Error(`Google token exchange failed: ${parsedError}`);
+      const err: any = new Error(`Discord token exchange failed: ${parsedError}`);
       err.code = 'TOKEN_EXCHANGE_FAILED';
       throw err;
     }
 
     const tokenData = (await response.json()) as any;
-    if (!tokenData.id_token) {
-      const err: any = new Error('Google did not return an ID token.');
-      err.code = 'MISSING_ID_TOKEN';
+    if (!tokenData.access_token) {
+      const err: any = new Error('Discord did not return an access token.');
+      err.code = 'MISSING_TOKEN';
       throw err;
     }
 
     return {
-      id_token: tokenData.id_token,
       access_token: tokenData.access_token,
     };
   }
 
   /**
-   * Verifies Google ID token cryptographic signature and all standard claims
+   * Cryptographically verifies Discord access token and fetches user identity profile.
+   * Enforces:
+   * 1. Direct retrieval from https://discord.com/api/v10/users/@me
+   * 2. Identity validation (snowflake user ID check)
+   * 3. Normalization of identity claims
    */
-  static async verifyIdToken(idToken: string): Promise<GoogleIdentityClaims> {
-    if (!idToken || typeof idToken !== 'string') {
-      const err: any = new Error('Missing ID token');
-      err.code = 'INVALID_ID_TOKEN';
+  static async verifyDiscordTokenAndIdentity(accessToken: string): Promise<DiscordIdentityClaims> {
+    if (!accessToken || typeof accessToken !== 'string') {
+      const err: any = new Error('Missing Discord access token.');
+      err.code = 'INVALID_TOKEN';
       throw err;
     }
 
-    if (testTokenVerifier) {
-      return await testTokenVerifier(idToken);
+    if (testDiscordIdentityVerifier) {
+      return await testDiscordIdentityVerifier(accessToken);
     }
 
-    // 1. Decode token structure without trusting contents yet
-    const parts = idToken.split('.');
-    if (parts.length !== 3) {
-      const err: any = new Error('Malformed ID token structure');
-      err.code = 'INVALID_ID_TOKEN';
+    const meRes = await fetch('https://discord.com/api/v10/users/@me', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!meRes.ok) {
+      const errText = await meRes.text();
+      let parsedErr = 'Token verification failed';
+      try {
+        const json = JSON.parse(errText);
+        parsedErr = json.message || parsedErr;
+      } catch {
+        // ignore JSON parse errors
+      }
+      const err: any = new Error(`Discord identity retrieval failed: ${parsedErr}`);
+      err.code = meRes.status === 401 ? 'INVALID_TOKEN' : 'IDENTITY_FETCH_FAILED';
       throw err;
     }
 
-    // 2. Validate using Google's official tokeninfo cryptographic endpoint
-    const tokenInfoUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
-    const res = await fetch(tokenInfoUrl);
+    const profile = (await meRes.json()) as any;
 
-    if (!res.ok) {
-      await res.text();
-      const err: any = new Error('Google ID token signature verification failed.');
-      err.code = 'TOKEN_SIGNATURE_INVALID';
+    if (!profile.id || typeof profile.id !== 'string') {
+      const err: any = new Error('Discord returned an invalid or missing user identifier.');
+      err.code = 'INVALID_DISCORD_ID';
       throw err;
     }
 
-    const payload = (await res.json()) as any;
-
-    // 3. Strict Audience Verification
-    if (payload.aud !== env.GOOGLE_CLIENT_ID) {
-      const err: any = new Error('Google ID token audience mismatch.');
-      err.code = 'INVALID_AUDIENCE';
-      throw err;
+    let avatarUrl: string | undefined;
+    if (profile.avatar) {
+      avatarUrl = `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png`;
     }
-
-    // 4. Strict Issuer Verification
-    const validIssuers = ['https://accounts.google.com', 'accounts.google.com'];
-    if (!validIssuers.includes(payload.iss)) {
-      const err: any = new Error('Google ID token issuer mismatch.');
-      err.code = 'INVALID_ISSUER';
-      throw err;
-    }
-
-    // 5. Expiration Verification
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    const exp = parseInt(payload.exp, 10);
-    if (isNaN(exp) || exp < nowSeconds - 60) {
-      const err: any = new Error('Google ID token has expired.');
-      err.code = 'TOKEN_EXPIRED';
-      throw err;
-    }
-
-    // 6. Identity Subject Verification
-    if (!payload.sub || typeof payload.sub !== 'string') {
-      const err: any = new Error('Google ID token missing subject identifier.');
-      err.code = 'MISSING_SUB';
-      throw err;
-    }
-
-    // 7. Email and Verification Status
-    if (!payload.email) {
-      const err: any = new Error('Google ID token missing email address.');
-      err.code = 'MISSING_EMAIL';
-      throw err;
-    }
-
-    const emailVerified =
-      payload.email_verified === true ||
-      payload.email_verified === 'true';
 
     return {
-      sub: payload.sub,
-      email: payload.email.toLowerCase().trim(),
-      email_verified: emailVerified,
-      name: payload.name || payload.given_name || payload.email.split('@')[0],
-      picture: payload.picture,
-      aud: payload.aud,
-      iss: payload.iss,
-      exp: exp,
+      id: String(profile.id),
+      username: profile.username,
+      global_name: profile.global_name,
+      email: profile.email ? profile.email.toLowerCase().trim() : undefined,
+      verified: profile.verified,
+      avatarUrl,
     };
   }
 
   /**
-   * Resolves Google identity against platform accounts:
-   * - Checks provider identity (provider='google', provider_subject=sub)
+   * Resolves Discord identity against platform accounts:
+   * - Checks provider identity (provider='discord', provider_subject=id)
    * - Enforces account status (ACTIVE vs SUSPENDED/DISABLED)
+   * - Explicitly handles missing email (requires user email completion)
+   * - Enforces verified email check (rejects unverified emails)
    * - Detects email conflicts with unlinked local accounts
    * - Safely provisions new client account if user does not exist
    */
-  static async resolveGoogleIdentity(
-    claims: GoogleIdentityClaims,
+  static async resolveDiscordIdentity(
+    claims: DiscordIdentityClaims,
     safeReturnUrl: string
-  ): Promise<GoogleOAuthResult> {
-    const provider = 'google';
-    const providerSubject = claims.sub;
-    const normalizedEmail = claims.email.toLowerCase().trim();
+  ): Promise<DiscordOAuthResult> {
+    const provider = 'discord';
+    const providerSubject = claims.id;
 
-    // 1. Enforce verified email requirement from Google
-    if (!claims.email_verified) {
-      await AuditLogger.log({
-        action: 'GOOGLE_OAUTH_FAILURE',
-        entityType: 'OAUTH',
-        entityId: providerSubject,
-        metadata: { reason: 'UNVERIFIED_GOOGLE_EMAIL', email: normalizedEmail },
-      });
-      const err: any = new Error('Your Google email address is not verified by Google.');
-      err.code = 'UNVERIFIED_EMAIL';
-      throw err;
-    }
-
-    // 2. Check if this exact Google identity already exists
+    // 1. Check if this exact Discord identity already exists in oauth_accounts
     const existingIdentityRes = await query(
       `SELECT oa.*, u.uid, u.public_uid, u.email as user_email, u.role, u.status, u.is_suspended, 
               u.suspension_reason, u.token_version
@@ -376,7 +333,7 @@ export class GoogleOAuthService {
       if (existingAccount.status === 'SUSPENDED' || existingAccount.is_suspended === true) {
         await AuditLogger.log({
           actorUserId: existingAccount.user_id,
-          action: 'GOOGLE_OAUTH_FAILURE',
+          action: 'DISCORD_OAUTH_FAILURE',
           entityType: 'USER',
           entityId: existingAccount.user_id,
           metadata: { reason: 'ACCOUNT_SUSPENDED', role: existingAccount.role },
@@ -390,7 +347,7 @@ export class GoogleOAuthService {
       if (existingAccount.status === 'DISABLED') {
         await AuditLogger.log({
           actorUserId: existingAccount.user_id,
-          action: 'GOOGLE_OAUTH_FAILURE',
+          action: 'DISCORD_OAUTH_FAILURE',
           entityType: 'USER',
           entityId: existingAccount.user_id,
           metadata: { reason: 'ACCOUNT_DISABLED', role: existingAccount.role },
@@ -477,10 +434,10 @@ export class GoogleOAuthService {
         { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
       );
 
-      // Log successful login audit event
+      // Log successful login audit events
       await AuditLogger.log({
         actorUserId: existingAccount.user_id,
-        action: 'GOOGLE_ACCOUNT_LOGIN',
+        action: 'DISCORD_ACCOUNT_LOGIN',
         entityType: 'USER',
         entityId: existingAccount.user_id,
         metadata: {
@@ -493,7 +450,7 @@ export class GoogleOAuthService {
 
       await AuditLogger.log({
         actorUserId: existingAccount.user_id,
-        action: 'GOOGLE_OAUTH_SUCCESS',
+        action: 'DISCORD_OAUTH_SUCCESS',
         entityType: 'USER',
         entityId: existingAccount.user_id,
         metadata: { provider, isNewUser: false },
@@ -509,7 +466,7 @@ export class GoogleOAuthService {
           role: existingAccount.role,
           status: existingAccount.status,
           emailVerified: true,
-          name: developerName || clientName || claims.name,
+          name: developerName || clientName || claims.global_name || claims.username,
           developerId,
           clientId,
           clientNumber,
@@ -519,6 +476,38 @@ export class GoogleOAuthService {
         isNewUser: false,
       };
     }
+
+    // 2. Identity not linked. For new account creation, verify that Discord provided an email address.
+    if (!claims.email || typeof claims.email !== 'string' || !claims.email.includes('@')) {
+      await AuditLogger.log({
+        action: 'DISCORD_OAUTH_FAILURE',
+        entityType: 'OAUTH',
+        entityId: providerSubject,
+        metadata: { reason: 'MISSING_DISCORD_EMAIL' },
+      });
+      const err: any = new Error(
+        'Discord did not provide an email address. Please continue to complete your account.'
+      );
+      err.code = 'MISSING_EMAIL';
+      throw err;
+    }
+
+    // Enforce email verification check from Discord
+    if (claims.verified === false) {
+      await AuditLogger.log({
+        action: 'DISCORD_OAUTH_FAILURE',
+        entityType: 'OAUTH',
+        entityId: providerSubject,
+        metadata: { reason: 'UNVERIFIED_DISCORD_EMAIL' },
+      });
+      const err: any = new Error(
+        'Your Discord email address is not verified. Please verify your email on Discord and try again.'
+      );
+      err.code = 'UNVERIFIED_EMAIL';
+      throw err;
+    }
+
+    const normalizedEmail = claims.email.toLowerCase().trim();
 
     // 3. Provider identity does NOT exist. Check if an existing platform user has this email.
     const emailConflictRes = await query(
@@ -532,7 +521,7 @@ export class GoogleOAuthService {
       // Log security audit for email conflict
       await AuditLogger.log({
         actorUserId: existingUser.id,
-        action: 'GOOGLE_ACCOUNT_EMAIL_CONFLICT',
+        action: 'DISCORD_ACCOUNT_EMAIL_CONFLICT',
         entityType: 'USER',
         entityId: existingUser.id,
         metadata: {
@@ -552,10 +541,11 @@ export class GoogleOAuthService {
       throw err;
     }
 
-    // 4. Completely new Google user: Provision new platform account safely.
+    // 4. Completely new Discord user: Provision new platform account safely.
     // Client role is strictly server-controlled according to Phase 4 client onboarding rules.
-    const cleanName = sanitizeInput(claims.name || normalizedEmail.split('@')[0]);
-    const cleanPicture = claims.picture ? sanitizeInput(claims.picture) : null;
+    const displayName = claims.global_name || claims.username || normalizedEmail.split('@')[0];
+    const cleanName = sanitizeInput(displayName);
+    const cleanPicture = claims.avatarUrl ? sanitizeInput(claims.avatarUrl) : null;
     const internalUid = generateUserUid();
 
     const createdResult = await withTransaction(async (client) => {
@@ -589,7 +579,7 @@ export class GoogleOAuthService {
       );
 
       // Insert federated identity in oauth_accounts table
-      const oauthRes = await client.query(
+      await client.query(
         `INSERT INTO oauth_accounts (
            user_id, provider, provider_subject, provider_email, 
            provider_email_verified, provider_display_name, provider_avatar_url
@@ -611,7 +601,7 @@ export class GoogleOAuthService {
       await AuditLogger.log(
         {
           actorUserId: newUser.id,
-          action: 'GOOGLE_ACCOUNT_CREATED',
+          action: 'DISCORD_ACCOUNT_CREATED',
           entityType: 'USER',
           entityId: newUser.id,
           metadata: {
@@ -628,7 +618,7 @@ export class GoogleOAuthService {
       await AuditLogger.log(
         {
           actorUserId: newUser.id,
-          action: 'GOOGLE_OAUTH_SUCCESS',
+          action: 'DISCORD_OAUTH_SUCCESS',
           entityType: 'USER',
           entityId: newUser.id,
           metadata: { provider, isNewUser: true },
@@ -639,7 +629,6 @@ export class GoogleOAuthService {
       return {
         user: newUser,
         client: clientRecord.rows[0],
-        oauthAccount: oauthRes.rows[0],
       };
     });
 
@@ -650,12 +639,11 @@ export class GoogleOAuthService {
       {
         userId: createdResult.user.id,
         uid: createdResult.user.uid,
-        publicUid: createdResult.user.uid,
+        publicUid: createdResult.user.public_uid || createdResult.user.uid,
         email: createdResult.user.email,
-        role: ROLES.CLIENT,
+        role: createdResult.user.role,
         tokenVersion: 1,
         clientId: createdResult.client.id,
-        clientNumber: createdResult.client.client_number,
       },
       env.JWT_SECRET,
       { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
@@ -666,9 +654,9 @@ export class GoogleOAuthService {
       user: {
         id: createdResult.user.id,
         uid: createdResult.user.uid,
-        publicUid: createdResult.user.uid,
+        publicUid: createdResult.user.public_uid || createdResult.user.uid,
         email: createdResult.user.email,
-        role: ROLES.CLIENT,
+        role: createdResult.user.role,
         status: createdResult.user.status,
         emailVerified: true,
         name: cleanName,
@@ -678,12 +666,5 @@ export class GoogleOAuthService {
       redirectUrl: effectiveRedirect,
       isNewUser: true,
     };
-  }
-
-  /**
-   * Helper to clear in-memory state store (testing helper)
-   */
-  static resetStateStore() {
-    stateStore.clear();
   }
 }

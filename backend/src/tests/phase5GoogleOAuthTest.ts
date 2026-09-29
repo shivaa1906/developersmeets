@@ -204,7 +204,6 @@ export async function runPhase5Tests() {
     GoogleOAuthService.setTestTokenExchanger(async () => ({ id_token: 'mock.id.token' }));
 
     // 14. Wrong audience rejected
-    let wrongAudRejected = false;
     GoogleOAuthService.setTestTokenVerifier(async () => {
       const err: any = new Error('Google ID token audience mismatch.');
       err.code = 'INVALID_AUDIENCE';

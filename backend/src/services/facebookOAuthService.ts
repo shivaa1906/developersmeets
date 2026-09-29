@@ -214,7 +214,9 @@ export class FacebookOAuthService {
       try {
         const json = JSON.parse(errText);
         parsedError = json.error?.message || json.error_description || parsedError;
-      } catch {}
+      } catch {
+        // ignore JSON parse errors
+      }
       const err: any = new Error(`Facebook token exchange failed: ${parsedError}`);
       err.code = 'TOKEN_EXCHANGE_FAILED';
       throw err;

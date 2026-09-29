@@ -12,6 +12,7 @@ import { ProjectService } from '../services/projectService.js';
 import { DeveloperService } from '../services/developerService.js';
 import { GoogleOAuthService } from '../services/googleOAuthService.js';
 import { FacebookOAuthService } from '../services/facebookOAuthService.js';
+import { DiscordOAuthService } from '../services/discordOAuthService.js';
 import { hashPassword, verifyPassword, validatePassword } from '../utils/password.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
@@ -300,6 +301,7 @@ export class AuthController {
         },
       });
     } catch (err: any) {
+      console.error('[RegisterDeveloper Error]', err);
       const statusCode =
         err.statusCode ||
         (err.message?.includes('already exists') ||
@@ -434,6 +436,7 @@ export class AuthController {
         redirectUrl: '/dashboard',
       });
     } catch (err: any) {
+      console.error('[RegisterClient Error]', err);
       const statusCode =
         err.statusCode ||
         (err.message?.includes('already exists') ||
@@ -1718,7 +1721,7 @@ export class AuthController {
         claims = await GoogleOAuthService.verifyIdToken(idToken);
       } catch (tokenErr: any) {
         const errCode = tokenErr.code || 'invalid_token';
-        let status = 401;
+        const status = 401;
         let message = 'Google token verification failed.';
         if (errCode === 'TOKEN_EXPIRED') {
           message = 'Google ID token has expired. Please sign in again.';
@@ -1780,7 +1783,7 @@ export class AuthController {
 
       const redirectDestination = `/auth/callback?token=${encodeURIComponent(result.token)}&redirect=${encodeURIComponent(result.redirectUrl)}`;
       res.redirect(redirectDestination);
-    } catch (err: any) {
+    } catch (_err: any) {
       await handleCallbackError(
         500,
         'oauth_failed',
@@ -1964,7 +1967,7 @@ export class AuthController {
         claims = await FacebookOAuthService.verifyFacebookTokenAndIdentity(accessToken);
       } catch (tokenErr: any) {
         const errCode = tokenErr.code || 'invalid_token';
-        let status = 401;
+        const status = 401;
         let message = 'Facebook token verification failed.';
         if (errCode === 'TOKEN_EXPIRED' || errCode === 'INVALID_ACCESS_TOKEN') {
           message = 'Facebook access token is invalid or expired. Please sign in again.';
@@ -2028,11 +2031,265 @@ export class AuthController {
 
       const redirectDestination = `/auth/callback?token=${encodeURIComponent(result.token)}&redirect=${encodeURIComponent(result.redirectUrl)}`;
       res.redirect(redirectDestination);
-    } catch (err: any) {
+    } catch (_err: any) {
       await handleCallbackError(
         500,
         'oauth_failed',
         'Facebook sign-in is temporarily unavailable.'
+      );
+    }
+  }
+
+  /**
+   * Initiates Discord OAuth 2.0 authorization code flow with PKCE and state token
+   */
+  static async initiateDiscordOAuth(req: Request, res: Response): Promise<void> {
+    try {
+      const requestedRedirect =
+        req.query.returnUrl ||
+        req.query.redirectUrl ||
+        req.query.redirect ||
+        req.query.next;
+      const safeReturnUrl = validateRedirectUrl(requestedRedirect, '/dashboard');
+
+      if (!DiscordOAuthService.isConfigured() && process.env.NODE_ENV !== 'test') {
+        const errorRedirect = `/login?error=oauth_unavailable`;
+        if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+          res.status(503).json({
+            error: 'Discord sign-in is temporarily unavailable.',
+            code: 'OAUTH_UNAVAILABLE',
+            redirectUrl: errorRedirect,
+          });
+          return;
+        }
+        res.redirect(errorRedirect);
+        return;
+      }
+
+      await AuditLogger.log({
+        action: 'DISCORD_OAUTH_STARTED',
+        entityType: 'OAUTH',
+        entityId: 'discord',
+        metadata: { returnUrl: safeReturnUrl },
+      });
+
+      const { authorizationUrl, state } = DiscordOAuthService.generateAuthorizationUrl(safeReturnUrl);
+
+      // Set secure HttpOnly cookie for state binding
+      const isProduction = env.NODE_ENV === 'production';
+      const cookieOptions = [
+        `oauth_state_discord=${state}`,
+        'Path=/api/auth/discord',
+        'HttpOnly',
+        'SameSite=Lax',
+        'Max-Age=600',
+        ...(isProduction ? ['Secure'] : []),
+      ].join('; ');
+      res.setHeader('Set-Cookie', cookieOptions);
+
+      if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+        res.json({
+          url: authorizationUrl,
+          state,
+          redirectUrl: authorizationUrl,
+        });
+        return;
+      }
+
+      res.redirect(authorizationUrl);
+    } catch (err: any) {
+      await AuditLogger.log({
+        action: 'DISCORD_OAUTH_FAILURE',
+        entityType: 'OAUTH',
+        entityId: 'discord',
+        metadata: { error: err.message, stage: 'INITIATION' },
+      });
+
+      if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+        res.status(500).json({ error: err.message || 'Failed to initiate Discord OAuth' });
+        return;
+      }
+      res.redirect('/login?error=oauth_unavailable');
+    }
+  }
+
+  /**
+   * Handles Discord OAuth callback: validates state, exchanges authorization code,
+   * verifies token & user identity, resolves or provisions identity, and redirects with authenticated session.
+   */
+  static async handleDiscordOAuthCallback(req: Request, res: Response): Promise<void> {
+    const isJsonClient =
+      req.headers.accept?.includes('application/json') ||
+      req.query.format === 'json' ||
+      req.body?.format === 'json';
+    const clearCookieHeader = 'oauth_state_discord=; Path=/api/auth/discord; HttpOnly; SameSite=Lax; Max-Age=0';
+
+    const handleCallbackError = async (
+      statusCode: number,
+      errorCode: string,
+      userFriendlyMessage: string,
+      auditMetadata?: any
+    ) => {
+      await AuditLogger.log({
+        action: 'DISCORD_OAUTH_FAILURE',
+        entityType: 'OAUTH',
+        entityId: 'discord',
+        metadata: { errorCode, ...auditMetadata },
+      });
+
+      res.setHeader('Set-Cookie', clearCookieHeader);
+
+      if (isJsonClient) {
+        res.status(statusCode).json({
+          error: userFriendlyMessage,
+          code: errorCode,
+          redirectUrl: `/login?error=${errorCode}`,
+        });
+        return;
+      }
+
+      res.redirect(`/login?error=${errorCode}`);
+    };
+
+    try {
+      // 1. Check for provider-level callback error (e.g. user cancelled login / access_denied)
+      const providerError = req.query.error || req.body?.error;
+      const errorDescription = req.query.error_description || req.body?.error_description;
+      if (providerError || errorDescription === 'access_denied') {
+        await handleCallbackError(
+          400,
+          'cancelled',
+          'Discord sign-in was cancelled.',
+          { providerError: String(providerError || errorDescription) }
+        );
+        return;
+      }
+
+      const state = (req.query.state || req.body?.state) as string;
+      const code = (req.query.code || req.body?.code) as string;
+      const directAccessToken = (req.body?.access_token || req.query?.access_token) as string;
+
+      // 2. Validate and consume single-use state token
+      let session;
+      try {
+        session = DiscordOAuthService.consumeState(state);
+      } catch (stateErr: any) {
+        const errCode = stateErr.code === 'STATE_EXPIRED' ? 'state_expired' : 'invalid_state';
+        await handleCallbackError(
+          400,
+          errCode,
+          'Your Discord sign-in session expired. Please try again.'
+        );
+        return;
+      }
+
+      // 3. Verify presence of code (or test-supplied access_token)
+      if (!code && !directAccessToken) {
+        await handleCallbackError(
+          400,
+          'missing_code',
+          'Invalid authentication request: authorization code is missing.'
+        );
+        return;
+      }
+
+      // 4. Exchange code for access token (or use direct access_token if provided in test mode)
+      let accessToken = directAccessToken;
+      if (!accessToken) {
+        try {
+          const tokenRes = await DiscordOAuthService.exchangeCodeForTokens(code, session.codeVerifier);
+          accessToken = tokenRes.access_token;
+        } catch (exchangeErr: any) {
+          await handleCallbackError(
+            400,
+            exchangeErr.code || 'exchange_failed',
+            'Failed to exchange authorization code with Discord.'
+          );
+          return;
+        }
+      }
+
+      // 5. Verify Discord token authenticity and user identity
+      let claims;
+      try {
+        claims = await DiscordOAuthService.verifyDiscordTokenAndIdentity(accessToken);
+      } catch (tokenErr: any) {
+        const errCode = tokenErr.code || 'invalid_token';
+        const status = 401;
+        let message = 'Discord identity verification failed.';
+        if (errCode === 'INVALID_TOKEN') {
+          message = 'Discord access token is invalid or expired. Please sign in again.';
+        }
+        const normalizedErrorCode =
+          errCode === 'INVALID_TOKEN' ? 'invalid_token' : errCode.toLowerCase();
+        await handleCallbackError(status, normalizedErrorCode, message);
+        return;
+      }
+
+      // 6. Resolve Discord Identity & Session
+      let result;
+      try {
+        result = await DiscordOAuthService.resolveDiscordIdentity(claims, session.returnUrl);
+      } catch (resolveErr: any) {
+        if (resolveErr.code === 'EMAIL_CONFLICT') {
+          await handleCallbackError(
+            409,
+            'account_exists_conflict',
+            'An account already exists with this email. Please sign in using your existing account.',
+            { email: claims.email }
+          );
+          return;
+        }
+        if (resolveErr.code === 'MISSING_EMAIL') {
+          await handleCallbackError(
+            400,
+            'missing_email',
+            'Discord did not provide an email address. Please continue to complete your account.'
+          );
+          return;
+        }
+        if (resolveErr.code === 'UNVERIFIED_EMAIL') {
+          await handleCallbackError(
+            400,
+            'unverified_email',
+            'Your Discord email address is not verified. Please verify your email on Discord and try again.'
+          );
+          return;
+        }
+        if (resolveErr.code === 'ACCOUNT_SUSPENDED') {
+          await handleCallbackError(
+            403,
+            'account_suspended',
+            'Your account has been suspended by administration. Please contact platform support.'
+          );
+          return;
+        }
+        if (resolveErr.code === 'ACCOUNT_DISABLED') {
+          await handleCallbackError(
+            403,
+            'account_disabled',
+            'Your account has been disabled. Please contact platform support.'
+          );
+          return;
+        }
+        throw resolveErr;
+      }
+
+      // Clear state cookie on success
+      res.setHeader('Set-Cookie', clearCookieHeader);
+
+      if (isJsonClient) {
+        res.json(result);
+        return;
+      }
+
+      const redirectDestination = `/auth/callback?token=${encodeURIComponent(result.token)}&redirect=${encodeURIComponent(result.redirectUrl)}`;
+      res.redirect(redirectDestination);
+    } catch (_err: any) {
+      await handleCallbackError(
+        500,
+        'oauth_failed',
+        'Discord sign-in is temporarily unavailable.'
       );
     }
   }
