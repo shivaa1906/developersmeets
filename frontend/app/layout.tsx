@@ -6,8 +6,6 @@ import { AuthProvider } from '@/hooks/use-auth';
 import { ThemeProvider } from '@/hooks/use-theme';
 import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
-import { MeshBackground } from '@/components/ui/mesh-background';
-import { MouseGlow } from '@/components/ui/mouse-glow';
 
 export const metadata: Metadata = {
   title: {
@@ -124,8 +122,6 @@ export default function RootLayout({
         <ThemeProvider>
           <ToastProvider>
             <AuthProvider>
-              <MeshBackground />
-              <MouseGlow />
               <div className="relative z-10 flex min-h-screen flex-col">
                 <Navbar />
                 <main className="flex-1">{children}</main>

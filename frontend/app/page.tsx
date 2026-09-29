@@ -4,7 +4,6 @@ import { siteConfig } from '@/config/site';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DeveloperWorkspace } from '@/components/developer-core/developer-workspace';
-import { EngineeringGridBackground } from '@/components/developer-core/engineering-grid-background';
 import { TiltCard } from '@/components/3d/tilt-card';
 import { MarqueeTicker } from '@/components/landing/marquee-ticker';
 import {
@@ -40,8 +39,9 @@ export default function HomePage() {
           1. PREMIUM FUTURISTIC ENGINEERING HERO SECTION
          ───────────────────────────────────────────────────────────── */}
       <section className="relative min-h-[92vh] flex flex-col justify-center items-center overflow-hidden pt-28 pb-16">
-        {/* Deep Black / Deep Green Background with Interactive Engineering Grid */}
-        <EngineeringGridBackground />
+        {/* Calm, Pristine Solid Background (Zero grid lines, zero grid animation) */}
+        <div className="absolute inset-0 bg-background -z-20 pointer-events-none" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-emerald-500/[0.06] blur-[160px] rounded-full pointer-events-none -z-10" />
 
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 w-full">
           {/* Executive Category Pill */}
