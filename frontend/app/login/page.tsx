@@ -43,18 +43,20 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = React.useState(false);
+  const [isFacebookLoading, setIsFacebookLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const errorParam = searchParams.get('error');
     if (errorParam) {
       const errorMap: Record<string, string> = {
-        cancelled: 'Google sign-in was cancelled.',
-        state_expired: 'Your Google sign-in session expired. Please try again.',
-        invalid_state: 'Your Google sign-in session expired. Please try again.',
+        cancelled: 'Social sign-in was cancelled.',
+        state_expired: 'Your sign-in session expired. Please try again.',
+        invalid_state: 'Your sign-in session expired. Please try again.',
         missing_code: 'Authentication code was missing. Please try again.',
-        exchange_failed: 'Failed to complete sign-in with Google. Please try again.',
-        invalid_token: 'Google identity verification failed. Please try again.',
+        missing_email: 'Facebook did not provide an email address. Please continue to complete your account.',
+        exchange_failed: 'Failed to complete social sign-in. Please try again.',
+        invalid_token: 'Identity verification failed. Please try again.',
         account_exists_conflict:
           'An account already exists with this email. Please sign in using your existing account.',
         account_suspended:
@@ -62,23 +64,33 @@ export default function LoginPage() {
         account_disabled:
           'Your account has been disabled. Please contact platform support.',
         unverified_email:
-          'Your Google email address is not verified by Google. Please verify your Google account.',
-        oauth_unavailable: 'Google sign-in is temporarily unavailable.',
+          'Your email address is not verified by your identity provider. Please verify your account.',
+        oauth_unavailable: 'Social sign-in is temporarily unavailable.',
       };
-      const msg = errorMap[errorParam] || 'Google sign-in failed. Please try again.';
+      const msg = errorMap[errorParam] || 'Authentication failed. Please try again.';
       setErrorMessage(msg);
-      addToast('error', 'Google Authentication', msg);
+      addToast('error', 'Social Authentication', msg);
     }
   }, [searchParams, addToast]);
 
   const handleGoogleLogin = () => {
-    if (isGoogleLoading) return;
+    if (isGoogleLoading || isFacebookLoading) return;
     setIsGoogleLoading(true);
     setErrorMessage(null);
     const requestedNext = searchParams.get('returnUrl') || searchParams.get('redirect') || searchParams.get('next');
     const safeNext = getSafeRedirect(requestedNext);
     const queryParam = safeNext ? `?returnUrl=${encodeURIComponent(safeNext)}` : '';
     window.location.href = `/api/auth/google${queryParam}`;
+  };
+
+  const handleFacebookLogin = () => {
+    if (isGoogleLoading || isFacebookLoading) return;
+    setIsFacebookLoading(true);
+    setErrorMessage(null);
+    const requestedNext = searchParams.get('returnUrl') || searchParams.get('redirect') || searchParams.get('next');
+    const safeNext = getSafeRedirect(requestedNext);
+    const queryParam = safeNext ? `?returnUrl=${encodeURIComponent(safeNext)}` : '';
+    window.location.href = `/api/auth/facebook${queryParam}`;
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -168,8 +180,8 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Google OAuth Authentication */}
-            <div className="space-y-4 mb-5">
+            {/* Social OAuth Authentication */}
+            <div className="space-y-2.5 mb-5">
               <Button
                 type="button"
                 variant="outline"
@@ -199,7 +211,24 @@ export default function LoginPage() {
                 <span>Continue with Google</span>
               </Button>
 
-              <div className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full h-11 border-border bg-surface-elevated/40 hover:bg-surface-elevated hover:border-[#1877F2]/50 text-foreground font-semibold text-sm flex items-center justify-center space-x-2.5 transition-all shadow-sm group"
+                onClick={handleFacebookLogin}
+                isLoading={isFacebookLoading}
+              >
+                <svg className="h-4 w-4 shrink-0 transition-transform group-hover:scale-105" viewBox="0 0 24 24">
+                  <path
+                    fill="#1877F2"
+                    d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"
+                  />
+                </svg>
+                <span>Continue with Facebook</span>
+              </Button>
+
+              <div className="relative pt-1.5">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-border" />
                 </div>

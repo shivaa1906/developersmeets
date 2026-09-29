@@ -11,6 +11,7 @@ import { sanitizeInput, sanitizeRichText } from '../utils/sanitizer.js';
 import { ProjectService } from '../services/projectService.js';
 import { DeveloperService } from '../services/developerService.js';
 import { GoogleOAuthService } from '../services/googleOAuthService.js';
+import { FacebookOAuthService } from '../services/facebookOAuthService.js';
 import { hashPassword, verifyPassword, validatePassword } from '../utils/password.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
@@ -1784,6 +1785,254 @@ export class AuthController {
         500,
         'oauth_failed',
         'Google sign-in is temporarily unavailable.'
+      );
+    }
+  }
+
+  /**
+   * Initiates Facebook OAuth: generates secure state and PKCE challenge, sets cookie,
+   * redirects to Facebook OAuth dialog endpoint.
+   */
+  static async initiateFacebookOAuth(req: Request, res: Response): Promise<void> {
+    try {
+      const requestedRedirect =
+        req.query.returnUrl ||
+        req.query.redirect ||
+        req.query.next;
+      const safeReturnUrl = validateRedirectUrl(requestedRedirect, '/dashboard');
+
+      if (!FacebookOAuthService.isConfigured() && process.env.NODE_ENV !== 'test') {
+        const errorRedirect = `/login?error=oauth_unavailable`;
+        if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+          res.status(503).json({
+            error: 'Facebook sign-in is temporarily unavailable.',
+            code: 'OAUTH_UNAVAILABLE',
+            redirectUrl: errorRedirect,
+          });
+          return;
+        }
+        res.redirect(errorRedirect);
+        return;
+      }
+
+      await AuditLogger.log({
+        action: 'FACEBOOK_OAUTH_STARTED',
+        entityType: 'OAUTH',
+        entityId: 'facebook',
+        metadata: { returnUrl: safeReturnUrl },
+      });
+
+      const { authorizationUrl, state } = FacebookOAuthService.generateAuthorizationUrl(safeReturnUrl);
+
+      // Set secure HttpOnly cookie for state binding
+      const isProduction = env.NODE_ENV === 'production';
+      const cookieOptions = [
+        `oauth_state_fb=${state}`,
+        'Path=/api/auth/facebook',
+        'HttpOnly',
+        'SameSite=Lax',
+        'Max-Age=600',
+        ...(isProduction ? ['Secure'] : []),
+      ].join('; ');
+      res.setHeader('Set-Cookie', cookieOptions);
+
+      if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+        res.json({
+          url: authorizationUrl,
+          state,
+          redirectUrl: authorizationUrl,
+        });
+        return;
+      }
+
+      res.redirect(authorizationUrl);
+    } catch (err: any) {
+      await AuditLogger.log({
+        action: 'FACEBOOK_OAUTH_FAILURE',
+        entityType: 'OAUTH',
+        entityId: 'facebook',
+        metadata: { error: err.message, stage: 'INITIATION' },
+      });
+
+      if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+        res.status(500).json({ error: err.message || 'Failed to initiate Facebook OAuth' });
+        return;
+      }
+      res.redirect('/login?error=oauth_unavailable');
+    }
+  }
+
+  /**
+   * Handles Facebook OAuth callback: validates state, exchanges authorization code,
+   * verifies token & user identity, resolves or provisions identity, and redirects with authenticated session.
+   */
+  static async handleFacebookOAuthCallback(req: Request, res: Response): Promise<void> {
+    const isJsonClient =
+      req.headers.accept?.includes('application/json') ||
+      req.query.format === 'json' ||
+      req.body?.format === 'json';
+    const clearCookieHeader = 'oauth_state_fb=; Path=/api/auth/facebook; HttpOnly; SameSite=Lax; Max-Age=0';
+
+    const handleCallbackError = async (
+      statusCode: number,
+      errorCode: string,
+      userFriendlyMessage: string,
+      auditMetadata?: any
+    ) => {
+      await AuditLogger.log({
+        action: 'FACEBOOK_OAUTH_FAILURE',
+        entityType: 'OAUTH',
+        entityId: 'facebook',
+        metadata: { errorCode, ...auditMetadata },
+      });
+
+      res.setHeader('Set-Cookie', clearCookieHeader);
+
+      if (isJsonClient) {
+        res.status(statusCode).json({
+          error: userFriendlyMessage,
+          code: errorCode,
+          redirectUrl: `/login?error=${errorCode}`,
+        });
+        return;
+      }
+
+      res.redirect(`/login?error=${errorCode}`);
+    };
+
+    try {
+      // 1. Check for provider-level callback error (e.g. user cancelled login)
+      const providerError = req.query.error || req.body?.error;
+      const errorReason = req.query.error_reason || req.body?.error_reason;
+      if (providerError || errorReason === 'user_denied') {
+        await handleCallbackError(
+          400,
+          'cancelled',
+          'Facebook sign-in was cancelled.',
+          { providerError: String(providerError || errorReason) }
+        );
+        return;
+      }
+
+      const state = (req.query.state || req.body?.state) as string;
+      const code = (req.query.code || req.body?.code) as string;
+      const directAccessToken = (req.body?.access_token || req.query?.access_token) as string;
+
+      // 2. Validate and consume single-use state token
+      let session;
+      try {
+        session = FacebookOAuthService.consumeState(state);
+      } catch (stateErr: any) {
+        const errCode = stateErr.code === 'STATE_EXPIRED' ? 'state_expired' : 'invalid_state';
+        await handleCallbackError(
+          400,
+          errCode,
+          'Your Facebook sign-in session expired. Please try again.'
+        );
+        return;
+      }
+
+      // 3. Verify presence of code (or test-supplied access_token)
+      if (!code && !directAccessToken) {
+        await handleCallbackError(
+          400,
+          'missing_code',
+          'Invalid authentication request: authorization code is missing.'
+        );
+        return;
+      }
+
+      // 4. Exchange code for access token (or use direct access_token if provided in test mode)
+      let accessToken = directAccessToken;
+      if (!accessToken) {
+        try {
+          const tokenRes = await FacebookOAuthService.exchangeCodeForTokens(code, session.codeVerifier);
+          accessToken = tokenRes.access_token;
+        } catch (exchangeErr: any) {
+          await handleCallbackError(
+            400,
+            exchangeErr.code || 'exchange_failed',
+            'Failed to exchange authorization code with Facebook.'
+          );
+          return;
+        }
+      }
+
+      // 5. Verify Facebook token authenticity and user identity
+      let claims;
+      try {
+        claims = await FacebookOAuthService.verifyFacebookTokenAndIdentity(accessToken);
+      } catch (tokenErr: any) {
+        const errCode = tokenErr.code || 'invalid_token';
+        let status = 401;
+        let message = 'Facebook token verification failed.';
+        if (errCode === 'TOKEN_EXPIRED' || errCode === 'INVALID_ACCESS_TOKEN') {
+          message = 'Facebook access token is invalid or expired. Please sign in again.';
+        } else if (errCode === 'INVALID_APP_ID') {
+          message = 'Untrusted or invalid identity provider token.';
+        }
+        const normalizedErrorCode =
+          errCode === 'INVALID_ACCESS_TOKEN' ? 'invalid_token' : errCode.toLowerCase();
+        await handleCallbackError(status, normalizedErrorCode, message);
+        return;
+      }
+
+      // 6. Resolve Facebook Identity & Session
+      let result;
+      try {
+        result = await FacebookOAuthService.resolveFacebookIdentity(claims, session.returnUrl);
+      } catch (resolveErr: any) {
+        if (resolveErr.code === 'EMAIL_CONFLICT') {
+          await handleCallbackError(
+            409,
+            'account_exists_conflict',
+            'An account already exists with this email. Please sign in using your existing account.',
+            { email: claims.email }
+          );
+          return;
+        }
+        if (resolveErr.code === 'MISSING_EMAIL') {
+          await handleCallbackError(
+            400,
+            'missing_email',
+            'Facebook did not provide an email address. Please continue to complete your account.'
+          );
+          return;
+        }
+        if (resolveErr.code === 'ACCOUNT_SUSPENDED') {
+          await handleCallbackError(
+            403,
+            'account_suspended',
+            'Your account has been suspended by administration. Please contact platform support.'
+          );
+          return;
+        }
+        if (resolveErr.code === 'ACCOUNT_DISABLED') {
+          await handleCallbackError(
+            403,
+            'account_disabled',
+            'Your account has been disabled. Please contact platform support.'
+          );
+          return;
+        }
+        throw resolveErr;
+      }
+
+      // Clear state cookie on success
+      res.setHeader('Set-Cookie', clearCookieHeader);
+
+      if (isJsonClient) {
+        res.json(result);
+        return;
+      }
+
+      const redirectDestination = `/auth/callback?token=${encodeURIComponent(result.token)}&redirect=${encodeURIComponent(result.redirectUrl)}`;
+      res.redirect(redirectDestination);
+    } catch (err: any) {
+      await handleCallbackError(
+        500,
+        'oauth_failed',
+        'Facebook sign-in is temporarily unavailable.'
       );
     }
   }

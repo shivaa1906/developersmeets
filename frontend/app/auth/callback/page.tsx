@@ -66,7 +66,7 @@ export default function AuthCallbackPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-center space-x-2 text-foreground font-semibold text-sm">
               <Loader2 className="h-4 w-4 animate-spin text-accent" />
-              <span>Completing Google Authentication...</span>
+              <span>Completing Secure Authentication...</span>
             </div>
             <p className="text-xs text-muted">Securing your session token and initializing workspace.</p>
           </div>

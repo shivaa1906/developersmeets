@@ -31,5 +31,9 @@ export const env = {
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
   GOOGLE_OAUTH_REDIRECT_URI:
     process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:5000/api/auth/google/callback',
+  FACEBOOK_CLIENT_ID: process.env.FACEBOOK_CLIENT_ID || '',
+  FACEBOOK_CLIENT_SECRET: process.env.FACEBOOK_CLIENT_SECRET || '',
+  FACEBOOK_OAUTH_REDIRECT_URI:
+    process.env.FACEBOOK_OAUTH_REDIRECT_URI || 'http://localhost:5000/api/auth/facebook/callback',
 };
 
