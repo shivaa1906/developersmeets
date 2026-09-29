@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Volume2, VolumeX } from 'lucide-react';
 import { InteractiveKeyboard } from './interactive-keyboard';
 import { CodePanel } from './code-panel';
 import { TerminalPanel } from './terminal-panel';
 import { KeyboardEventHUD } from './keyboard-event-hud';
 import { SystemStatusBadges } from './system-status';
+import { mechanicalAudio } from './keyboard-sound';
 
 interface DeveloperWorkspaceProps {
   className?: string;
@@ -14,9 +16,10 @@ interface DeveloperWorkspaceProps {
 export function DeveloperWorkspace({ className = '' }: DeveloperWorkspaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 1. Keyboard State
+  // 1. Keyboard State & Audio
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [lastKeyEvent, setLastKeyEvent] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   // 2. Pointer & Kinematics State
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
@@ -30,7 +33,7 @@ export function DeveloperWorkspace({ className = '' }: DeveloperWorkspaceProps) 
   const rafRef = useRef<number | null>(null);
 
   // ─────────────────────────────────────────────────────────────
-  // 3. Centralized Keyboard Event Handler
+  // 3. Centralized Keyboard Event Handler & Audio Synchronization
   // ─────────────────────────────────────────────────────────────
   const normalizeKey = useCallback((e: KeyboardEvent): string => {
     // Build combo string if modifier keys are active
@@ -60,11 +63,14 @@ export function DeveloperWorkspace({ className = '' }: DeveloperWorkspaceProps) 
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if user is typing in form inputs or textareas
+      // Don't intercept or play sound if user is typing in form inputs, textareas, or contenteditable
       const target = e.target as HTMLElement;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
         return;
       }
+
+      // Play immediate mechanical keyboard sound (< 15ms latency, synchronous)
+      mechanicalAudio.playKeyClick(e.key, e.repeat, e.code);
 
       const keyName = normalizeKey(e);
       const rawCode = e.key.toUpperCase();
@@ -193,13 +199,41 @@ export function DeveloperWorkspace({ className = '' }: DeveloperWorkspaceProps) 
           transition: 'transform 0.05s linear',
         }}
       >
-        {/* Top Control Strip: HUD + Secondary Telemetry */}
+        {/* Top Control Strip: HUD + Sound Toggle + Secondary Telemetry */}
         <div className="flex items-center justify-between gap-3 px-1 w-full">
-          <KeyboardEventHUD
-            lastKeyEvent={lastKeyEvent}
-            activeKeysCount={activeKeys.size}
-            className="shrink-0"
-          />
+          <div className="flex items-center space-x-2">
+            <KeyboardEventHUD
+              lastKeyEvent={lastKeyEvent}
+              activeKeysCount={activeKeys.size}
+              className="shrink-0"
+            />
+            {/* Audio Toggle Indicator */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = mechanicalAudio.toggleSound();
+                setSoundEnabled(next);
+              }}
+              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-mono transition-all duration-150 select-none ${
+                soundEnabled
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:border-emerald-400 hover:bg-emerald-500/20 shadow-sm'
+                  : 'border-border/60 bg-surface-elevated/40 text-muted-foreground hover:border-border hover:text-foreground'
+              }`}
+              title={soundEnabled ? 'Mute mechanical keyboard audio' : 'Enable mechanical keyboard audio'}
+            >
+              {soundEnabled ? (
+                <>
+                  <Volume2 className="h-3 w-3 text-emerald-400" />
+                  <span className="font-semibold tracking-wider">SOUND ON</span>
+                </>
+              ) : (
+                <>
+                  <VolumeX className="h-3 w-3 text-muted-foreground" />
+                  <span className="font-semibold tracking-wider">SOUND OFF</span>
+                </>
+              )}
+            </button>
+          </div>
           <SystemStatusBadges className="hidden sm:flex" />
         </div>
 
