@@ -11,7 +11,6 @@ interface InteractiveKeyboardProps {
 
 // ─────────────────────────────────────────────────────────────
 // Keyboard Layout Matrix (Compact 68-Key Developer Layout)
-// Divided cleanly into Left Cluster and Right Cluster for split
 // ─────────────────────────────────────────────────────────────
 
 interface KeyDef {
@@ -122,7 +121,6 @@ export function InteractiveKeyboard({
 }: InteractiveKeyboardProps) {
   // Check whether a key is currently pressed
   const isKeyPressed = (id: string): boolean => {
-    // Direct match
     if (activeKeys.has(id)) return true;
 
     // Shift aliases
@@ -156,32 +154,36 @@ export function InteractiveKeyboard({
 
   return (
     <div
-      className={`relative w-full rounded-2xl border border-border/80 dark:border-emerald-500/25 bg-[#0a0e0c]/95 p-3 sm:p-5 shadow-2xl backdrop-blur-xl ${className}`}
+      className={`relative w-full rounded-2xl border border-white/15 bg-gradient-to-b from-[#161c22] via-[#11161a] to-[#0c0f13] p-3 sm:p-5 shadow-[0_20px_50px_rgba(0,0,0,0.85),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl ${className}`}
       style={{
         transformStyle: 'preserve-3d',
       }}
     >
-      {/* Top Aluminum Chassis Rim with Indicators & Port */}
-      <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-3 px-1 text-[10px] font-mono text-muted-foreground select-none">
-        <div className="flex items-center space-x-2">
-          {/* USB-C Port Indicator */}
-          <div className="h-1.5 w-6 rounded-full bg-[#1b2621] border border-emerald-500/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]" />
-          <span className="text-[9px] text-emerald-400/80 tracking-widest uppercase">
-            NEXUS-CORE-68 // REV 2.4
+      {/* Machined Aluminum Bezel Top Bar */}
+      <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-3 px-1 text-xs font-mono select-none">
+        <div className="flex items-center space-x-3">
+          {/* USB-C CNC Port Indicator */}
+          <div className="h-2 w-7 rounded-full bg-[#080b0d] border border-white/20 shadow-[inset_0_1px_3px_rgba(0,0,0,0.9)]" />
+          <span className="text-[10px] sm:text-xs text-slate-300 font-bold tracking-wider uppercase">
+            NEXUS-CORE-68 // CNC WORKSTATION
           </span>
         </div>
 
-        {/* Telemetry Status LEDs */}
-        <div className="flex items-center space-x-3">
+        {/* Telemetry Status LEDs with HD Glow */}
+        <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
-            <span className="text-[8px] uppercase tracking-wider text-muted-foreground">ONLINE</span>
+            <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+            <span className="text-[9px] uppercase tracking-wider font-bold text-slate-300">ONLINE</span>
           </div>
           <div className="flex items-center space-x-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${
-              activeKeys.size > 0 ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-[#1b2621]'
-            }`} />
-            <span className="text-[8px] uppercase tracking-wider text-muted-foreground">INPUT</span>
+            <span
+              className={`h-2 w-2 rounded-full transition-all duration-100 ${
+                activeKeys.size > 0
+                  ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]'
+                  : 'bg-slate-700'
+              }`}
+            />
+            <span className="text-[9px] uppercase tracking-wider font-bold text-slate-300">INPUT</span>
           </div>
         </div>
       </div>
@@ -190,43 +192,38 @@ export function InteractiveKeyboard({
       <div className="relative flex justify-center items-center gap-2 sm:gap-3 overflow-x-auto pb-1">
         {/* Left Keyboard Cluster */}
         <div
-          className="flex flex-col gap-1 sm:gap-1.5 flex-1 max-w-[280px] sm:max-w-[340px] will-change-transform"
+          className="flex flex-col gap-1.5 flex-1 max-w-[310px] sm:max-w-[370px] will-change-transform"
           style={{
             transform: `translateX(-${splitOffset}px) rotateZ(-${(splitOffset * 0.08).toFixed(2)}deg)`,
             transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
             transformStyle: 'preserve-3d',
           }}
         >
-          {/* Row 1 Left */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_1_LEFT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
           </div>
 
-          {/* Row 2 Left */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_2_LEFT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
           </div>
 
-          {/* Row 3 Left */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_3_LEFT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
           </div>
 
-          {/* Row 4 Left */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_4_LEFT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
           </div>
 
-          {/* Row 5 Left */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_5_LEFT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
@@ -235,54 +232,49 @@ export function InteractiveKeyboard({
 
         {/* Subtle Mechanical Expansion Seam / Split Hinge */}
         <div
-          className="hidden sm:flex flex-col justify-center items-center opacity-40 shrink-0 select-none pointer-events-none"
+          className="hidden sm:flex flex-col justify-center items-center opacity-60 shrink-0 select-none pointer-events-none"
           style={{
             width: `${Math.max(splitOffset * 1.5, 4)}px`,
             transition: 'width 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
-          <div className="h-4/5 w-[1px] bg-gradient-to-b from-transparent via-emerald-500/40 to-transparent" />
+          <div className="h-4/5 w-[1px] bg-gradient-to-b from-transparent via-emerald-400/50 to-transparent" />
         </div>
 
         {/* Right Keyboard Cluster */}
         <div
-          className="flex flex-col gap-1 sm:gap-1.5 flex-1 max-w-[340px] sm:max-w-[420px] will-change-transform"
+          className="flex flex-col gap-1.5 flex-1 max-w-[360px] sm:max-w-[440px] will-change-transform"
           style={{
             transform: `translateX(${splitOffset}px) rotateZ(${(splitOffset * 0.08).toFixed(2)}deg)`,
             transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
             transformStyle: 'preserve-3d',
           }}
         >
-          {/* Row 1 Right */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_1_RIGHT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
           </div>
 
-          {/* Row 2 Right */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_2_RIGHT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
           </div>
 
-          {/* Row 3 Right */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_3_RIGHT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
           </div>
 
-          {/* Row 4 Right */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_4_RIGHT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}
           </div>
 
-          {/* Row 5 Right */}
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {ROW_5_RIGHT.map((key) => (
               <KeyboardKey key={key.id} {...key} isPressed={isKeyPressed(key.id)} />
             ))}

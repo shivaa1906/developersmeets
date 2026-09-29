@@ -184,7 +184,7 @@ export function DeveloperWorkspace({ className = '' }: DeveloperWorkspaceProps) 
       ref={containerRef}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
-      className={`relative w-full max-w-[680px] flex flex-col items-center select-none ${className}`}
+      className={`relative w-full max-w-[760px] flex flex-col items-center select-none ${className}`}
       style={{
         perspective: '1200px',
         transformStyle: 'preserve-3d',
@@ -214,22 +214,22 @@ export function DeveloperWorkspace({ className = '' }: DeveloperWorkspaceProps) 
                 const next = mechanicalAudio.toggleSound();
                 setSoundEnabled(next);
               }}
-              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border text-[10px] font-mono transition-all duration-150 select-none ${
+              className={`flex items-center space-x-2 px-3 py-2 rounded-xl border text-xs font-mono transition-all duration-150 select-none shadow-sm ${
                 soundEnabled
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:border-emerald-400 hover:bg-emerald-500/20 shadow-sm'
-                  : 'border-border/60 bg-surface-elevated/40 text-muted-foreground hover:border-border hover:text-foreground'
+                  ? 'border-emerald-400/50 bg-[#151b22] text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:border-emerald-400 hover:bg-[#1a222b]'
+                  : 'border-white/15 bg-[#151b22]/90 text-slate-400 hover:border-white/30 hover:text-slate-200'
               }`}
               title={soundEnabled ? 'Mute mechanical keyboard audio' : 'Enable mechanical keyboard audio'}
             >
               {soundEnabled ? (
                 <>
-                  <Volume2 className="h-3 w-3 text-emerald-400" />
-                  <span className="font-semibold tracking-wider">SOUND ON</span>
+                  <Volume2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="font-bold tracking-wider">SOUND ON</span>
                 </>
               ) : (
                 <>
-                  <VolumeX className="h-3 w-3 text-muted-foreground" />
-                  <span className="font-semibold tracking-wider">SOUND OFF</span>
+                  <VolumeX className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="font-bold tracking-wider">SOUND OFF</span>
                 </>
               )}
             </button>
