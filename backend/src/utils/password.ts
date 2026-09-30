@@ -1,5 +1,6 @@
-import argon2 from 'argon2';
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { argon2id as wasmArgon2id } from 'hash-wasm';
 import { env } from '../config/environment.js';
 
 export interface PasswordValidationResult {
@@ -65,6 +66,23 @@ export function isBcryptHash(hash: string | null | undefined): boolean {
   );
 }
 
+// Lazy-loaded native argon2 loader with safe fallback
+let nativeArgon2: any = null;
+let nativeArgon2Attempted = false;
+
+async function getNativeArgon2(): Promise<any> {
+  if (nativeArgon2Attempted) return nativeArgon2;
+  nativeArgon2Attempted = true;
+  try {
+    const mod = await import('argon2');
+    nativeArgon2 = mod.default || mod;
+  } catch {
+    // Native argon2 binary blocked by OS Application Control (Windows SmartApp Control) or unavailable
+    nativeArgon2 = null;
+  }
+  return nativeArgon2;
+}
+
 /**
  * Hashes a plaintext password using Argon2id with a unique CSPRNG salt
  * and server-configurable parameters.
@@ -74,19 +92,34 @@ export async function hashPassword(password: string): Promise<string> {
     throw new Error('Password must be a non-empty string.');
   }
 
-  return await argon2.hash(password, {
-    type: argon2.argon2id,
-    memoryCost: env.ARGON2_MEMORY_COST,
-    timeCost: env.ARGON2_TIME_COST,
+  const argon = await getNativeArgon2();
+  if (argon) {
+    return await argon.hash(password, {
+      type: argon.argon2id,
+      memoryCost: env.ARGON2_MEMORY_COST,
+      timeCost: env.ARGON2_TIME_COST,
+      parallelism: env.ARGON2_PARALLELISM,
+      hashLength: env.ARGON2_HASH_LENGTH,
+    });
+  }
+
+  // Pure WebAssembly Argon2id fallback: RFC 9106 compliant, platform-independent, zero native DLL blocking
+  const salt = crypto.randomBytes(16);
+  return await wasmArgon2id({
+    password,
+    salt,
+    iterations: env.ARGON2_TIME_COST,
+    memorySize: env.ARGON2_MEMORY_COST,
     parallelism: env.ARGON2_PARALLELISM,
     hashLength: env.ARGON2_HASH_LENGTH,
+    outputType: 'encoded',
   });
 }
 
 /**
  * Verifies a candidate password against a stored hash using constant-time verification.
  * Automatically identifies hash algorithm:
- * - If Argon2id: verifies using argon2.verify
+ * - If Argon2id: verifies using argon2.verify or wasmArgon2id with timingSafeEqual
  * - If legacy bcrypt ($2a$, $2b$, $2y$): verifies using bcrypt.compare and flags needsRehash = true
  * - If unknown/invalid: safely returns valid = false without throwing or leaking internal info
  */
@@ -105,8 +138,39 @@ export async function verifyPassword(
 
   try {
     if (isArgon2Hash(storedHash)) {
-      const match = await argon2.verify(storedHash, candidatePassword);
-      return { valid: match, needsRehash: false };
+      const argon = await getNativeArgon2();
+      if (argon) {
+        const match = await argon.verify(storedHash, candidatePassword);
+        return { valid: match, needsRehash: false };
+      }
+
+      // Wasm-based constant-time Argon2 verification
+      const parts = storedHash.split('$');
+      if (parts.length >= 6) {
+        const params = parts[3].split(',').reduce((acc: any, p: string) => {
+          const [k, v] = p.split('=');
+          acc[k] = parseInt(v, 10);
+          return acc;
+        }, {});
+        const salt = Buffer.from(parts[4], 'base64');
+        const expectedHashBuf = Buffer.from(parts[5], 'base64');
+        const computed = await wasmArgon2id({
+          password: candidatePassword,
+          salt,
+          iterations: params.t,
+          memorySize: params.m,
+          parallelism: params.p,
+          hashLength: expectedHashBuf.length,
+          outputType: 'encoded',
+        });
+        const computedParts = computed.split('$');
+        const computedHashBuf = Buffer.from(computedParts[5], 'base64');
+        const match =
+          expectedHashBuf.length === computedHashBuf.length &&
+          crypto.timingSafeEqual(expectedHashBuf, computedHashBuf);
+        return { valid: match, needsRehash: false };
+      }
+      return { valid: false, needsRehash: false };
     }
 
     if (isBcryptHash(storedHash)) {

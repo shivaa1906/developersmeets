@@ -22,6 +22,7 @@ import {
   Users,
   MessageSquare,
   ChevronDown,
+  Code2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { ThemeNavbarToggle } from '@/components/ui/theme-selector';
@@ -87,6 +88,15 @@ export const Navbar: React.FC = () => {
       icon: <LifeBuoy className="h-3.5 w-3.5" />,
       onClick: () => router.push(isExecutive ? '/admin/support' : '/dashboard/support'),
     },
+    ...(isClient
+      ? [
+          {
+            label: 'Join as Developer',
+            icon: <Code2 className="h-3.5 w-3.5 text-accent" />,
+            onClick: () => router.push('/join-developer'),
+          },
+        ]
+      : []),
     {
       label: 'Sign Out',
       icon: <LogOut className="h-3.5 w-3.5" />,
@@ -141,6 +151,11 @@ export const Navbar: React.FC = () => {
                   <Link href="/dashboard">
                     <Button size="sm" variant="ghost" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
                       Dashboard
+                    </Button>
+                  </Link>
+                  <Link href="/join-developer">
+                    <Button size="sm" variant="outline" className="border-accent/40 text-accent hover:bg-accent/10" leftIcon={<Code2 className="h-3.5 w-3.5" />}>
+                      Join as Developer
                     </Button>
                   </Link>
                   <Link href="/start-project">
@@ -310,6 +325,11 @@ export const Navbar: React.FC = () => {
                     <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
                       <Button size="sm" variant="outline" className="w-full justify-start" leftIcon={<LayoutDashboard className="h-3.5 w-3.5" />}>
                         Dashboard
+                      </Button>
+                    </Link>
+                    <Link href="/join-developer" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" variant="outline" className="w-full justify-start border-accent/40 text-accent" leftIcon={<Code2 className="h-3.5 w-3.5" />}>
+                        Join as Developer
                       </Button>
                     </Link>
                     <Link href="/start-project" onClick={() => setMobileMenuOpen(false)}>

@@ -149,9 +149,13 @@ export class AuthController {
 
       const result = await withTransaction(async (client) => {
         // Check existing email
-        const existingEmail = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+        const existingEmail = await client.query('SELECT id, role, status FROM users WHERE email = $1', [normalizedEmail]);
         if (existingEmail.rows.length > 0) {
-          const conflictErr: any = new Error('This email is already registered.');
+          const isClientAccount = existingEmail.rows[0].role === ROLES.CLIENT;
+          const msg = isClientAccount
+            ? 'This email is already registered to your Client account. A separate Developer account requires a different email.'
+            : 'This email is already registered.';
+          const conflictErr: any = new Error(msg);
           conflictErr.statusCode = 409;
           throw conflictErr;
         }
@@ -274,6 +278,39 @@ export class AuthController {
           },
           client
         );
+
+        // If registered through transition from a Client account, record relationship & audit
+        const { fromClientUserId } = req.body;
+        if (fromClientUserId) {
+          const clientUserCheck = await client.query(
+            'SELECT id, email, role, status FROM users WHERE id = $1',
+            [fromClientUserId]
+          );
+          if (clientUserCheck.rows.length > 0) {
+            await AuditLogger.log(
+              {
+                actorUserId: user.id,
+                action: 'DEVELOPER_REGISTRATION_STARTED_FROM_CLIENT',
+                entityType: 'USER',
+                entityId: user.id,
+                metadata: {
+                  clientUserId: fromClientUserId,
+                  clientEmail: clientUserCheck.rows[0].email,
+                  developerEmail: user.email,
+                },
+              },
+              client
+            );
+
+            // Record cross-account link in user_account_links
+            await client.query(
+              `INSERT INTO user_account_links (primary_user_id, linked_user_id, relationship_type, created_at)
+               VALUES ($1, $2, 'CLIENT_DEVELOPER', NOW())
+               ON CONFLICT (primary_user_id, linked_user_id) DO NOTHING`,
+              [fromClientUserId, user.id]
+            );
+          }
+        }
 
         return { user, developer: dev };
       });
@@ -1544,6 +1581,506 @@ export class AuthController {
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to deactivate account' });
+    }
+  }
+
+  /**
+   * PHASE 8: CLIENT -> DEVELOPER REGISTRATION TRANSITION
+   * Queries transition status, account invariants, and deactivation eligibility for an authenticated CLIENT.
+   * Strictly verifies role server-side; blocks developers, executives, and support staff.
+   */
+  static async getDeveloperTransition(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    // Role checks
+    if (req.user.role === ROLES.DEVELOPER) {
+      res.status(400).json({
+        error: 'Your account is already registered as a Developer.',
+        code: 'ALREADY_DEVELOPER',
+        isDeveloper: true,
+      });
+      return;
+    }
+
+    if (
+      req.user.role === ROLES.CEO ||
+      req.user.role === ROLES.MD ||
+      req.user.role === ROLES.ADMIN ||
+      req.user.email === 'shivaa1906@gmail.com'
+    ) {
+      res.status(403).json({
+        error: 'Administrative and executive accounts cannot enter the client-to-developer transition workflow.',
+        code: 'FORBIDDEN_ROLE',
+      });
+      return;
+    }
+
+    if (req.user.role === ROLES.SUPPORT) {
+      res.status(403).json({
+        error: 'Platform support accounts cannot enter the client-to-developer transition workflow.',
+        code: 'FORBIDDEN_ROLE',
+      });
+      return;
+    }
+
+    if (req.user.role !== ROLES.CLIENT) {
+      res.status(403).json({
+        error: 'Only client accounts can enter the developer transition workflow.',
+        code: 'CLIENT_ROLE_REQUIRED',
+      });
+      return;
+    }
+
+    try {
+      // Validate live user status in database
+      const userRes = await query(
+        'SELECT id, uid, public_uid, email, status, is_suspended, suspension_reason FROM users WHERE id = $1',
+        [req.user.userId]
+      );
+
+      if (userRes.rows.length === 0) {
+        res.status(404).json({ error: 'User account not found.', code: 'USER_NOT_FOUND' });
+        return;
+      }
+
+      const dbUser = userRes.rows[0];
+
+      if (dbUser.is_suspended || dbUser.status === 'DISABLED' || dbUser.status === 'SUSPENDED') {
+        res.status(403).json({
+          error: 'Your client account is suspended or disabled and cannot initiate a transition.',
+          code: 'ACCOUNT_SUSPENDED',
+        });
+        return;
+      }
+
+      // Fetch client record
+      const clientRes = await query(
+        'SELECT id, client_number, company_name, private_name FROM clients WHERE user_id = $1',
+        [req.user.userId]
+      );
+
+      if (clientRes.rows.length === 0) {
+        res.status(404).json({ error: 'Client profile not found for this account.', code: 'CLIENT_PROFILE_NOT_FOUND' });
+        return;
+      }
+
+      const clientData = clientRes.rows[0];
+
+      // Check active projects / workflows that would prevent deactivation for Option B
+      const activeProjRes = await query(
+        `SELECT id, project_number, title, status FROM projects 
+         WHERE client_id = $1 AND status IN ('IN_PROGRESS', 'DEVELOPER_SELECTED', 'SUBMITTED_FOR_REVIEW', 'SELECTION_PENDING', 'OPEN_FOR_CLAIMS', 'CLAIMS_ACTIVE', 'REVIEWING')`,
+        [clientData.id]
+      );
+
+      const activeProjects = activeProjRes.rows;
+      const canDeactivate = activeProjects.length === 0;
+      const blockingReasons: string[] = [];
+
+      if (!canDeactivate) {
+        blockingReasons.push(
+          'Your account has active projects in progress or under review. Please resolve or transfer those projects before deactivating your client account.'
+        );
+      }
+
+      // Log transition initiated
+      await AuditLogger.log({
+        actorUserId: req.user.userId,
+        action: 'DEVELOPER_REGISTRATION_TRANSITION_STARTED',
+        entityType: 'USER',
+        entityId: req.user.userId,
+        metadata: {
+          email: dbUser.email,
+          role: ROLES.CLIENT,
+          clientNumber: clientData.client_number,
+          canDeactivate,
+        },
+      });
+
+      res.json({
+        currentAccount: {
+          userId: dbUser.id,
+          uid: dbUser.uid,
+          email: dbUser.email,
+          role: ROLES.CLIENT,
+          clientNumber: clientData.client_number,
+          companyName: clientData.company_name,
+          privateName: clientData.private_name,
+          status: dbUser.status,
+        },
+        options: {
+          optionA: {
+            id: 'SEPARATE_DEVELOPER_ACCOUNT',
+            title: 'Create a separate Developer account',
+            description:
+              'Your existing Client account remains active. Your client projects and history remain unchanged. You will register a separate Developer account with its own authentication identity.',
+            keepsClientActive: true,
+            requiresVerification: true,
+            nextStep: '/register/developer',
+          },
+          optionB: {
+            id: 'DEACTIVATE_CLIENT_ACCOUNT',
+            title: 'Deactivate Client account and continue as Developer',
+            description:
+              'Your Client account will be safely deactivated and existing sessions invalidated. Historical projects, financial transactions, and audit records remain preserved. You will continue to Developer registration.',
+            canDeactivate,
+            blockingReasons,
+            activeProjects,
+            confirmationRequired: true,
+            confirmationPhrase: 'DEACTIVATE CLIENT ACCOUNT',
+            alternateConfirmationPhrase: 'DELETE',
+            nextStep: '/register/developer',
+          },
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to retrieve transition status' });
+    }
+  }
+
+  /**
+   * PHASE 8: Select transition option
+   * Handles explicit selection of Option A (separate Developer account) or Option B (deactivation confirmation).
+   */
+  static async startDeveloperTransition(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    if (req.user.role === ROLES.DEVELOPER) {
+      res.status(400).json({
+        error: 'Your account is already registered as a Developer.',
+        code: 'ALREADY_DEVELOPER',
+      });
+      return;
+    }
+
+    if (
+      req.user.role === ROLES.CEO ||
+      req.user.role === ROLES.MD ||
+      req.user.role === ROLES.ADMIN ||
+      req.user.role === ROLES.SUPPORT ||
+      req.user.email === 'shivaa1906@gmail.com'
+    ) {
+      res.status(403).json({
+        error: 'Administrative and support accounts cannot enter the client-to-developer transition workflow.',
+        code: 'FORBIDDEN_ROLE',
+      });
+      return;
+    }
+
+    if (req.user.role !== ROLES.CLIENT) {
+      res.status(403).json({
+        error: 'Only client accounts can enter the developer transition workflow.',
+        code: 'CLIENT_ROLE_REQUIRED',
+      });
+      return;
+    }
+
+    const { option } = req.body || {};
+    const normalizedOption = String(option || '').toUpperCase().trim();
+
+    if (
+      normalizedOption !== 'OPTION_A' &&
+      normalizedOption !== 'SEPARATE_DEVELOPER_ACCOUNT' &&
+      normalizedOption !== 'OPTION_B' &&
+      normalizedOption !== 'DEACTIVATE_CLIENT_ACCOUNT'
+    ) {
+      res.status(400).json({
+        error: "Valid transition option is required: 'OPTION_A' or 'OPTION_B'.",
+        code: 'INVALID_TRANSITION_OPTION',
+      });
+      return;
+    }
+
+    try {
+      const userRes = await query(
+        'SELECT id, email, role, status, is_suspended FROM users WHERE id = $1',
+        [req.user.userId]
+      );
+      if (userRes.rows.length === 0) {
+        res.status(404).json({ error: 'User account not found.' });
+        return;
+      }
+
+      const dbUser = userRes.rows[0];
+      if (dbUser.is_suspended || dbUser.status === 'DISABLED' || dbUser.status === 'SUSPENDED') {
+        res.status(403).json({
+          error: 'Your client account is suspended or disabled.',
+          code: 'ACCOUNT_SUSPENDED',
+        });
+        return;
+      }
+
+      // Audit selection
+      await AuditLogger.log({
+        actorUserId: req.user.userId,
+        action: 'DEVELOPER_REGISTRATION_TRANSITION_OPTION_SELECTED',
+        entityType: 'USER',
+        entityId: req.user.userId,
+        metadata: {
+          email: dbUser.email,
+          role: ROLES.CLIENT,
+          selectedOption: normalizedOption,
+        },
+      });
+
+      if (normalizedOption === 'OPTION_A' || normalizedOption === 'SEPARATE_DEVELOPER_ACCOUNT') {
+        // Option A: Client account remains completely preserved.
+        res.json({
+          success: true,
+          option: 'OPTION_A',
+          action: 'PROCEED_TO_REGISTRATION',
+          nextStep: '/register/developer',
+          clientUserId: dbUser.id,
+          message:
+            'You can now register a separate Developer account. Your existing Client account remains active and preserved.',
+        });
+        return;
+      }
+
+      // Option B: Check eligibility before prompting for confirmation
+      const clientRes = await query('SELECT id FROM clients WHERE user_id = $1', [req.user.userId]);
+      if (clientRes.rows.length === 0) {
+        res.status(404).json({ error: 'Client profile not found.' });
+        return;
+      }
+
+      const clientId = clientRes.rows[0].id;
+      const activeProjRes = await query(
+        `SELECT id, project_number, title, status FROM projects 
+         WHERE client_id = $1 AND status IN ('IN_PROGRESS', 'DEVELOPER_SELECTED', 'SUBMITTED_FOR_REVIEW', 'SELECTION_PENDING', 'OPEN_FOR_CLAIMS', 'CLAIMS_ACTIVE', 'REVIEWING')`,
+        [clientId]
+      );
+
+      if (activeProjRes.rows.length > 0) {
+        await AuditLogger.log({
+          actorUserId: req.user.userId,
+          action: 'CLIENT_ACCOUNT_DEACTIVATION_BLOCKED',
+          entityType: 'USER',
+          entityId: req.user.userId,
+          metadata: {
+            reason: 'ACTIVE_PROJECTS_EXIST',
+            activeProjectCount: activeProjRes.rows.length,
+          },
+        });
+
+        res.status(400).json({
+          error:
+            'Your account has active projects. Please resolve or transfer those projects before deactivating your client account.',
+          code: 'ACTIVE_PROJECTS_BLOCK_DEACTIVATION',
+          canDeactivate: false,
+          activeProjects: activeProjRes.rows,
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        option: 'OPTION_B',
+        action: 'CONFIRMATION_REQUIRED',
+        canDeactivate: true,
+        confirmationRequired: true,
+        confirmationPhrase: 'DEACTIVATE CLIENT ACCOUNT',
+        alternateConfirmationPhrase: 'DELETE',
+        nextStep: '/register/developer',
+        message: 'Explicit confirmation required to deactivate your Client account.',
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to start transition' });
+    }
+  }
+
+  /**
+   * PHASE 8: Deactivate Client Account for Developer Transition
+   * Safely soft-deactivates client account after explicit confirmation & zero active projects.
+   * Invalidates token sessions and preserves all historical records.
+   */
+  static async deactivateClientForTransition(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    // Role protection
+    if (req.user.email === 'shivaa1906@gmail.com' || req.user.role === ROLES.CEO) {
+      res.status(403).json({
+        error: 'Chief Executive Officer account is protected and cannot be deleted or deactivated.',
+        code: 'FORBIDDEN_ROLE',
+      });
+      return;
+    }
+
+    if (req.user.role === ROLES.MD) {
+      res.status(403).json({
+        error: 'Managing Director account is protected and cannot be deactivated via self-service.',
+        code: 'FORBIDDEN_ROLE',
+      });
+      return;
+    }
+
+    if (req.user.role !== ROLES.CLIENT) {
+      res.status(403).json({
+        error: 'Only client accounts can be deactivated through this transition endpoint.',
+        code: 'CLIENT_ROLE_REQUIRED',
+      });
+      return;
+    }
+
+    // Explicit confirmation validation
+    const { confirmation, confirmText } = req.body || {};
+    const text = (confirmation || confirmText || '').trim();
+    if (text !== 'DEACTIVATE CLIENT ACCOUNT' && text !== 'DELETE') {
+      res.status(400).json({
+        error:
+          "Confirmation text 'DEACTIVATE CLIENT ACCOUNT' or 'DELETE' is required to confirm account deactivation.",
+        code: 'INVALID_CONFIRMATION',
+      });
+      return;
+    }
+
+    // Check user in database
+    const userRes = await query(
+      'SELECT id, email, role, status, is_suspended, token_version FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ error: 'User account not found.' });
+      return;
+    }
+
+    const dbUser = userRes.rows[0];
+
+    if (dbUser.is_suspended || dbUser.status === 'DISABLED' || dbUser.status === 'SUSPENDED') {
+      res.status(400).json({
+        error: 'Account is already deactivated or suspended.',
+        code: 'ALREADY_DEACTIVATED',
+      });
+      return;
+    }
+
+    // Check active projects
+    const clientRes = await query('SELECT id, client_number FROM clients WHERE user_id = $1', [req.user.userId]);
+    if (clientRes.rows.length === 0) {
+      res.status(404).json({ error: 'Client profile not found.' });
+      return;
+    }
+
+    const clientId = clientRes.rows[0].id;
+    const activeProjectsRes = await query(
+      `SELECT id, project_number, title, status FROM projects 
+       WHERE client_id = $1 AND status IN ('IN_PROGRESS', 'DEVELOPER_SELECTED', 'SUBMITTED_FOR_REVIEW', 'SELECTION_PENDING', 'OPEN_FOR_CLAIMS', 'CLAIMS_ACTIVE', 'REVIEWING')`,
+      [clientId]
+    );
+
+    if (activeProjectsRes.rows.length > 0) {
+      await AuditLogger.log({
+        actorUserId: req.user.userId,
+        action: 'CLIENT_ACCOUNT_DEACTIVATION_BLOCKED',
+        entityType: 'USER',
+        entityId: req.user.userId,
+        metadata: {
+          reason: 'ACTIVE_PROJECTS_EXIST',
+          activeProjects: activeProjectsRes.rows,
+        },
+      });
+
+      res.status(400).json({
+        error:
+          'Your account has active projects. Please resolve or transfer those projects before deactivating your client account.',
+        code: 'ACTIVE_PROJECTS_BLOCK_DEACTIVATION',
+        activeProjects: activeProjectsRes.rows,
+      });
+      return;
+    }
+
+    try {
+      await withTransaction(async (client) => {
+        // 1. Audit log: CLIENT_ACCOUNT_DEACTIVATION_REQUESTED
+        await AuditLogger.log(
+          {
+            actorUserId: req.user!.userId,
+            action: 'CLIENT_ACCOUNT_DEACTIVATION_REQUESTED',
+            entityType: 'USER',
+            entityId: req.user!.userId,
+            metadata: {
+              email: req.user!.email,
+              role: req.user!.role,
+              reason: 'DEVELOPER_TRANSITION',
+            },
+          },
+          client
+        );
+
+        // 2. Safely soft-deactivate user: status = DISABLED, is_suspended = TRUE, increment token_version
+        await client.query(
+          `UPDATE users 
+           SET status = 'DISABLED', 
+               is_suspended = TRUE, 
+               suspension_reason = 'Deactivated by user for developer registration transition', 
+               token_version = COALESCE(token_version, 1) + 1, 
+               updated_at = NOW() 
+           WHERE id = $1`,
+          [req.user!.userId]
+        );
+
+        // 3. Audit log: CLIENT_ACCOUNT_DEACTIVATED
+        await AuditLogger.log(
+          {
+            actorUserId: req.user!.userId,
+            action: 'CLIENT_ACCOUNT_DEACTIVATED',
+            entityType: 'USER',
+            entityId: req.user!.userId,
+            metadata: {
+              email: req.user!.email,
+              role: req.user!.role,
+              transition: true,
+              preservedHistory: true,
+              deactivatedAt: new Date().toISOString(),
+            },
+          },
+          client
+        );
+
+        // 4. Audit log: SESSION_INVALIDATED
+        await AuditLogger.log(
+          {
+            actorUserId: req.user!.userId,
+            action: 'SESSION_INVALIDATED',
+            entityType: 'USER',
+            entityId: req.user!.userId,
+            metadata: {
+              email: req.user!.email,
+              reason: 'CLIENT_DEACTIVATED_FOR_TRANSITION',
+            },
+          },
+          client
+        );
+
+        // 5. System notification recording preservation of records
+        await client.query(
+          `INSERT INTO notifications (user_id, title, message, type)
+           VALUES ($1, 'Client Account Deactivated', 'Your Client account was deactivated for developer registration transition. Historical projects, financial transactions, and audit records remain preserved.', 'SYSTEM')`,
+          [req.user!.userId]
+        );
+      });
+
+      res.json({
+        success: true,
+        deactivated: true,
+        preservedHistory: true,
+        clientUserId: dbUser.id,
+        nextStep: '/register/developer',
+        message:
+          'Client account successfully deactivated. All active sessions have been invalidated. You may now continue to Developer registration.',
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to deactivate client account' });
     }
   }
 

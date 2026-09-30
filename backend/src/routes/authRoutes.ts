@@ -34,4 +34,9 @@ router.post('/delete-account', authenticateJwt, AuthController.deactivateAccount
 router.post('/account/delete', authenticateJwt, AuthController.deactivateAccount);
 router.delete('/account', authenticateJwt, AuthController.deactivateAccount);
 
+// Phase 8: Client -> Developer Registration Transition endpoints
+router.get('/account/developer-transition', authenticateJwt, AuthController.getDeveloperTransition);
+router.post('/account/developer-transition/start', authenticateJwt, AuthController.startDeveloperTransition);
+router.post('/account/developer-transition/deactivate-client', authenticateJwt, AuthController.deactivateClientForTransition);
+
 export default router;

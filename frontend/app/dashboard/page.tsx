@@ -21,6 +21,7 @@ import {
   Bell,
   Plus,
   AlertCircle,
+  Code2,
 } from 'lucide-react';
 
 export default function DashboardOverviewPage() {
@@ -117,6 +118,11 @@ export default function DashboardOverviewPage() {
                   Start a Project
                 </Button>
               </Link>
+              <Link href="/join-developer">
+                <Button variant="outline" size="sm" className="border-accent/40 text-accent hover:bg-accent/10" leftIcon={<Code2 className="h-3.5 w-3.5" />}>
+                  Join as Developer
+                </Button>
+              </Link>
               <Link href="/dashboard/projects">
                 <Button variant="outline" size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
                   My Projects
@@ -139,6 +145,32 @@ export default function DashboardOverviewPage() {
           )}
         </div>
       </div>
+
+      {/* Client to Developer Opportunity Banner */}
+      {isClient && (
+        <Card className="border-accent/20 bg-accent/5 p-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="h-8 w-8 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-accent shrink-0">
+                <Code2 className="h-4 w-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-foreground">
+                  Build and deliver software? Join the Developer Network
+                </h4>
+                <p className="text-[11px] text-muted">
+                  Keep your client account active or transition safely with preserved project and financial records.
+                </p>
+              </div>
+            </div>
+            <Link href="/join-developer" className="shrink-0">
+              <Button size="sm" variant="outline" className="border-accent/40 text-accent hover:bg-accent/10" rightIcon={<ArrowRight className="h-3 w-3" />}>
+                Join as Developer
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {/* Pending Developer Alert Banner */}
       {!isClient && !isVerified && (
