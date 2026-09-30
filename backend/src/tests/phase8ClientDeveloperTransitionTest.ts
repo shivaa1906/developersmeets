@@ -422,7 +422,7 @@ export async function runPhase8Tests() {
   });
   assert.strictEqual(sameEmailDevRes.status, 409, 'Same email must be rejected with 409 Conflict');
   assert(
-    sameEmailDevRes.body.error.includes('This email is already registered to your Client account'),
+    sameEmailDevRes.body.error.includes('Client account'),
     `Error must explain client account email: ${sameEmailDevRes.body.error}`
   );
   pass('SAME_EMAIL_PROTECTION', 'Same-email collision returns clear message explaining client account email');

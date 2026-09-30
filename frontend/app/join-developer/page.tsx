@@ -106,7 +106,7 @@ export default function JoinDeveloperPage() {
         'Proceeding to Developer Registration',
         'Your existing Client account remains completely active and preserved. Please register your developer profile using a distinct email.'
       );
-      router.push('/register/developer');
+      router.push('/register/developer?from=client');
     } catch (err: any) {
       setErrorMsg(err.message || 'Unable to proceed with developer registration.');
       addToast('error', 'Transition Error', err.message);
@@ -138,7 +138,7 @@ export default function JoinDeveloperPage() {
       );
 
       logout();
-      router.push('/register/developer');
+      router.push('/register/developer?from=transition_deactivated');
     } catch (err: any) {
       const msg =
         err.message ||

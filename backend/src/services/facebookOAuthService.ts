@@ -511,7 +511,7 @@ export class FacebookOAuthService {
 
     // 3. Provider identity does NOT exist. Check if an existing platform user has this email.
     const emailConflictRes = await query(
-      `SELECT id, email, role, status FROM users WHERE email = $1`,
+      `SELECT id, email, role, status FROM users WHERE LOWER(TRIM(email)) = $1`,
       [normalizedEmail]
     );
 

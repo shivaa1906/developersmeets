@@ -2,16 +2,20 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { Terminal, Shield, CheckCircle2, ArrowRight, Code2, Globe, Github, Linkedin, Award, Cpu, Eye, EyeOff } from 'lucide-react';
+import { Terminal, Shield, CheckCircle2, ArrowRight, Code2, Globe, Github, Linkedin, Award, Cpu, Eye, EyeOff, AlertTriangle, Info, UserCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
-export default function RegisterDeveloperPage() {
+function DeveloperRegistrationForm() {
+  const searchParams = useSearchParams();
+  const fromParam = searchParams.get('from');
+  const isFromClient = fromParam === 'client' || fromParam === 'transition_deactivated';
   const { addToast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
@@ -98,7 +102,22 @@ export default function RegisterDeveloperPage() {
         'Your profile status is PENDING_DEVELOPER_APPROVAL. Executive leadership will review your credentials.'
       );
     } catch (err: any) {
-      addToast('error', 'Registration Failed', err.message || 'Failed to submit developer application.');
+      const msg = err.message || 'Failed to submit developer application.';
+      if (msg.includes('Your current Client account already uses this email') || msg.includes('Client account')) {
+        addToast(
+          'error',
+          'Client Email In Use',
+          'Your current Client account already uses this email. A separate Developer account requires a different email.'
+        );
+      } else if (msg.includes('already registered') || msg.includes('already exists') || err.statusCode === 409) {
+        addToast(
+          'error',
+          'Email Already Registered',
+          'This email is already registered. Please sign in with the existing account.'
+        );
+      } else {
+        addToast('error', 'Registration Failed', msg);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -166,6 +185,27 @@ export default function RegisterDeveloperPage() {
           Apply to build enterprise digital systems, claim project slots with 100% refundable credits, and gain permanent public attributions.
         </p>
       </div>
+
+      {isFromClient && (
+        <div className="rounded-xl border border-accent/40 bg-surface-elevated/90 p-5 shadow-accent-glow space-y-3">
+          <div className="flex items-center space-x-2 text-accent">
+            <UserCheck className="h-5 w-5" />
+            <h2 className="text-sm font-semibold tracking-wide uppercase">
+              You Are Creating a Separate Developer Account
+            </h2>
+          </div>
+          <p className="text-xs text-foreground/90 leading-relaxed">
+            As part of the platform architecture, Client and Developer accounts are maintained as strictly separate entities with independent identities, permissions, and security contexts:
+          </p>
+          <ul className="text-xs text-muted space-y-1.5 list-disc list-inside">
+            <li><strong className="text-foreground">Separate Platform Identity:</strong> Your existing Client account remains untouched with all projects, contracts, and history intact.</li>
+            <li><strong className="text-foreground">Unique Platform UID:</strong> Your Developer account will receive its own distinct 16-character server UID upon registration.</li>
+            <li><strong className="text-foreground">Independent Email Address:</strong> Each account requires its own unique email address. You cannot use the email associated with your Client account.</li>
+            <li><strong className="text-foreground">Verification Requirement:</strong> Developer accounts enter <span className="font-mono text-status-warning">PENDING_DEVELOPER_APPROVAL</span> and require executive verification before accepting project claims.</li>
+            <li><strong className="text-foreground">Dual Account Capability:</strong> You may sign into either account independently using its dedicated credentials.</li>
+          </ul>
+        </div>
+      )}
 
       <Card className="border-border">
         <CardHeader>
@@ -477,5 +517,19 @@ export default function RegisterDeveloperPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function RegisterDeveloperPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="min-h-[60vh] flex items-center justify-center text-xs text-muted">
+          Loading developer registration...
+        </div>
+      }
+    >
+      <DeveloperRegistrationForm />
+    </React.Suspense>
   );
 }

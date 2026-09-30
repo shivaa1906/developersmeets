@@ -14,6 +14,8 @@ import { GoogleOAuthService } from '../services/googleOAuthService.js';
 import { FacebookOAuthService } from '../services/facebookOAuthService.js';
 import { DiscordOAuthService } from '../services/discordOAuthService.js';
 import { hashPassword, verifyPassword, validatePassword } from '../utils/password.js';
+import { normalizeEmail, InvalidEmailError } from '../utils/emailNormalization.js';
+import { generateUserUid } from '../utils/uidGenerator.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
 const consumedResetTokens = new Set<string>();
@@ -118,7 +120,14 @@ export class AuthController {
       return;
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    let normalizedEmail: string;
+    try {
+      normalizedEmail = normalizeEmail(email);
+    } catch (normErr: any) {
+      res.status(normErr.statusCode || 400).json({ error: normErr.message || 'Invalid email address.' });
+      return;
+    }
+
     const cleanFullName = sanitizeInput(fullName);
     const cleanUsername = sanitizeInput(username);
     const cleanRoleTitle = sanitizeInput(effectiveRoleTitle);
@@ -148,13 +157,16 @@ export class AuthController {
       const passwordHash = await hashPassword(password);
 
       const result = await withTransaction(async (client) => {
-        // Check existing email
-        const existingEmail = await client.query('SELECT id, role, status FROM users WHERE email = $1', [normalizedEmail]);
+        // Check existing email (case-safe & trimmed)
+        const existingEmail = await client.query(
+          'SELECT id, role, status FROM users WHERE LOWER(TRIM(email)) = $1',
+          [normalizedEmail]
+        );
         if (existingEmail.rows.length > 0) {
           const isClientAccount = existingEmail.rows[0].role === ROLES.CLIENT;
           const msg = isClientAccount
-            ? 'This email is already registered to your Client account. A separate Developer account requires a different email.'
-            : 'This email is already registered.';
+            ? 'Your current Client account already uses this email. A separate Developer account requires a different email.'
+            : 'This email is already registered. Please sign in with the existing account.';
           const conflictErr: any = new Error(msg);
           conflictErr.statusCode = 409;
           throw conflictErr;
@@ -166,12 +178,15 @@ export class AuthController {
           throw new Error('Username is already taken. Please choose another.');
         }
 
+        // Distinct, immutable, server-generated 16-character UID
+        const devUid = generateUserUid();
+
         // Create user with server-controlled role = DEVELOPER and status = PENDING_VERIFICATION
         const userRes = await client.query(
-          `INSERT INTO users (email, phone, password_hash, role, status, email_verified)
-           VALUES ($1, $2, $3, $4, 'PENDING_VERIFICATION', FALSE)
+          `INSERT INTO users (uid, public_uid, email, phone, password_hash, role, status, email_verified)
+           VALUES ($1, $1, $2, $3, $4, $5, 'PENDING_VERIFICATION', FALSE)
            RETURNING id, uid, public_uid, email, role, status, email_verified, created_at`,
-          [normalizedEmail, phone || null, passwordHash, ROLES.DEVELOPER]
+          [devUid, normalizedEmail, phone || null, passwordHash, ROLES.DEVELOPER]
         );
         const user = userRes.rows[0];
 
@@ -339,14 +354,23 @@ export class AuthController {
       });
     } catch (err: any) {
       console.error('[RegisterDeveloper Error]', err);
+      const isUniqueViolation = err.code === '23505';
       const statusCode =
         err.statusCode ||
         (err.message?.includes('already exists') ||
         err.message?.includes('already registered') ||
-        err.code === '23505'
+        isUniqueViolation
           ? 409
           : 400);
-      res.status(statusCode).json({ error: err.message || 'Registration failed' });
+      let errorMsg = err.message || 'Registration failed';
+      if (isUniqueViolation) {
+        if (err.constraint === 'developers_username_key' || err.detail?.includes('username')) {
+          errorMsg = 'Username is already taken. Please choose another.';
+        } else {
+          errorMsg = 'This email is already registered. Please sign in with the existing account.';
+        }
+      }
+      res.status(statusCode).json({ error: errorMsg });
     }
   }
 
@@ -369,7 +393,14 @@ export class AuthController {
       return;
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    let normalizedEmail: string;
+    try {
+      normalizedEmail = normalizeEmail(email);
+    } catch (normErr: any) {
+      res.status(normErr.statusCode || 400).json({ error: normErr.message || 'Invalid email address.' });
+      return;
+    }
+
     const cleanPrivateName = sanitizeInput(contactName);
     const cleanCompanyName = companyName
       ? sanitizeInput(companyName)
@@ -379,19 +410,25 @@ export class AuthController {
       const passwordHash = await hashPassword(password);
 
       const result = await withTransaction(async (client) => {
-        // Check existing email
-        const existingEmail = await client.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+        // Check existing email (case-safe & trimmed)
+        const existingEmail = await client.query(
+          'SELECT id, role, status FROM users WHERE LOWER(TRIM(email)) = $1',
+          [normalizedEmail]
+        );
         if (existingEmail.rows.length > 0) {
-          const conflictErr: any = new Error('This email is already registered.');
+          const conflictErr: any = new Error('This email is already registered. Please sign in with the existing account.');
           conflictErr.statusCode = 409;
           throw conflictErr;
         }
 
+        // Distinct, immutable, server-generated 16-character UID
+        const clientUid = generateUserUid();
+
         const userRes = await client.query(
-          `INSERT INTO users (email, phone, password_hash, role, status, email_verified, email_verified_at)
-           VALUES ($1, $2, $3, $4, 'ACTIVE', TRUE, NOW())
+          `INSERT INTO users (uid, public_uid, email, phone, password_hash, role, status, email_verified, email_verified_at)
+           VALUES ($1, $1, $2, $3, $4, $5, 'ACTIVE', TRUE, NOW())
            RETURNING id, uid, public_uid, email, role, status, email_verified, created_at`,
-          [normalizedEmail, phone || null, passwordHash, ROLES.CLIENT]
+          [clientUid, normalizedEmail, phone || null, passwordHash, ROLES.CLIENT]
         );
         const user = userRes.rows[0];
 
@@ -474,14 +511,19 @@ export class AuthController {
       });
     } catch (err: any) {
       console.error('[RegisterClient Error]', err);
+      const isUniqueViolation = err.code === '23505';
       const statusCode =
         err.statusCode ||
         (err.message?.includes('already exists') ||
         err.message?.includes('already registered') ||
-        err.code === '23505'
+        isUniqueViolation
           ? 409
           : 400);
-      res.status(statusCode).json({ error: err.message || 'Registration failed' });
+      let errorMsg = err.message || 'Registration failed';
+      if (isUniqueViolation) {
+        errorMsg = 'This email is already registered. Please sign in with the existing account.';
+      }
+      res.status(statusCode).json({ error: errorMsg });
     }
   }
 
@@ -518,7 +560,7 @@ export class AuthController {
 
       const userRes = await query(
         `SELECT id, uid, public_uid, email, phone, password_hash, role, status, email_verified, is_suspended, suspension_reason, token_version, last_login_at 
-         FROM users WHERE email = $1 OR email = $2`,
+         FROM users WHERE LOWER(TRIM(email)) = $1 OR LOWER(TRIM(email)) = $2`,
         [normalizedEmail, effectiveEmail]
       );
 
@@ -870,7 +912,10 @@ export class AuthController {
     const normalizedEmail = email.toLowerCase().trim();
 
     try {
-      const userRes = await query('SELECT id, email FROM users WHERE email = $1', [normalizedEmail]);
+      const userRes = await query(
+        'SELECT id, email FROM users WHERE LOWER(TRIM(email)) = $1',
+        [normalizedEmail]
+      );
       if (userRes.rows.length === 0) {
         res.json({ message: 'If an account exists with that email, a password reset token has been issued.' });
         return;
@@ -1136,7 +1181,10 @@ export class AuthController {
     const normalizedEmail = email.toLowerCase().trim();
 
     try {
-      const userRes = await query('SELECT id, email FROM users WHERE email = $1', [normalizedEmail]);
+      const userRes = await query(
+        'SELECT id, email FROM users WHERE LOWER(TRIM(email)) = $1',
+        [normalizedEmail]
+      );
       if (userRes.rows.length === 0) {
         res.json({ message: 'If an account exists, a verification link has been sent.' });
         return;
