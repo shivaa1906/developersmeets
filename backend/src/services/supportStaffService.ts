@@ -126,7 +126,7 @@ export class SupportStaffService {
 
       // 2. Update user role to SUPPORT if not already executive
       if (!['CEO', 'MD', 'ADMIN'].includes(targetUser.role)) {
-        await client.query(`UPDATE users SET role = 'SUPPORT' WHERE id = $1`, [targetUser.id]);
+        await client.query(`UPDATE users SET role = 'SUPPORT', token_version = COALESCE(token_version, 1) + 1, updated_at = NOW() WHERE id = $1`, [targetUser.id]);
       }
 
       // 3. Upsert support staff profile
@@ -338,7 +338,7 @@ export class SupportStaffService {
 
       // 1. Demote user role to GUEST / CLIENT if currently SUPPORT
       if (staff.role === 'SUPPORT') {
-        await client.query(`UPDATE users SET role = 'CLIENT' WHERE id = $1`, [staff.user_id]);
+        await client.query(`UPDATE users SET role = 'CLIENT', token_version = COALESCE(token_version, 1) + 1, updated_at = NOW() WHERE id = $1`, [staff.user_id]);
       }
 
       // 2. Set staff status to OFFLINE

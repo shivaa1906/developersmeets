@@ -17,6 +17,7 @@ import { hashPassword, verifyPassword, validatePassword } from '../utils/passwor
 import { normalizeEmail, InvalidEmailError } from '../utils/emailNormalization.js';
 import { generateUserUid } from '../utils/uidGenerator.js';
 import { AccountLinkingService } from '../services/accountLinkingService.js';
+import { generateAccessToken } from '../utils/tokenService.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
 const consumedResetTokens = new Set<string>();
@@ -478,20 +479,15 @@ export class AuthController {
         return { user, client: clientRecord.rows[0] };
       });
 
-      const token = jwt.sign(
-        {
-          userId: result.user.id,
-          uid: result.user.uid,
-          publicUid: result.user.uid,
-          email: result.user.email,
-          role: ROLES.CLIENT,
-          tokenVersion: 1,
-          clientId: result.client.id,
-          clientNumber: result.client.client_number,
-        },
-        env.JWT_SECRET,
-        { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
-      );
+      const token = generateAccessToken({
+        userId: result.user.id,
+        uid: result.user.uid,
+        publicUid: result.user.uid,
+        email: result.user.email,
+        role: ROLES.CLIENT,
+        tokenVersion: 1,
+        clientId: result.client.id,
+      });
 
       res.status(201).json({
         token,
@@ -724,23 +720,26 @@ export class AuthController {
         req.query.next;
       const safeRedirectUrl = validateRedirectUrl(requestedRedirect, defaultRoleRedirect);
 
-      const token = jwt.sign(
-        {
-          userId: user.id,
-          uid: user.uid,
-          publicUid: user.uid || user.public_uid,
-          email: user.email,
-          role: user.role,
-          tokenVersion: user.token_version || 1,
-          developerId,
-          clientId,
-          supportStaffId,
-        },
-        env.JWT_SECRET,
-        { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
-      );
+      const token = generateAccessToken({
+        userId: user.id,
+        uid: user.uid,
+        publicUid: user.uid || user.public_uid,
+        email: user.email,
+        role: user.role,
+        tokenVersion: user.token_version || 1,
+        developerId,
+        clientId,
+        supportStaffId,
+      });
 
       // Audit log login
+      await AuditLogger.log({
+        actorUserId: user.id,
+        action: 'LOGIN_SUCCESS',
+        entityType: 'USER',
+        entityId: user.id,
+        metadata: { role: user.role, email: user.email },
+      });
       await AuditLogger.log({
         actorUserId: user.id,
         action: 'USER_LOGGED_IN',
@@ -1032,7 +1031,7 @@ export class AuthController {
       const newHash = await hashPassword(newPassword);
       await query(
         `UPDATE users 
-         SET password_hash = $1, password_reset_token = NULL, password_reset_expires_at = NULL, token_version = token_version + 1, password_changed_at = NOW(), updated_at = NOW() 
+         SET password_hash = $1, password_reset_token = NULL, password_reset_expires_at = NULL, token_version = COALESCE(token_version, 1) + 1, password_changed_at = NOW(), updated_at = NOW() 
          WHERE id = $2`,
         [newHash, targetUserId]
       );
@@ -1116,21 +1115,17 @@ export class AuthController {
         metadata: { success: true },
       });
 
-      const freshToken = jwt.sign(
-        {
-          userId: req.user.userId,
-          uid: req.user.uid,
-          publicUid: req.user.publicUid,
-          email: req.user.email,
-          role: req.user.role,
-          tokenVersion: nextTokenVersion,
-          developerId: req.user.developerId,
-          clientId: req.user.clientId,
-          supportStaffId: req.user.supportStaffId,
-        },
-        env.JWT_SECRET,
-        { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
-      );
+      const freshToken = generateAccessToken({
+        userId: req.user.userId,
+        uid: req.user.uid,
+        publicUid: req.user.publicUid,
+        email: req.user.email,
+        role: req.user.role,
+        tokenVersion: nextTokenVersion,
+        developerId: req.user.developerId,
+        clientId: req.user.clientId,
+        supportStaffId: req.user.supportStaffId,
+      });
 
       res.json({
         message: 'Password changed successfully. Prior active sessions have been invalidated.',

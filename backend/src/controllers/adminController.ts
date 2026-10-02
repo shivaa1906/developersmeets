@@ -289,7 +289,7 @@ export class AdminController {
         }
 
         const updateRes = await client.query(
-          `UPDATE users SET permissions = $1::jsonb, updated_at = NOW() WHERE id = $2 RETURNING id, uid, email, role, permissions, status`,
+          `UPDATE users SET permissions = $1::jsonb, token_version = COALESCE(token_version, 1) + 1, updated_at = NOW() WHERE id = $2 RETURNING id, uid, email, role, permissions, status`,
           [JSON.stringify(permissions), userId]
         );
 
@@ -361,9 +361,15 @@ export class AdminController {
           ];
         }
 
+        const roleChanged = target.role !== role;
         const updateRes = await client.query(
-          `UPDATE users SET role = $1, permissions = $2::jsonb, updated_at = NOW() WHERE id = $3 RETURNING id, uid, email, role, permissions, status`,
-          [role, JSON.stringify(newPermissions || []), userId]
+          `UPDATE users 
+           SET role = $1, permissions = $2::jsonb, 
+               token_version = CASE WHEN $4::boolean THEN COALESCE(token_version, 1) + 1 ELSE COALESCE(token_version, 1) END, 
+               updated_at = NOW() 
+           WHERE id = $3 
+           RETURNING id, uid, email, role, permissions, status`,
+          [role, JSON.stringify(newPermissions || []), userId, roleChanged]
         );
 
         await AuditLogger.logStrict(
@@ -424,7 +430,7 @@ export class AdminController {
 
         const userRes = await client.query(
           `UPDATE users 
-           SET status = 'SUSPENDED', is_suspended = TRUE, suspended_at = NOW(), suspension_reason = $1, updated_at = NOW() 
+           SET status = 'SUSPENDED', is_suspended = TRUE, suspended_at = NOW(), suspension_reason = $1, token_version = COALESCE(token_version, 1) + 1, updated_at = NOW() 
            WHERE id = $2 
            RETURNING id, email, role, status`,
           [reason || 'Administrative suspension', userId]
@@ -554,7 +560,7 @@ export class AdminController {
 
         const userRes = await client.query(
           `UPDATE users 
-           SET status = 'DISABLED', updated_at = NOW() 
+           SET status = 'DISABLED', token_version = COALESCE(token_version, 1) + 1, updated_at = NOW() 
            WHERE id = $1 
            RETURNING id, email, role, status`,
           [userId]

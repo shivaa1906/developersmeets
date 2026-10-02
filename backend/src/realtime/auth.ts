@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/environment.js';
 import { query } from '../database/db.js';
 import { RealtimeUser } from './types.js';
+import { verifyAccessToken } from '../utils/tokenService.js';
 
 interface JwtPayload {
   userId: string;
@@ -26,12 +27,12 @@ export async function authenticateSocketToken(token: string): Promise<RealtimeUs
 
   let decoded: JwtPayload;
   try {
-    decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+    decoded = verifyAccessToken(token) as JwtPayload;
   } catch (err: any) {
-    if (err.name === 'TokenExpiredError') {
+    if (err.name === 'TokenExpiredError' || err.code === 'TOKEN_EXPIRED') {
       throw new Error('Authentication token has expired');
     }
-    throw new Error('Invalid authentication token');
+    throw new Error(err.message || 'Invalid authentication token');
   }
 
   const userId = decoded.userId;

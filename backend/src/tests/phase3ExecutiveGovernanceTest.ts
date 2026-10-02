@@ -502,6 +502,13 @@ async function runPhase3Tests() {
       body: JSON.stringify({ permissions: mdPerms }),
     });
 
+    // Refresh MD token following permission change session invalidation
+    const mdRelogin = await api('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'md@example.invalid', password: 'ExecutiveSecret2026!' }),
+    });
+    mdToken = mdRelogin.body.token;
+
     // 5.4 CEO assigning user role
     const roleAssignRes = await api(`/api/admin/users/${adminUserId}/assign-role`, {
       method: 'POST',

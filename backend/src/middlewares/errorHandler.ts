@@ -6,6 +6,10 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  if (err.message === 'Not allowed by CORS') {
+    res.status(403).json({ error: 'CORS forbidden: origin not allowed.' });
+    return;
+  }
   const statusCode = err.status || err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
 

@@ -8,6 +8,7 @@ import { sanitizeInput } from '../utils/sanitizer.js';
 import { generateUserUid } from '../utils/uidGenerator.js';
 import { validateRedirectUrl, getDefaultRedirectForRole } from '../controllers/authController.js';
 import { ProjectService } from './projectService.js';
+import { generateAccessToken } from '../utils/tokenService.js';
 
 export interface GoogleIdentityClaims {
   sub: string;
@@ -462,20 +463,16 @@ export class GoogleOAuthService {
       const effectiveRedirect = safeReturnUrl !== '/dashboard' ? safeReturnUrl : defaultRoleRedirect;
 
       // Create standard authenticated JWT session
-      const token = jwt.sign(
-        {
-          userId: existingAccount.user_id,
-          uid: existingAccount.uid,
-          publicUid: existingAccount.public_uid || existingAccount.uid,
-          email: existingAccount.user_email,
-          role: existingAccount.role,
-          tokenVersion: existingAccount.token_version || 1,
-          developerId,
-          clientId,
-        },
-        env.JWT_SECRET,
-        { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
-      );
+      const token = generateAccessToken({
+        userId: existingAccount.user_id,
+        uid: existingAccount.uid,
+        publicUid: existingAccount.public_uid || existingAccount.uid,
+        email: existingAccount.user_email,
+        role: existingAccount.role,
+        tokenVersion: existingAccount.token_version || 1,
+        developerId,
+        clientId,
+      });
 
       // Log successful login audit event
       await AuditLogger.log({
@@ -646,20 +643,15 @@ export class GoogleOAuthService {
     const defaultRoleRedirect = getDefaultRedirectForRole(ROLES.CLIENT);
     const effectiveRedirect = safeReturnUrl !== '/dashboard' ? safeReturnUrl : defaultRoleRedirect;
 
-    const token = jwt.sign(
-      {
-        userId: createdResult.user.id,
-        uid: createdResult.user.uid,
-        publicUid: createdResult.user.uid,
-        email: createdResult.user.email,
-        role: ROLES.CLIENT,
-        tokenVersion: 1,
-        clientId: createdResult.client.id,
-        clientNumber: createdResult.client.client_number,
-      },
-      env.JWT_SECRET,
-      { expiresIn: (env.JWT_EXPIRES_IN || '7d') as any }
-    );
+    const token = generateAccessToken({
+      userId: createdResult.user.id,
+      uid: createdResult.user.uid,
+      publicUid: createdResult.user.uid,
+      email: createdResult.user.email,
+      role: ROLES.CLIENT,
+      tokenVersion: 1,
+      clientId: createdResult.client.id,
+    });
 
     return {
       token,

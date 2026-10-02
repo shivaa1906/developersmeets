@@ -1,8 +1,7 @@
 import { Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { env } from '../config/environment.js';
 import { AuthenticatedRequest, AuthUser } from '../types/index.js';
 import { query } from '../database/db.js';
+import { verifyAccessToken } from '../utils/tokenService.js';
 
 export async function authenticateJwt(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
@@ -13,9 +12,13 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
   }
 
   const token = authHeader.split(' ')[1];
+  if (!token || token.trim() === '') {
+    res.status(401).json({ error: 'Authentication required. Empty token provided.' });
+    return;
+  }
 
   try {
-    const decoded = jwt.verify(token, env.JWT_SECRET) as AuthUser & { tokenVersion?: number };
+    const decoded = verifyAccessToken(token) as AuthUser & { tokenVersion?: number };
 
     // Check if the user is suspended, disabled, or deleted in the database
     const userRes = await query(
@@ -65,7 +68,43 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
       permissions: Array.isArray(user.permissions) ? user.permissions : [],
     };
     next();
-  } catch (_error) {
+  } catch (error: any) {
+    if (error.name === 'TokenExpiredError' || error.code === 'TOKEN_EXPIRED') {
+      res.status(401).json({ error: 'Token has expired.', code: 'TOKEN_EXPIRED' });
+      return;
+    }
+    if (error.code === 'INVALID_ISSUER') {
+      res.status(401).json({ error: 'Invalid token issuer.' });
+      return;
+    }
+    if (error.code === 'INVALID_AUDIENCE') {
+      res.status(401).json({ error: 'Invalid token audience.' });
+      return;
+    }
+    if (error.code === 'INVALID_SUBJECT') {
+      res.status(401).json({ error: 'Invalid token subject.' });
+      return;
+    }
+    if (error.code === 'INVALID_ALGORITHM') {
+      res.status(401).json({ error: 'Invalid or unsupported token algorithm.' });
+      return;
+    }
+    if (error.code === 'MISSING_SIGNATURE') {
+      res.status(401).json({ error: 'Token signature is missing.' });
+      return;
+    }
+    if (error.code === 'MALFORMED_TOKEN') {
+      res.status(401).json({ error: 'Malformed token.' });
+      return;
+    }
+    if (error.code === 'INVALID_PURPOSE') {
+      res.status(401).json({ error: error.message });
+      return;
+    }
+    if (error.name === 'JsonWebTokenError') {
+      res.status(401).json({ error: error.message || 'Invalid token.' });
+      return;
+    }
     res.status(401).json({ error: 'Invalid or expired token.' });
   }
 }
@@ -77,4 +116,3 @@ export async function optionalAuthenticateJwt(req: AuthenticatedRequest, res: Re
   }
   return authenticateJwt(req, res, next);
 }
-

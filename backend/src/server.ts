@@ -23,9 +23,51 @@ import { runMigrations } from './database/migrate.js';
 
 const app = express();
 
-// Security & utility middlewares
-app.use(helmet());
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+// Security & utility middlewares: CSP, strict headers, frameguard, and CORS
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'", 'ws:', 'wss:'],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: env.NODE_ENV === 'production' ? [] : null,
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    frameguard: { action: 'sameorigin' },
+    xContentTypeOptions: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    hsts:
+      env.NODE_ENV === 'production'
+        ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+        : false,
+  })
+);
+
+const allowedOrigins = [env.CORS_ORIGIN, 'http://localhost:3000', 'http://127.0.0.1:3000'].filter(Boolean);
+app.use(
+  cors({
+    origin: (requestOrigin, callback) => {
+      // Allow non-browser agents (cURL, tests, background workers) with no Origin header
+      if (!requestOrigin) return callback(null, true);
+      if (
+        allowedOrigins.includes(requestOrigin) ||
+        (env.NODE_ENV !== 'production' && (requestOrigin.startsWith('http://localhost:') || requestOrigin.startsWith('http://127.0.0.1:')))
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  })
+);
+
 app.use('/api', apiRateLimiter());
 app.use(
   express.json({
