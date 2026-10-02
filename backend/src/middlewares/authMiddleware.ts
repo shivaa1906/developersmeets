@@ -58,6 +58,13 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
       return;
     }
 
+    // Authoritatively resolve client, developer, and support staff records from database
+    const [clientRes, devRes, supportRes] = await Promise.all([
+      query('SELECT id, client_number FROM clients WHERE user_id = $1', [user.id]),
+      query('SELECT id, verification_status FROM developers WHERE user_id = $1', [user.id]),
+      query('SELECT id FROM support_staff WHERE user_id = $1', [user.id]),
+    ]);
+
     req.user = {
       ...decoded,
       userId: user.id,
@@ -66,6 +73,11 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
       email: user.email,
       role: user.role, // Authoritative from database
       permissions: Array.isArray(user.permissions) ? user.permissions : [],
+      clientId: clientRes.rows[0]?.id,
+      clientNumber: clientRes.rows[0]?.client_number,
+      developerId: devRes.rows[0]?.id,
+      verificationStatus: devRes.rows[0]?.verification_status,
+      supportStaffId: supportRes.rows[0]?.id,
     };
     next();
   } catch (error: any) {

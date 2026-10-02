@@ -94,22 +94,40 @@ export class ProjectController {
 
       const project = projRes.rows[0];
 
-      // Multi-tenant privacy guard: Non-owners and non-admins cannot view projects under review
-      const isClientOwner = req.user?.clientId === project.client_id;
+      // Multi-tenant authorization & privacy guard
+      const isClientOwner = Boolean(req.user?.clientId && req.user.clientId === project.client_id);
       const isAdmin = ['CEO', 'MD', 'ADMIN'].includes(req.user?.role || '');
-      const isPubliclyVisibleStatus = [
-        'OPEN_FOR_CLAIMS',
-        'CLAIMS_ACTIVE',
-        'SELECTION_PENDING',
-        'DEVELOPER_SELECTED',
-        'IN_PROGRESS',
-        'COMPLETED',
-        'PUBLISHED',
-      ].includes(project.status);
+      const isPublished = project.status === 'PUBLISHED';
 
-      if (!isClientOwner && !isAdmin) {
-        if (!isPubliclyVisibleStatus) {
-          res.status(403).json({ error: 'Access denied: Project is under administrative review.' });
+      if (!isAdmin) {
+        if (req.user?.role === ROLES.CLIENT) {
+          if (!isClientOwner && !isPublished) {
+            res.status(403).json({ error: 'Access denied: You do not have permission to view this project.' });
+            return;
+          }
+        } else if (req.user?.role === ROLES.DEVELOPER) {
+          if (!isPublished) {
+            const isOpenMarketplace = project.status === 'OPEN_FOR_CLAIMS' || project.status === 'CLAIMS_ACTIVE';
+            let isAuthorizedDev = false;
+            if (req.user?.developerId) {
+              if (project.lead_developer_id === req.user.developerId) {
+                isAuthorizedDev = true;
+              } else {
+                const [claimCheck, memberCheck] = await Promise.all([
+                  query('SELECT 1 FROM project_claims WHERE project_id = $1 AND developer_id = $2', [project.id, req.user.developerId]),
+                  query('SELECT 1 FROM project_members WHERE project_id = $1 AND developer_id = $2', [project.id, req.user.developerId]),
+                ]);
+                isAuthorizedDev = claimCheck.rows.length > 0 || memberCheck.rows.length > 0;
+              }
+            }
+
+            if (!isOpenMarketplace && !isAuthorizedDev) {
+              res.status(403).json({ error: 'Access denied: You are not authorized to view this project.' });
+              return;
+            }
+          }
+        } else if (!isClientOwner && !isPublished) {
+          res.status(403).json({ error: 'Access denied: Insufficient permissions to view this project.' });
           return;
         }
       }
@@ -574,7 +592,11 @@ export class ProjectController {
    */
   static async myProjects(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      if (req.user?.clientId) {
+      if (req.user?.role === ROLES.CLIENT) {
+        if (!req.user?.clientId) {
+          res.json({ projects: [] });
+          return;
+        }
         let sql = `SELECT * FROM projects WHERE client_id = $1`;
         const params: any[] = [req.user.clientId];
         const search = req.query.search as string;
@@ -588,7 +610,11 @@ export class ProjectController {
         return;
       }
 
-      if (req.user?.developerId) {
+      if (req.user?.role === ROLES.DEVELOPER) {
+        if (!req.user?.developerId) {
+          res.json({ projects: [] });
+          return;
+        }
         let sql = `
           SELECT DISTINCT p.*, COALESCE(pc.status, 'ASSIGNED') as claim_status, pc.anonymous_tag
           FROM projects p
@@ -604,6 +630,22 @@ export class ProjectController {
         }
         sql += ` ORDER BY p.created_at DESC`;
         const rows = await query(sql, params);
+        res.json({ projects: rows.rows });
+        return;
+      }
+
+      if (req.user?.clientId) {
+        const rows = await query(`SELECT * FROM projects WHERE client_id = $1 ORDER BY created_at DESC`, [req.user.clientId]);
+        res.json({ projects: rows.rows });
+        return;
+      }
+      if (req.user?.developerId) {
+        const rows = await query(
+          `SELECT DISTINCT p.* FROM projects p
+           LEFT JOIN project_claims pc ON (p.id = pc.project_id AND pc.developer_id = $1)
+           WHERE pc.developer_id = $1 OR p.lead_developer_id = $1 ORDER BY p.created_at DESC`,
+          [req.user.developerId]
+        );
         res.json({ projects: rows.rows });
         return;
       }

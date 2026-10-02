@@ -18,6 +18,8 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import { LEADERSHIP } from './config/constants.js';
 import { apiRateLimiter } from './middlewares/rateLimiter.js';
+import { AuthController } from './controllers/authController.js';
+import { authenticateJwt } from './middlewares/authMiddleware.js';
 
 import { runMigrations } from './database/migrate.js';
 
@@ -120,6 +122,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Mount Routes
+app.get('/api/me', authenticateJwt, AuthController.me);
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/credits', creditRoutes);

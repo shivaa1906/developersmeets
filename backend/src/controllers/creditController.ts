@@ -113,8 +113,8 @@ export class CreditController {
   }
 
   static async adminAdjust(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { developerId, userId, target, amount, reason, type } = req.body;
-    const targetId = target || userId || developerId;
+    const { developerId, userId, target, targetId: tId, amount, reason, type } = req.body;
+    const targetId = target || userId || developerId || tId;
 
     if (!targetId || amount === undefined || !reason) {
       res.status(400).json({ error: 'developerId (or target/userId), amount, and reason are required' });

@@ -15,6 +15,7 @@ export interface AuthUser {
   clientId?: string;
   clientNumber?: string;
   supportStaffId?: string;
+  verificationStatus?: string;
 }
 
 export interface AuthenticatedRequest extends Request {

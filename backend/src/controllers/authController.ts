@@ -893,6 +893,9 @@ export class AuthController {
           client,
           supportStaff,
         },
+        developer,
+        client,
+        supportStaff,
       });
     } catch (_error: any) {
       res.json({ user: req.user });
