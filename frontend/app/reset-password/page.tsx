@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/toast';
 import { Terminal, Lock, CheckCircle2, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addToast } = useToast();
@@ -20,6 +20,7 @@ export default function ResetPasswordPage() {
   const [newPassword, setNewPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isSuccess, setIsSuccess] = React.useState(false);
 
@@ -31,6 +32,7 @@ export default function ResetPasswordPage() {
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
 
     if (newPassword.length < 8) {
       addToast('error', 'Password Too Short', 'Password must be at least 8 characters long.');
@@ -42,7 +44,7 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (!token) {
+    if (!token.trim()) {
       addToast('error', 'Token Required', 'Password reset token is missing.');
       return;
     }
@@ -51,7 +53,7 @@ export default function ResetPasswordPage() {
 
     try {
       await apiClient.post('/auth/reset-password', {
-        resetToken: token,
+        resetToken: token.trim(),
         newPassword,
         confirmPassword,
       });
@@ -117,6 +119,7 @@ export default function ResetPasswordPage() {
                   placeholder="Paste reset token if not detected"
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
+                  disabled={isLoading}
                   required
                 />
                 <Input
@@ -125,13 +128,14 @@ export default function ResetPasswordPage() {
                   placeholder="At least 8 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={isLoading}
                   rightElement={
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-muted hover:text-foreground focus:outline-none p-1 transition-colors"
+                      className="text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded p-1 transition-colors"
                       title={showPassword ? 'Hide password' : 'Show password'}
-                      tabIndex={-1}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -141,25 +145,26 @@ export default function ResetPasswordPage() {
                 />
                 <Input
                   label="Confirm New Password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showConfirmPassword ? 'text' : 'password'}
                   placeholder="Confirm matching password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isLoading}
                   rightElement={
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-muted hover:text-foreground focus:outline-none p-1 transition-colors"
-                      title={showPassword ? 'Hide password' : 'Show password'}
-                      tabIndex={-1}
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded p-1 transition-colors"
+                      title={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   }
                   required
                   minLength={8}
                 />
-                <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
+                <Button type="submit" className="w-full" size="lg" isLoading={isLoading} disabled={isLoading}>
                   Update Password
                 </Button>
               </form>
@@ -174,5 +179,19 @@ export default function ResetPasswordPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="min-h-[60vh] flex items-center justify-center text-xs text-muted">
+          Loading password reset...
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </React.Suspense>
   );
 }

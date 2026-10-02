@@ -854,7 +854,12 @@ export async function runPhase10Tests() {
   // =========================================================================
   // CHECK 41: No fake data in production code
   // =========================================================================
-  const serviceCode = fs.readFileSync(path.resolve('backend/src/services/accountLinkingService.ts'), 'utf8');
+  const possiblePaths = [
+    path.resolve('src/services/accountLinkingService.ts'),
+    path.resolve('backend/src/services/accountLinkingService.ts')
+  ];
+  const servicePath = possiblePaths.find(p => fs.existsSync(p)) || possiblePaths[0];
+  const serviceCode = fs.readFileSync(servicePath, 'utf8');
   assert(!serviceCode.includes('mockLinkedAccount'), 'Zero mockLinkedAccount in AccountLinkingService');
   assert(!serviceCode.includes('fakeProvider'), 'Zero fakeProvider in AccountLinkingService');
   assert(!serviceCode.includes('demoGoogle'), 'Zero demoGoogle in AccountLinkingService');

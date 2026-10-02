@@ -26,7 +26,28 @@ class ApiClient {
 
     if (!response.ok) {
       const errorMsg = data.error || `HTTP error ${response.status}`;
-      throw new Error(errorMsg);
+      const err: any = new Error(errorMsg);
+      err.status = response.status;
+      err.statusCode = response.status;
+      err.code = data.code;
+      err.data = data;
+
+      // When an authenticated request fails with 401 or account suspension/disabling (403),
+      // broadcast event for proactive session cleanup, avoiding login/register endpoints
+      if (
+        typeof window !== 'undefined' &&
+        token &&
+        !endpoint.includes('/auth/login') &&
+        !endpoint.includes('/auth/register')
+      ) {
+        if (response.status === 401) {
+          window.dispatchEvent(new CustomEvent('nexus:session_invalidated', { detail: { code: data.code || 'SESSION_EXPIRED', error: errorMsg } }));
+        } else if (response.status === 403 && (data.code === 'ACCOUNT_SUSPENDED' || data.code === 'ACCOUNT_DISABLED')) {
+          window.dispatchEvent(new CustomEvent('nexus:account_locked', { detail: { code: data.code, error: errorMsg } }));
+        }
+      }
+
+      throw err;
     }
 
     return data as T;

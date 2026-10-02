@@ -7,12 +7,16 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { ConnectedAccountsCard } from '@/components/ui/connected-accounts';
 import { api } from '@/lib/api-client';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function SecuritySettingsPage() {
   const { addToast } = useToast();
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = React.useState(false);
+  const [showNewPassword, setShowNewPassword] = React.useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
@@ -63,25 +67,61 @@ export default function SecuritySettingsPage() {
           <CardContent className="space-y-4">
             <Input
               label="Current Password"
-              type="password"
+              type={showCurrentPassword ? 'text' : 'password'}
               placeholder="••••••••"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
+              disabled={isSaving}
+              rightElement={
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded p-1 transition-colors"
+                  title={showCurrentPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              }
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label="New Password"
-                type="password"
+                type={showNewPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
+                disabled={isSaving}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded p-1 transition-colors"
+                    title={showNewPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
               />
               <Input
                 label="Confirm New Password"
-                type="password"
+                type={showConfirmPassword ? 'text' : 'password'}
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={isSaving}
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded p-1 transition-colors"
+                    title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
               />
             </div>
           </CardContent>

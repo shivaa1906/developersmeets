@@ -6,7 +6,21 @@ import { useAuth } from '@/hooks/use-auth';
 import { apiClient } from '@/lib/api-client';
 import { Terminal, Loader2, AlertCircle } from 'lucide-react';
 
-export default function AuthCallbackPage() {
+function getSafeRedirect(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const decoded = decodeURIComponent(path.trim());
+  if (
+    decoded.startsWith('/') &&
+    !decoded.startsWith('//') &&
+    !decoded.startsWith('/\\') &&
+    !decoded.includes(':')
+  ) {
+    return decoded;
+  }
+  return null;
+}
+
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login: setAuthSession } = useAuth();
@@ -14,8 +28,13 @@ export default function AuthCallbackPage() {
 
   React.useEffect(() => {
     const token = searchParams.get('token');
-    const redirect = searchParams.get('redirect') || '/dashboard';
+    const returnUrlParam = searchParams.get('returnUrl') || searchParams.get('redirect') || searchParams.get('next');
     const err = searchParams.get('error');
+
+    // Immediately sanitize browser address bar to prevent token leakage in history
+    if (typeof window !== 'undefined' && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
 
     if (err) {
       router.replace(`/login?error=${encodeURIComponent(err)}`);
@@ -38,7 +57,15 @@ export default function AuthCallbackPage() {
 
         if (res.user) {
           setAuthSession(token, res.user);
-          router.replace(redirect);
+
+          const safeNext = getSafeRedirect(returnUrlParam);
+          let defaultDestination = '/dashboard';
+          if (res.user.role === 'CEO' || res.user.role === 'ADMIN' || res.user.role === 'MD') {
+            defaultDestination = '/admin/dashboard';
+          }
+
+          const destination = safeNext || defaultDestination;
+          router.replace(destination);
         } else {
           throw new Error('Profile fetch failed');
         }
@@ -73,5 +100,22 @@ export default function AuthCallbackPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex min-h-[80vh] items-center justify-center px-4">
+          <div className="flex flex-col items-center space-y-4 text-center">
+            <Loader2 className="h-6 w-6 animate-spin text-accent" />
+            <p className="text-xs text-muted">Completing authentication...</p>
+          </div>
+        </div>
+      }
+    >
+      <AuthCallbackContent />
+    </React.Suspense>
   );
 }

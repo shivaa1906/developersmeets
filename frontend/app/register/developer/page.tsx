@@ -20,6 +20,7 @@ function DeveloperRegistrationForm() {
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
 
   const [formData, setFormData] = React.useState({
     fullName: '',
@@ -269,13 +270,14 @@ function DeveloperRegistrationForm() {
                   placeholder="Minimum 8 characters"
                   value={formData.password}
                   onChange={(e) => handleChange('password', e.target.value)}
+                  disabled={isSubmitting}
                   rightElement={
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="text-muted hover:text-foreground focus:outline-none p-1 transition-colors"
+                      className="text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded p-1 transition-colors"
                       title={showPassword ? 'Hide password' : 'Show password'}
-                      tabIndex={-1}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -285,19 +287,20 @@ function DeveloperRegistrationForm() {
                 />
                 <Input
                   label="Confirm Password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showConfirmPassword ? 'text' : 'password'}
                   placeholder="Re-enter password"
                   value={formData.confirmPassword}
                   onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                  disabled={isSubmitting}
                   rightElement={
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-muted hover:text-foreground focus:outline-none p-1 transition-colors"
-                      title={showPassword ? 'Hide password' : 'Show password'}
-                      tabIndex={-1}
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="text-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded p-1 transition-colors"
+                      title={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                     >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   }
                   required

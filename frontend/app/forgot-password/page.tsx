@@ -16,22 +16,23 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
-  const [demoToken, setDemoToken] = React.useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setIsLoading(true);
 
     try {
-      const data = await apiClient.post<{ message: string; resetToken?: string }>('/auth/forgot-password', {
-        email,
+      await apiClient.post<{ message: string }>('/auth/forgot-password', {
+        email: email.trim().toLowerCase(),
       });
 
       setSubmitted(true);
-      if (data.resetToken) {
-        setDemoToken(data.resetToken);
-      }
-      addToast('success', 'Reset Request Dispatched', 'Password reset instructions have been generated.');
+      addToast(
+        'success',
+        'Reset Request Dispatched',
+        'If the email is registered, password recovery instructions have been sent.'
+      );
     } catch (err: any) {
       addToast('error', 'Request Failed', err.message || 'Failed to submit reset request.');
     } finally {
@@ -62,7 +63,7 @@ export default function ForgotPasswordPage() {
               <KeyRound className="h-4 w-4 text-accent" />
             </CardTitle>
             <CardDescription>
-              We will issue a secure, single-use reset token valid for 1 hour.
+              We will issue a secure, single-use reset link valid for 1 hour.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -71,25 +72,23 @@ export default function ForgotPasswordPage() {
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-success/10 text-status-success border border-status-success/30">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold text-foreground">Reset Token Dispatched</h3>
-                  <p className="text-xs text-muted">
-                    If an account is associated with <span className="text-foreground font-medium">{email}</span>, a secure password reset token has been issued.
+                <div className="space-y-1.5">
+                  <h3 className="text-sm font-semibold text-foreground">Recovery Instructions Dispatched</h3>
+                  <p className="text-xs text-muted leading-relaxed">
+                    If an account is associated with <span className="text-foreground font-medium">{email}</span>, a secure password reset link has been dispatched to your inbox.
                   </p>
                 </div>
 
-                {demoToken && (
-                  <div className="p-3 bg-surface-raised rounded-md border border-border text-left space-y-2">
-                    <span className="text-[10px] uppercase font-bold text-accent tracking-wider block">
-                      Direct Password Reset Link
-                    </span>
-                    <Link href={`/reset-password?token=${demoToken}`}>
-                      <Button size="sm" className="w-full text-xs">
-                        Proceed to Reset Password
-                      </Button>
-                    </Link>
-                  </div>
-                )}
+                <div className="p-3 bg-surface-raised rounded-md border border-border text-left space-y-2">
+                  <span className="text-[11px] font-medium text-foreground block">
+                    Already have your reset token?
+                  </span>
+                  <Link href="/reset-password">
+                    <Button size="sm" variant="outline" className="w-full text-xs">
+                      Enter Reset Token
+                    </Button>
+                  </Link>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -99,9 +98,10 @@ export default function ForgotPasswordPage() {
                   placeholder="name@domain.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
                   required
                 />
-                <Button type="submit" className="w-full" size="lg" isLoading={isLoading}>
+                <Button type="submit" className="w-full" size="lg" isLoading={isLoading} disabled={isLoading}>
                   Request Password Reset
                 </Button>
               </form>

@@ -120,14 +120,9 @@ export function verifyAccessToken(token: string): VerifiedTokenClaims {
   }
 
   // 3. Cryptographic signature and expiration verification
-  let decoded: any;
-  try {
-    decoded = jwt.verify(trimmedToken, env.JWT_SECRET, {
-      algorithms: [TOKEN_ALGORITHM],
-    });
-  } catch (jwtErr: any) {
-    throw jwtErr;
-  }
+  const decoded: any = jwt.verify(trimmedToken, env.JWT_SECRET, {
+    algorithms: [TOKEN_ALGORITHM],
+  });
 
   // 4. Claims validation
   if (decoded.purpose && decoded.purpose !== 'ACCESS_TOKEN') {
