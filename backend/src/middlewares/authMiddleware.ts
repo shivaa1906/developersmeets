@@ -69,3 +69,12 @@ export async function authenticateJwt(req: AuthenticatedRequest, res: Response, 
     res.status(401).json({ error: 'Invalid or expired token.' });
   }
 }
+
+export async function optionalAuthenticateJwt(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+  return authenticateJwt(req, res, next);
+}
+

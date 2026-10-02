@@ -117,7 +117,9 @@ export async function runPhase7Tests() {
     pass('ENV_CONFIG', 'Discord credentials and redirect URI cleanly loaded from environment');
 
     // 5. Zero hardcoded secrets in source code
-    const srcDir = path.resolve(process.cwd(), 'src');
+    const srcDir = fs.existsSync(path.resolve(process.cwd(), 'src'))
+      ? path.resolve(process.cwd(), 'src')
+      : path.resolve(process.cwd(), 'backend/src');
     const filesToScan = [
       path.join(srcDir, 'services/discordOAuthService.ts'),
       path.join(srcDir, 'controllers/authController.ts'),
@@ -551,7 +553,10 @@ export async function runPhase7Tests() {
   console.log('\n--- SECTION 15: RATE LIMITING & START PROJECT FLOW ---');
   {
     // 35. Rate limiter covers Discord endpoints
-    const routeSource = fs.readFileSync(path.resolve(process.cwd(), 'src/routes/authRoutes.ts'), 'utf8');
+    const routeSourcePath = fs.existsSync(path.resolve(process.cwd(), 'src/routes/authRoutes.ts'))
+      ? path.resolve(process.cwd(), 'src/routes/authRoutes.ts')
+      : path.resolve(process.cwd(), 'backend/src/routes/authRoutes.ts');
+    const routeSource = fs.readFileSync(routeSourcePath, 'utf8');
     assert(routeSource.includes('router.use(authRateLimiter('), 'authRateLimiter applied across all auth routes');
     assert(routeSource.includes('/discord'), 'Discord routes defined under rate-limited router');
     pass('RATE_LIMITING', 'Discord OAuth endpoints protected by authRateLimiter');
@@ -678,8 +683,14 @@ export async function runPhase7Tests() {
   // --- SECTION 18: FRONTEND UI & DOCS VERIFICATION ---
   console.log('\n--- SECTION 18: FRONTEND UI & DOCS VERIFICATION ---');
   {
+    const resolveRelPath = (relPath: string) => {
+      const p1 = path.resolve(process.cwd(), relPath);
+      if (fs.existsSync(p1)) return p1;
+      return path.resolve(process.cwd(), '..', relPath);
+    };
+
     // 48. Login page includes Discord
-    const loginPage = fs.readFileSync(path.resolve(process.cwd(), '../frontend/app/login/page.tsx'), 'utf8');
+    const loginPage = fs.readFileSync(resolveRelPath('frontend/app/login/page.tsx'), 'utf8');
     assert(loginPage.includes('Continue with Google'), 'Login includes Google sign-in');
     assert(loginPage.includes('Continue with Facebook'), 'Login includes Facebook sign-in');
     assert(loginPage.includes('Continue with Discord'), 'Login includes Discord sign-in');
@@ -687,19 +698,19 @@ export async function runPhase7Tests() {
     pass('UI_LOGIN', 'Login page includes Google, Facebook, and Discord OAuth buttons with error handling');
 
     // 49. Client registration includes Discord
-    const clientRegPage = fs.readFileSync(path.resolve(process.cwd(), '../frontend/app/register/client/page.tsx'), 'utf8');
+    const clientRegPage = fs.readFileSync(resolveRelPath('frontend/app/register/client/page.tsx'), 'utf8');
     assert(clientRegPage.includes('Continue with Google'), 'Client register includes Google');
     assert(clientRegPage.includes('Continue with Facebook'), 'Client register includes Facebook');
     assert(clientRegPage.includes('Continue with Discord'), 'Client register includes Discord');
     pass('UI_REGISTRATION', 'Client registration provides Google, Facebook, and Discord onboarding');
 
     // 50. Main register page includes Discord
-    const regPage = fs.readFileSync(path.resolve(process.cwd(), '../frontend/app/register/page.tsx'), 'utf8');
+    const regPage = fs.readFileSync(resolveRelPath('frontend/app/register/page.tsx'), 'utf8');
     assert(regPage.includes('Continue with Discord'), 'Register page includes Discord');
     pass('UI_MAIN_REGISTER', 'Main register page client tab includes Discord onboarding');
 
     // 51. Documentation exists
-    const docFile = fs.readFileSync(path.resolve(process.cwd(), '../docs/discord-oauth-setup.md'), 'utf8');
+    const docFile = fs.readFileSync(resolveRelPath('docs/discord-oauth-setup.md'), 'utf8');
     assert(docFile.includes('DISCORD_CLIENT_ID'), 'Setup doc covers DISCORD_CLIENT_ID');
     assert(docFile.includes('OAuth2'), 'Setup doc covers OAuth2');
     assert(docFile.includes('identify') && docFile.includes('email'), 'Setup doc covers scopes');

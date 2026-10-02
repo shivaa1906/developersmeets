@@ -16,6 +16,7 @@ import { DiscordOAuthService } from '../services/discordOAuthService.js';
 import { hashPassword, verifyPassword, validatePassword } from '../utils/password.js';
 import { normalizeEmail, InvalidEmailError } from '../utils/emailNormalization.js';
 import { generateUserUid } from '../utils/uidGenerator.js';
+import { AccountLinkingService } from '../services/accountLinkingService.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
 const consumedResetTokens = new Set<string>();
@@ -2260,6 +2261,39 @@ export class AuthController {
       const code = (req.query.code || req.body?.code) as string;
       const directIdToken = (req.body?.id_token || req.query?.id_token) as string;
 
+      // Phase 10: Check if this state belongs to an account-linking transaction
+      const linkState = await AccountLinkingService.findLinkState(state);
+      if (linkState) {
+        try {
+          const sessionUserId = (req as any).user?.userId;
+          const linkResult = await AccountLinkingService.completeProviderLink({
+            state,
+            code,
+            idToken: directIdToken,
+            sessionUserId,
+          });
+          res.setHeader('Set-Cookie', clearCookieHeader);
+          if (isJsonClient) {
+            res.json(linkResult);
+            return;
+          }
+          const param = linkResult.status === 'ALREADY_LINKED' ? 'already_linked=google' : 'linked=google';
+          const separator = linkState.return_url.includes('?') ? '&' : '?';
+          res.redirect(`${linkState.return_url}${separator}${param}`);
+          return;
+        } catch (linkErr: any) {
+          res.setHeader('Set-Cookie', clearCookieHeader);
+          const statusCode = linkErr.statusCode || 400;
+          const errCode = linkErr.code || 'linking_failed';
+          if (isJsonClient) {
+            res.status(statusCode).json({ error: linkErr.message, code: errCode });
+            return;
+          }
+          res.redirect(`/dashboard/settings?error=${encodeURIComponent(linkErr.message)}`);
+          return;
+        }
+      }
+
       // 2. Validate and consume single-use state token
       let session;
       try {
@@ -2505,6 +2539,39 @@ export class AuthController {
       const state = (req.query.state || req.body?.state) as string;
       const code = (req.query.code || req.body?.code) as string;
       const directAccessToken = (req.body?.access_token || req.query?.access_token) as string;
+
+      // Phase 10: Check if this state belongs to an account-linking transaction
+      const linkState = await AccountLinkingService.findLinkState(state);
+      if (linkState) {
+        try {
+          const sessionUserId = (req as any).user?.userId;
+          const linkResult = await AccountLinkingService.completeProviderLink({
+            state,
+            code,
+            accessToken: directAccessToken,
+            sessionUserId,
+          });
+          res.setHeader('Set-Cookie', clearCookieHeader);
+          if (isJsonClient) {
+            res.json(linkResult);
+            return;
+          }
+          const param = linkResult.status === 'ALREADY_LINKED' ? 'already_linked=facebook' : 'linked=facebook';
+          const separator = linkState.return_url.includes('?') ? '&' : '?';
+          res.redirect(`${linkState.return_url}${separator}${param}`);
+          return;
+        } catch (linkErr: any) {
+          res.setHeader('Set-Cookie', clearCookieHeader);
+          const statusCode = linkErr.statusCode || 400;
+          const errCode = linkErr.code || 'linking_failed';
+          if (isJsonClient) {
+            res.status(statusCode).json({ error: linkErr.message, code: errCode });
+            return;
+          }
+          res.redirect(`/dashboard/settings?error=${encodeURIComponent(linkErr.message)}`);
+          return;
+        }
+      }
 
       // 2. Validate and consume single-use state token
       let session;
@@ -2754,6 +2821,39 @@ export class AuthController {
       const code = (req.query.code || req.body?.code) as string;
       const directAccessToken = (req.body?.access_token || req.query?.access_token) as string;
 
+      // Phase 10: Check if this state belongs to an account-linking transaction
+      const linkState = await AccountLinkingService.findLinkState(state);
+      if (linkState) {
+        try {
+          const sessionUserId = (req as any).user?.userId;
+          const linkResult = await AccountLinkingService.completeProviderLink({
+            state,
+            code,
+            accessToken: directAccessToken,
+            sessionUserId,
+          });
+          res.setHeader('Set-Cookie', clearCookieHeader);
+          if (isJsonClient) {
+            res.json(linkResult);
+            return;
+          }
+          const param = linkResult.status === 'ALREADY_LINKED' ? 'already_linked=discord' : 'linked=discord';
+          const separator = linkState.return_url.includes('?') ? '&' : '?';
+          res.redirect(`${linkState.return_url}${separator}${param}`);
+          return;
+        } catch (linkErr: any) {
+          res.setHeader('Set-Cookie', clearCookieHeader);
+          const statusCode = linkErr.statusCode || 400;
+          const errCode = linkErr.code || 'linking_failed';
+          if (isJsonClient) {
+            res.status(statusCode).json({ error: linkErr.message, code: errCode });
+            return;
+          }
+          res.redirect(`/dashboard/settings?error=${encodeURIComponent(linkErr.message)}`);
+          return;
+        }
+      }
+
       // 2. Validate and consume single-use state token
       let session;
       try {
@@ -2878,5 +2978,165 @@ export class AuthController {
       );
     }
   }
+
+  // =========================================================================
+  // PHASE 10: ACCOUNT LINKING & DUPLICATE-ACCOUNT PROTECTION METHODS
+  // =========================================================================
+
+  /**
+   * Retrieves all connected authentication providers for the authenticated user.
+   * Omits provider subjects to prevent exposing sensitive internal provider IDs.
+   */
+  static async getConnectedProviders(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user?.userId) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+    try {
+      const result = await AccountLinkingService.getConnectedProviders(req.user.userId);
+      res.json(result);
+    } catch (err: any) {
+      const statusCode = err.statusCode || 500;
+      res.status(statusCode).json({ error: err.message });
+    }
+  }
+
+  /**
+   * Initiates provider linking for the authenticated user.
+   * Target user is strictly derived from the verified session (req.user.userId).
+   */
+  static async initiateAccountLink(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user?.userId) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+    const provider = (req.params.provider || req.body?.provider || req.query?.provider) as any;
+    const returnUrl = (req.query?.returnUrl || req.body?.returnUrl) as string;
+
+    try {
+      const result = await AccountLinkingService.initiateProviderLink(
+        req.user.userId,
+        provider,
+        returnUrl
+      );
+
+      if (
+        req.headers.accept?.includes('application/json') ||
+        req.headers['content-type']?.includes('application/json') ||
+        req.query.format === 'json' ||
+        req.body?.format === 'json'
+      ) {
+        res.json(result);
+        return;
+      }
+
+      res.redirect(result.authorizationUrl);
+    } catch (err: any) {
+      const statusCode = err.statusCode || 400;
+      res.status(statusCode).json({
+        error: err.message,
+        code: err.code || 'LINK_INITIATE_FAILED',
+      });
+    }
+  }
+
+  /**
+   * Completes provider linking via direct API or programmatic completion.
+   */
+  static async completeAccountLink(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { state, code, idToken, accessToken, claims } = req.body || {};
+
+    try {
+      const result = await AccountLinkingService.completeProviderLink({
+        state,
+        code,
+        idToken,
+        accessToken,
+        claims,
+        sessionUserId: req.user?.userId,
+      });
+
+      res.json(result);
+    } catch (err: any) {
+      const statusCode = err.statusCode || 400;
+      res.status(statusCode).json({
+        error: err.message,
+        code: err.code || 'LINK_COMPLETE_FAILED',
+      });
+    }
+  }
+
+  /**
+   * Safely unlinks a connected provider with Last-Authentication-Method Protection.
+   */
+  static async unlinkAccountProvider(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user?.userId) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+    const provider = (req.params.provider || req.body?.provider) as any;
+    const password = req.body?.password;
+
+    try {
+      const result = await AccountLinkingService.unlinkProvider(
+        req.user.userId,
+        provider,
+        password
+      );
+
+      res.json(result);
+    } catch (err: any) {
+      const statusCode = err.statusCode || 400;
+      res.status(statusCode).json({
+        error: err.message,
+        code: err.code || 'UNLINK_FAILED',
+      });
+    }
+  }
+
+  /**
+   * Sets initial password for OAuth-only accounts using Argon2id.
+   */
+  static async setAccountPassword(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user?.userId) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+    const { password, confirmPassword } = req.body || {};
+
+    try {
+      const result = await AccountLinkingService.setInitialPassword(
+        req.user.userId,
+        password,
+        confirmPassword
+      );
+
+      res.json(result);
+    } catch (err: any) {
+      const statusCode = err.statusCode || 400;
+      res.status(statusCode).json({
+        error: err.message,
+        code: err.code || 'SET_PASSWORD_FAILED',
+      });
+    }
+  }
+
+  /**
+   * Retrieves cross-account relationships from user_account_links
+   */
+  static async getAccountRelationships(req: AuthenticatedRequest, res: Response): Promise<void> {
+    if (!req.user?.userId) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+    try {
+      const relationships = await AccountLinkingService.getAccountRelationships(req.user.userId);
+      res.json({ relationships });
+    } catch (err: any) {
+      const statusCode = err.statusCode || 500;
+      res.status(statusCode).json({ error: err.message });
+    }
+  }
 }
+
 

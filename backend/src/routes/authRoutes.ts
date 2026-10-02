@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/authController.js';
-import { authenticateJwt } from '../middlewares/authMiddleware.js';
+import { authenticateJwt, optionalAuthenticateJwt } from '../middlewares/authMiddleware.js';
 import { authRateLimiter } from '../middlewares/rateLimiter.js';
 
 const router = Router();
@@ -38,5 +38,17 @@ router.delete('/account', authenticateJwt, AuthController.deactivateAccount);
 router.get('/account/developer-transition', authenticateJwt, AuthController.getDeveloperTransition);
 router.post('/account/developer-transition/start', authenticateJwt, AuthController.startDeveloperTransition);
 router.post('/account/developer-transition/deactivate-client', authenticateJwt, AuthController.deactivateClientForTransition);
+
+// Phase 10: Account Linking & Duplicate-Account Protection
+router.get('/account/connected-providers', authenticateJwt, AuthController.getConnectedProviders);
+router.get('/account/connected-accounts', authenticateJwt, AuthController.getConnectedProviders);
+router.post('/account/link/:provider', authenticateJwt, AuthController.initiateAccountLink);
+router.get('/account/link/:provider', authenticateJwt, AuthController.initiateAccountLink);
+router.post('/account/link/:provider/complete', optionalAuthenticateJwt, AuthController.completeAccountLink);
+router.post('/account/unlink/:provider', authenticateJwt, AuthController.unlinkAccountProvider);
+router.post('/account/unlink-provider', authenticateJwt, AuthController.unlinkAccountProvider);
+router.delete('/account/providers/:provider', authenticateJwt, AuthController.unlinkAccountProvider);
+router.post('/account/set-password', authenticateJwt, AuthController.setAccountPassword);
+router.get('/account/relationships', authenticateJwt, AuthController.getAccountRelationships);
 
 export default router;

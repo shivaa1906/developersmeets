@@ -93,10 +93,10 @@ export async function runPhase5Tests() {
     pass('CONFIG', 'OAuth configuration dynamically read from environment variables');
 
     // 3. Scan codebase to guarantee zero hardcoded Google client secrets in code
-    const serviceSource = fs.readFileSync(
-      path.resolve(process.cwd(), 'src/services/googleOAuthService.ts'),
-      'utf8'
-    );
+    const servicePath = fs.existsSync(path.resolve(process.cwd(), 'src/services/googleOAuthService.ts'))
+      ? path.resolve(process.cwd(), 'src/services/googleOAuthService.ts')
+      : path.resolve(process.cwd(), 'backend/src/services/googleOAuthService.ts');
+    const serviceSource = fs.readFileSync(servicePath, 'utf8');
     assert(!serviceSource.includes('GOCSPX-'), 'Zero hardcoded Google production secrets in service source');
     assert(!serviceSource.includes('fakeGoogleUser'), 'Zero mock Google users in production paths');
     pass('CREDENTIAL_HYGIENE', 'Zero hardcoded secrets or fake users found in codebase');
@@ -618,9 +618,15 @@ export async function runPhase5Tests() {
   // --- SECTION 14: FRONTEND UI & REGISTRATION ARTIFACTS ---
   console.log('\n--- SECTION 14: FRONTEND UI & REGISTRATION ARTIFACTS ---');
   {
+    const resolveFrontendPath = (relPath: string) => {
+      const p1 = path.resolve(process.cwd(), 'frontend', relPath);
+      if (fs.existsSync(p1)) return p1;
+      return path.resolve(process.cwd(), '../frontend', relPath);
+    };
+
     // 36. Verify Login page contains "Continue with Google"
     const loginPageSource = fs.readFileSync(
-      path.resolve(process.cwd(), '../frontend/app/login/page.tsx'),
+      resolveFrontendPath('app/login/page.tsx'),
       'utf8'
     );
     assert(loginPageSource.includes('Continue with Google'), 'Login page must render Continue with Google');
@@ -629,7 +635,7 @@ export async function runPhase5Tests() {
 
     // 37. Verify Client Registration page contains Google button
     const clientRegSource = fs.readFileSync(
-      path.resolve(process.cwd(), '../frontend/app/register/client/page.tsx'),
+      resolveFrontendPath('app/register/client/page.tsx'),
       'utf8'
     );
     assert(clientRegSource.includes('Continue with Google'), 'Client register page includes Continue with Google');
@@ -637,7 +643,7 @@ export async function runPhase5Tests() {
 
     // 38. Verify Frontend Auth Callback handler exists
     const callbackSource = fs.readFileSync(
-      path.resolve(process.cwd(), '../frontend/app/auth/callback/page.tsx'),
+      resolveFrontendPath('app/auth/callback/page.tsx'),
       'utf8'
     );
     assert(callbackSource.includes('AuthCallbackPage'), 'Auth callback component exists');

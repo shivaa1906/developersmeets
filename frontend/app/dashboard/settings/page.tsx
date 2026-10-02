@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { ThemeSettingsCard } from '@/components/ui/theme-selector';
+import { ConnectedAccountsCard } from '@/components/ui/connected-accounts';
 
 export default function DashboardSettingsPage() {
   const { addToast } = useToast();
@@ -29,6 +30,9 @@ export default function DashboardSettingsPage() {
 
       {/* Visual Theme Selection (System, Bright, Dark) */}
       <ThemeSettingsCard />
+
+      {/* Connected Accounts & Multi-Provider Sign-in */}
+      <ConnectedAccountsCard />
 
       {/* Security Credentials */}
       <form onSubmit={handleSave} className="space-y-6">

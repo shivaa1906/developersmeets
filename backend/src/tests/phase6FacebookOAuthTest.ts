@@ -106,10 +106,10 @@ export async function runPhase6Tests() {
     pass('CONFIG', 'OAuth configuration dynamically read from environment variables');
 
     // 4. Scan codebase to guarantee zero hardcoded Facebook secrets in code
-    const serviceSource = fs.readFileSync(
-      path.resolve(process.cwd(), 'src/services/facebookOAuthService.ts'),
-      'utf8'
-    );
+    const servicePath = fs.existsSync(path.resolve(process.cwd(), 'src/services/facebookOAuthService.ts'))
+      ? path.resolve(process.cwd(), 'src/services/facebookOAuthService.ts')
+      : path.resolve(process.cwd(), 'backend/src/services/facebookOAuthService.ts');
+    const serviceSource = fs.readFileSync(servicePath, 'utf8');
     assert(!serviceSource.includes('mockFacebookLogin'), 'Zero mock login functions in production paths');
     assert(!serviceSource.includes('fakeFacebookUser'), 'Zero fake Facebook users in production paths');
     pass('CREDENTIAL_HYGIENE', 'Zero hardcoded secrets or fake users found in codebase');
@@ -582,7 +582,10 @@ export async function runPhase6Tests() {
   console.log('\n--- SECTION 14: RATE LIMITING & START PROJECT FLOW ---');
   {
     // 39. Rate limiter covers Facebook endpoints
-    const routeSource = fs.readFileSync(path.resolve(process.cwd(), 'src/routes/authRoutes.ts'), 'utf8');
+    const routeSourcePath = fs.existsSync(path.resolve(process.cwd(), 'src/routes/authRoutes.ts'))
+      ? path.resolve(process.cwd(), 'src/routes/authRoutes.ts')
+      : path.resolve(process.cwd(), 'backend/src/routes/authRoutes.ts');
+    const routeSource = fs.readFileSync(routeSourcePath, 'utf8');
     assert(routeSource.includes('router.use(authRateLimiter('), 'authRateLimiter applied across all auth routes');
     assert(routeSource.includes('/facebook'), 'Facebook routes defined under rate-limited router');
     pass('RATE_LIMITING', 'Facebook OAuth endpoints protected by authRateLimiter');
@@ -696,18 +699,24 @@ export async function runPhase6Tests() {
   // --- SECTION 17: FRONTEND UI VERIFICATION ---
   console.log('\n--- SECTION 17: FRONTEND UI VERIFICATION ---');
   {
-    const loginPage = fs.readFileSync(path.resolve(process.cwd(), '../frontend/app/login/page.tsx'), 'utf8');
+    const resolveRelPath = (relPath: string) => {
+      const p1 = path.resolve(process.cwd(), relPath);
+      if (fs.existsSync(p1)) return p1;
+      return path.resolve(process.cwd(), '..', relPath);
+    };
+
+    const loginPage = fs.readFileSync(resolveRelPath('frontend/app/login/page.tsx'), 'utf8');
     assert(loginPage.includes('Continue with Google'), 'Login includes Google sign-in');
     assert(loginPage.includes('Continue with Facebook'), 'Login includes Facebook sign-in');
     assert(loginPage.includes('handleFacebookLogin'), 'Login includes handleFacebookLogin');
     pass('UI_LOGIN', 'Login page includes both Google and Facebook OAuth buttons with error handling');
 
-    const clientRegPage = fs.readFileSync(path.resolve(process.cwd(), '../frontend/app/register/client/page.tsx'), 'utf8');
+    const clientRegPage = fs.readFileSync(resolveRelPath('frontend/app/register/client/page.tsx'), 'utf8');
     assert(clientRegPage.includes('Continue with Google'), 'Client register includes Google');
     assert(clientRegPage.includes('Continue with Facebook'), 'Client register includes Facebook');
     pass('UI_REGISTRATION', 'Client registration provides both Google and Facebook onboarding');
 
-    const docFile = fs.readFileSync(path.resolve(process.cwd(), '../docs/facebook-oauth-setup.md'), 'utf8');
+    const docFile = fs.readFileSync(resolveRelPath('docs/facebook-oauth-setup.md'), 'utf8');
     assert(docFile.includes('FACEBOOK_CLIENT_ID'), 'Setup doc covers FACEBOOK_CLIENT_ID');
     assert(docFile.includes('Valid OAuth Redirect URIs'), 'Setup doc covers redirect URI');
     pass('DOCS_VERIFICATION', 'Facebook OAuth developer setup guide documented in docs/facebook-oauth-setup.md');
