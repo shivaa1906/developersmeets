@@ -6,6 +6,7 @@ import { ProjectService } from '../services/projectService.js';
 import { NotificationService } from '../services/notificationService.js';
 import { CreditLedgerService } from '../services/creditLedgerService.js';
 import { ROLES } from '../config/constants.js';
+import { realtimeServer } from '../realtime/realtimeServer.js';
 
 export class AdminController {
   /**
@@ -463,6 +464,8 @@ export class AdminController {
         return;
       }
 
+      realtimeServer.revokeUserSessions(userId, 'Account suspended by administrator');
+
       res.json({ success: true, message: 'User account has been suspended.' });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -701,6 +704,12 @@ export class AdminController {
           metadata: { username: devRes.rows[0].username, verifiedBy: req.user!.role },
         });
       });
+
+      const devCheck = await query(`SELECT user_id FROM developers WHERE id = $1`, [developerId]);
+      if (devCheck.rows.length > 0) {
+        await realtimeServer.revalidateUserAuthorization(devCheck.rows[0].user_id);
+      }
+
       res.json({ success: true, message: 'Developer verified successfully.', developerId, status: 'VERIFIED' });
     } catch (err: any) {
       res.status(400).json({ error: err.message });

@@ -76,4 +76,49 @@ export class RealtimeEvents {
       realtimeServer.broadcastToChannel(`client:${project.client_id}`, 'project:create', project);
     }
   }
+
+  /**
+   * Broadcasts private credit balance update strictly to authorized user
+   */
+  static emitCreditUpdate(userId: string, data: { balance: number; reason: string; amount?: number }): void {
+    realtimeServer.broadcastToUser(userId, 'credit:balance_updated', data);
+  }
+
+  /**
+   * Broadcasts private payment update strictly to authorized client
+   */
+  static emitPaymentUpdate(userId: string, data: { paymentId: string; amount: number; status: string; currency: string }): void {
+    realtimeServer.broadcastToUser(userId, 'payment:updated', data);
+  }
+
+  /**
+   * Broadcasts private developer selection notifications
+   */
+  static emitDeveloperSelected(developerUserId: string, data: { projectId: string; projectTitle: string }): void {
+    realtimeServer.broadcastToUser(developerUserId, 'project:selected', {
+      ...data,
+      message: 'You have been selected for this project.',
+    });
+  }
+
+  static emitDeveloperNotSelected(developerUserId: string, data: { projectId: string; projectTitle: string }): void {
+    realtimeServer.broadcastToUser(developerUserId, 'project:not_selected', {
+      ...data,
+      message: 'Another developer was selected for this project.',
+    });
+  }
+
+  static emitClaimRefund(developerUserId: string, data: { projectId: string; creditsRefunded: number }): void {
+    realtimeServer.broadcastToUser(developerUserId, 'credit:refunded', {
+      ...data,
+      message: `Your project claim deposit of ${data.creditsRefunded} credits has been refunded.`,
+    });
+  }
+
+  static emitProjectSelectionToClient(clientUserId: string, data: { projectId: string; developerTag: string }): void {
+    realtimeServer.broadcastToUser(clientUserId, 'project:developer_selected', {
+      ...data,
+      message: 'A developer has been assigned to your project.',
+    });
+  }
 }

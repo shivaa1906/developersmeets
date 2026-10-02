@@ -834,6 +834,14 @@ export class ProjectService {
           },
           client,
         });
+        RealtimeEvents.emitDeveloperSelected(winDevUser.rows[0].user_id, {
+          projectId: project.id,
+          projectTitle: project.title,
+        });
+        RealtimeEvents.emitProjectSelectionToClient(actorUserId, {
+          projectId: project.id,
+          developerTag: 'DEV-ASSIGNED',
+        });
       }
 
       return {

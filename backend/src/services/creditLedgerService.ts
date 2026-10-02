@@ -328,6 +328,9 @@ export class CreditLedgerService {
                 metadata: { projectId, projectCode, amount: refundAmt, balanceAfter, referenceId: refundReference },
                 client,
               });
+
+              RealtimeEvents.emitClaimRefund(targetUserId, { projectId, creditsRefunded: refundAmt });
+              RealtimeEvents.emitCreditUpdate(targetUserId, { balance: balanceAfter, reason: 'PROJECT_NOT_SELECTED_REFUND', amount: refundAmt });
             }
 
             refundedCount++;

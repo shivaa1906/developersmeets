@@ -15,15 +15,33 @@ export async function authorizeSubscription(
 
   const [scope, id] = channel.split(':');
 
-  // 1. Personal user notification & alert channel
+  // 1. Personal user notification & alert channel (Strictly personal to authenticated user)
   if (scope === 'user') {
-    if (user.userId === id || ['CEO', 'ADMIN'].includes(user.role)) {
+    if (user.userId === id) {
       return { authorized: true };
     }
     return { authorized: false, reason: 'Forbidden: Cannot subscribe to another user personal channel' };
   }
 
-  // 2. Developer Community channels (e.g. community:general, community:frontend)
+  // 2. Private Client channel (client:<clientId>)
+  if (scope === 'client') {
+    if (!id) return { authorized: false, reason: 'Missing client identifier' };
+    if (user.clientId === id || ['CEO', 'ADMIN'].includes(user.role)) {
+      return { authorized: true };
+    }
+    return { authorized: false, reason: 'Forbidden: Access restricted to authorized client account' };
+  }
+
+  // 3. Private Developer channel (developer:<developerId>)
+  if (scope === 'developer') {
+    if (!id) return { authorized: false, reason: 'Missing developer identifier' };
+    if (user.developerId === id || ['CEO', 'ADMIN'].includes(user.role)) {
+      return { authorized: true };
+    }
+    return { authorized: false, reason: 'Forbidden: Access restricted to authorized developer account' };
+  }
+
+  // 4. Developer Community channels (e.g. community:general, community:frontend)
   if (scope === 'community') {
     if (['DEVELOPER', 'CEO', 'MD', 'ADMIN'].includes(user.role)) {
       // If developer, verify developer account is VERIFIED
@@ -41,8 +59,8 @@ export async function authorizeSubscription(
     return { authorized: false, reason: 'Forbidden: Community is restricted to approved developers and leadership' };
   }
 
-  // 3. Project chat & Private Direct Message channels (chat:<conversationId>)
-  if (scope === 'chat' || scope === 'dm') {
+  // 5. Project chat & Private Direct Message channels (chat:<id>, conversation:<id>, dm:<id>)
+  if (scope === 'chat' || scope === 'conversation' || scope === 'dm') {
     if (!id) return { authorized: false, reason: 'Missing conversation identifier' };
 
     // Check conversation membership
@@ -50,7 +68,7 @@ export async function authorizeSubscription(
       `SELECT cm.role, cm.developer_id, cm.client_id, c.type, c.status as conversation_status, c.project_id
        FROM conversation_members cm
        JOIN conversations c ON cm.conversation_id = c.id
-       WHERE cm.conversation_id = $1 AND cm.user_id = $2`,
+       WHERE cm.conversation_id::text = $1 AND cm.user_id = $2`,
       [id, user.userId]
     );
 
@@ -90,22 +108,27 @@ export async function authorizeSubscription(
     return { authorized: false, reason: 'Forbidden: You are not an authorized member of this conversation' };
   }
 
-  // 4. Project Workspace channel (workspace:<projectId>)
-  if (scope === 'workspace') {
+  // 6. Project Workspace channel (workspace:<projectId> or project:<projectId>)
+  if (scope === 'workspace' || scope === 'project') {
     if (!id) return { authorized: false, reason: 'Missing project identifier' };
 
     // Leadership has oversight
-    if (['CEO', 'MD', 'ADMIN'].includes(user.role)) {
+    if (['CEO', 'ADMIN'].includes(user.role)) {
       return { authorized: true };
+    }
+    if (user.role === 'MD') {
+      const hasPerm = user.permissions?.includes('PROJECT_MANAGEMENT') || user.permissions?.includes('*');
+      if (hasPerm) return { authorized: true };
+      return { authorized: false, reason: 'Forbidden: Managing Director lacks project management permissions' };
     }
 
     // Check project client or selected lead developer
     const projRes = await query(
-      `SELECT p.client_id, p.lead_developer_id, cl.user_id as client_user_id, d.user_id as dev_user_id
+      `SELECT p.id, p.client_id, p.lead_developer_id, cl.user_id as client_user_id, d.user_id as dev_user_id
        FROM projects p
        LEFT JOIN clients cl ON p.client_id = cl.id
        LEFT JOIN developers d ON p.lead_developer_id = d.id
-       WHERE p.id = $1`,
+       WHERE p.id::text = $1`,
       [id]
     );
 
@@ -118,15 +141,72 @@ export async function authorizeSubscription(
       return { authorized: true };
     }
 
-    return { authorized: false, reason: 'Forbidden: Access restricted to project client and selected developer' };
+    // Check team membership
+    const memberCheck = await query(
+      `SELECT 1 FROM project_members pm
+       JOIN developers d ON pm.developer_id = d.id
+       WHERE pm.project_id::text = $1 AND d.user_id = $2`,
+      [id, user.userId]
+    );
+    if (memberCheck.rows.length > 0) {
+      return { authorized: true };
+    }
+
+    // Check accepted or active project claim
+    const claimCheck = await query(
+      `SELECT 1 FROM project_claims pc
+       JOIN developers d ON pc.developer_id = d.id
+       WHERE pc.project_id::text = $1 AND d.user_id = $2 AND pc.status IN ('CLAIMED', 'SELECTED')`,
+      [id, user.userId]
+    );
+    if (claimCheck.rows.length > 0) {
+      return { authorized: true };
+    }
+
+    return { authorized: false, reason: 'Forbidden: Access restricted to project client and authorized developers' };
   }
 
-  // 5. Support bridge & ticket channel (support:<bridgeId> or support:<ticketId>)
-  if (scope === 'support') {
+  // 7. Claim channel (claim:<claimId>)
+  if (scope === 'claim') {
+    if (!id) return { authorized: false, reason: 'Missing claim identifier' };
+
+    if (['CEO', 'ADMIN'].includes(user.role)) {
+      return { authorized: true };
+    }
+
+    const claimRes = await query(
+      `SELECT pc.id, d.user_id as dev_user_id, cl.user_id as client_user_id
+       FROM project_claims pc
+       JOIN developers d ON pc.developer_id = d.id
+       JOIN projects p ON pc.project_id = p.id
+       LEFT JOIN clients cl ON p.client_id = cl.id
+       WHERE pc.id::text = $1`,
+      [id]
+    );
+
+    if (claimRes.rows.length === 0) {
+      return { authorized: false, reason: 'Claim not found' };
+    }
+
+    const claim = claimRes.rows[0];
+    if (claim.dev_user_id === user.userId || claim.client_user_id === user.userId) {
+      return { authorized: true };
+    }
+
+    return { authorized: false, reason: 'Forbidden: Access restricted to claimant developer and project owner' };
+  }
+
+  // 8. Support bridge & ticket channel (support:<id>, support-bridge:<id>, support-ticket:<id>)
+  if (scope === 'support' || scope === 'support-bridge' || scope === 'support-ticket') {
     if (!id) return { authorized: false, reason: 'Missing support identifier' };
 
-    if (['CEO', 'MD', 'ADMIN'].includes(user.role)) {
+    if (['CEO', 'ADMIN'].includes(user.role)) {
       return { authorized: true };
+    }
+    if (user.role === 'MD') {
+      const hasPerm = user.permissions?.includes('SUPPORT_MANAGEMENT') || user.permissions?.includes('*');
+      if (hasPerm) return { authorized: true };
+      return { authorized: false, reason: 'Forbidden: Managing Director lacks support management permissions' };
     }
 
     if (user.role === 'SUPPORT') {
@@ -181,7 +261,7 @@ export async function authorizeSubscription(
     return { authorized: false, reason: 'Forbidden: You are not authorized for this support channel' };
   }
 
-  // 6. Admin operational dashboard (admin:events, admin:executive, admin:settings)
+  // 9. Admin operational dashboard (admin:events, admin:executive, admin:settings)
   if (scope === 'admin') {
     if (id === 'executive' || id === 'settings') {
       if (user.role === 'CEO') {
@@ -195,10 +275,10 @@ export async function authorizeSubscription(
     return { authorized: false, reason: 'Forbidden: Administrative events channel' };
   }
 
-  // 7. Public marketplace channel (marketplace:projects)
+  // 10. Public marketplace channel (marketplace:projects)
   if (scope === 'marketplace') {
     return { authorized: true };
   }
 
-  return { authorized: false, reason: `Unknown channel scope: ${scope}` };
+  return { authorized: false, reason: `Unknown or unauthorized channel scope: ${scope}` };
 }

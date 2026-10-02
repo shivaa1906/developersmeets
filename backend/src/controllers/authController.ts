@@ -18,6 +18,7 @@ import { normalizeEmail, InvalidEmailError } from '../utils/emailNormalization.j
 import { generateUserUid } from '../utils/uidGenerator.js';
 import { AccountLinkingService } from '../services/accountLinkingService.js';
 import { generateAccessToken } from '../utils/tokenService.js';
+import { realtimeServer } from '../realtime/realtimeServer.js';
 
 // In-memory single-use reset token tracker for JWT reset tokens
 const consumedResetTokens = new Set<string>();
@@ -1038,6 +1039,7 @@ export class AuthController {
          WHERE id = $2`,
         [newHash, targetUserId]
       );
+      realtimeServer.revokeUserSessions(targetUserId, 'Password reset - sessions invalidated');
 
       // Invalidate the reset token to prevent reuse
       if (tokenIdentifier) {
@@ -1109,6 +1111,7 @@ export class AuthController {
          WHERE id = $3`,
         [newHash, nextTokenVersion, user.id]
       );
+      realtimeServer.revokeUserSessions(user.id, 'Password changed - sessions invalidated');
 
       await AuditLogger.log({
         actorUserId: user.id,
@@ -1144,6 +1147,7 @@ export class AuthController {
    */
   static async logout(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (req.user?.userId) {
+      realtimeServer.revokeUserSessions(req.user.userId, 'User logged out');
       await query('UPDATE users SET token_version = COALESCE(token_version, 1) + 1, updated_at = NOW() WHERE id = $1', [
         req.user.userId,
       ]);
@@ -2116,6 +2120,8 @@ export class AuthController {
           [req.user!.userId]
         );
       });
+
+      realtimeServer.revokeUserSessions(req.user!.userId, 'Client account deactivated');
 
       res.json({
         success: true,

@@ -40,9 +40,9 @@ export async function authenticateSocketToken(token: string): Promise<RealtimeUs
     throw new Error('Malformed token payload: missing userId');
   }
 
-  // Load user from database to ensure fresh status and role
+  // Load user from database to ensure fresh status, role, and permissions
   const userRes = await query(
-    `SELECT id, email, role, status, is_suspended, token_version FROM users WHERE id = $1`,
+    `SELECT id, email, role, status, is_suspended, token_version, permissions FROM users WHERE id = $1`,
     [userId]
   );
 
@@ -61,15 +61,17 @@ export async function authenticateSocketToken(token: string): Promise<RealtimeUs
   }
 
   if (
-    decoded.tokenVersion !== undefined &&
     dbUser.token_version !== undefined &&
-    decoded.tokenVersion !== dbUser.token_version
+    dbUser.token_version !== null &&
+    (decoded.tokenVersion === undefined || decoded.tokenVersion !== dbUser.token_version)
   ) {
     throw new Error('Authentication session has been invalidated');
   }
 
   let developerId: string | undefined = undefined;
+  let verificationStatus: string | undefined = undefined;
   let clientId: string | undefined = undefined;
+  let supportStaffId: string | undefined = undefined;
   let displayName = dbUser.email.split('@')[0];
 
   if (dbUser.role === 'DEVELOPER') {
@@ -79,6 +81,7 @@ export async function authenticateSocketToken(token: string): Promise<RealtimeUs
     );
     if (devRes.rows.length > 0) {
       developerId = devRes.rows[0].id;
+      verificationStatus = devRes.rows[0].verification_status;
       displayName = devRes.rows[0].display_name || devRes.rows[0].username || displayName;
     }
   } else if (dbUser.role === 'CLIENT') {
@@ -90,9 +93,22 @@ export async function authenticateSocketToken(token: string): Promise<RealtimeUs
       clientId = clientRes.rows[0].id;
       displayName = clientRes.rows[0].client_number || displayName;
     }
+  } else if (dbUser.role === 'SUPPORT') {
+    const staffRes = await query(
+      `SELECT id, status, permissions FROM support_staff WHERE user_id = $1`,
+      [userId]
+    );
+    if (staffRes.rows.length > 0) {
+      supportStaffId = staffRes.rows[0].id;
+      if (staffRes.rows[0].status === 'SUSPENDED') {
+        throw new Error('Support staff account is suspended');
+      }
+    }
   } else if (['CEO', 'MD', 'ADMIN'].includes(dbUser.role)) {
     displayName = `${dbUser.role} Administrator`;
   }
+
+  const permissions = Array.isArray(dbUser.permissions) ? dbUser.permissions : [];
 
   return {
     userId: dbUser.id,
@@ -101,6 +117,10 @@ export async function authenticateSocketToken(token: string): Promise<RealtimeUs
     status: dbUser.status,
     developerId,
     clientId,
+    supportStaffId,
+    verificationStatus,
+    permissions,
     displayName,
+    tokenVersion: dbUser.token_version,
   };
 }

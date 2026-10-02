@@ -82,6 +82,12 @@ export class RealtimeClient {
 
       this.ws.onclose = (event) => {
         this.emitLocal('disconnect', { code: event.code, reason: event.reason });
+        if (event.code === 1008) {
+          // Authentication failure or session revoked: prevent unauthorized reconnection loop
+          this.isExplicitDisconnect = true;
+          this.subscriptions.clear();
+          return;
+        }
         if (!this.isExplicitDisconnect) {
           this.scheduleReconnect();
         }
