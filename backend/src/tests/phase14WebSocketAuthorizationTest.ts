@@ -117,7 +117,9 @@ class TestWsClient {
     if (this.ws) {
       try {
         this.ws.close();
-      } catch (_e) {}
+      } catch (_e) {
+        /* ignore */
+      }
       this.ws = null;
     }
   }

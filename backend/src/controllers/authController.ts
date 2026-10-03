@@ -529,10 +529,15 @@ export class AuthController {
    * User login with server-verified credentials and strictly server-controlled role
    */
   static async login(req: Request, res: Response): Promise<void> {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
-    if (!email || !password) {
-      res.status(400).json({ error: 'Email and password required' });
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
+      res.status(400).json({ error: 'Valid email and password are required.' });
+      return;
+    }
+
+    if (email.length > 256 || password.length > 128) {
+      res.status(400).json({ error: 'Credentials exceed maximum allowable length.' });
       return;
     }
 

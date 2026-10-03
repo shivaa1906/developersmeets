@@ -24,8 +24,8 @@ export function validatePassword(
   password: unknown,
   confirmPassword?: unknown
 ): PasswordValidationResult {
-  if (typeof password !== 'string' || !password) {
-    return { valid: false, error: 'Password is required.' };
+  if (typeof password !== 'string' || !password || password.trim().length === 0) {
+    return { valid: false, error: 'Password is required and cannot be empty or solely whitespace.' };
   }
 
   if (password.length < 8) {
